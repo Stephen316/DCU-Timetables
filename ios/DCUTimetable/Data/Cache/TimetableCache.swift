@@ -21,9 +21,9 @@ public struct TimetableSnapshot: Codable, Sendable, Equatable {
 /// `fetchedAt` to show the user how stale the data is.
 public actor TimetableCache {
     private let directory: URL
-    private let fileManager = FileManager.default
 
     public init(directoryName: String = "TimetableCache") {
+        let fileManager = FileManager.default
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.temporaryDirectory
         self.directory = base.appendingPathComponent(directoryName, isDirectory: true)
