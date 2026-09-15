@@ -1,0 +1,794 @@
+{
+  "title": "Year 1 Engineering Lab Rotation 2026/27 \u2014 Semester 1",
+  "modules": {
+    "EEG1001": {
+      "name": "EEG1001[1,2] Project & Technical Drawing",
+      "activity": "Workshop"
+    },
+    "EEG1004": {
+      "name": "EEG1004[1,2] Introduction to Electronics",
+      "activity": "Drawing"
+    },
+    "EEG1002": {
+      "name": "EEG1002[1,2] Programming & Software Development for Engineers",
+      "activity": "Programming lab"
+    }
+  },
+  "sessions": [
+    {
+      "week": 2,
+      "date": "2026-09-17",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 2,
+      "date": "2026-09-18",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 3,
+      "date": "2026-09-22",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "B"
+      ]
+    },
+    {
+      "week": 3,
+      "date": "2026-09-22",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 3,
+      "date": "2026-09-23",
+      "day": "Wed",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "E"
+      ]
+    },
+    {
+      "week": 3,
+      "date": "2026-09-24",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 3,
+      "date": "2026-09-24",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 3,
+      "date": "2026-09-24",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 3,
+      "date": "2026-09-25",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 4,
+      "date": "2026-09-29",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 4,
+      "date": "2026-09-29",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 4,
+      "date": "2026-10-01",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 4,
+      "date": "2026-10-01",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 4,
+      "date": "2026-10-01",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 4,
+      "date": "2026-10-02",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 5,
+      "date": "2026-10-06",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "B"
+      ]
+    },
+    {
+      "week": 5,
+      "date": "2026-10-06",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 5,
+      "date": "2026-10-07",
+      "day": "Wed",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "E"
+      ]
+    },
+    {
+      "week": 5,
+      "date": "2026-10-08",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 5,
+      "date": "2026-10-08",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 5,
+      "date": "2026-10-08",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 5,
+      "date": "2026-10-09",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 6,
+      "date": "2026-10-13",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 6,
+      "date": "2026-10-13",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 6,
+      "date": "2026-10-15",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 6,
+      "date": "2026-10-15",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 6,
+      "date": "2026-10-15",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 6,
+      "date": "2026-10-16",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 7,
+      "date": "2026-10-20",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "B"
+      ]
+    },
+    {
+      "week": 7,
+      "date": "2026-10-20",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 7,
+      "date": "2026-10-21",
+      "day": "Wed",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "E"
+      ]
+    },
+    {
+      "week": 7,
+      "date": "2026-10-22",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 7,
+      "date": "2026-10-22",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 7,
+      "date": "2026-10-22",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 7,
+      "date": "2026-10-23",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 8,
+      "date": "2026-10-27",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 8,
+      "date": "2026-10-27",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 8,
+      "date": "2026-10-29",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 8,
+      "date": "2026-10-29",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 8,
+      "date": "2026-10-29",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 8,
+      "date": "2026-10-30",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 9,
+      "date": "2026-11-03",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "B"
+      ]
+    },
+    {
+      "week": 9,
+      "date": "2026-11-03",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 9,
+      "date": "2026-11-04",
+      "day": "Wed",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "E"
+      ]
+    },
+    {
+      "week": 9,
+      "date": "2026-11-05",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 9,
+      "date": "2026-11-05",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 9,
+      "date": "2026-11-05",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 9,
+      "date": "2026-11-06",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 10,
+      "date": "2026-11-10",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 10,
+      "date": "2026-11-10",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 10,
+      "date": "2026-11-12",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 10,
+      "date": "2026-11-12",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 10,
+      "date": "2026-11-12",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 10,
+      "date": "2026-11-13",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 11,
+      "date": "2026-11-17",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "B"
+      ]
+    },
+    {
+      "week": 11,
+      "date": "2026-11-17",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 11,
+      "date": "2026-11-18",
+      "day": "Wed",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "E"
+      ]
+    },
+    {
+      "week": 11,
+      "date": "2026-11-19",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 11,
+      "date": "2026-11-19",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 11,
+      "date": "2026-11-19",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 11,
+      "date": "2026-11-20",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    },
+    {
+      "week": 12,
+      "date": "2026-11-24",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "A"
+      ]
+    },
+    {
+      "week": 12,
+      "date": "2026-11-24",
+      "day": "Tue",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 12,
+      "date": "2026-11-26",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1001",
+      "groups": [
+        "C"
+      ]
+    },
+    {
+      "week": 12,
+      "date": "2026-11-26",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1004",
+      "groups": [
+        "D"
+      ]
+    },
+    {
+      "week": 12,
+      "date": "2026-11-26",
+      "day": "Thu",
+      "start": "14:00",
+      "end": "17:00",
+      "module": "EEG1002",
+      "groups": [
+        "A",
+        "B",
+        "E"
+      ]
+    },
+    {
+      "week": 12,
+      "date": "2026-11-27",
+      "day": "Fri",
+      "start": "09:00",
+      "end": "12:00",
+      "module": "EEG1002",
+      "groups": [
+        "C",
+        "D"
+      ]
+    }
+  ]
+}
