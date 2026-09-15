@@ -6,12 +6,17 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
 
+# Signing lives in Local.xcconfig (git-ignored) so your Team ID stays out of the repo and
+# survives `xcodegen generate`. Create it once: cp Local.xcconfig.example Local.xcconfig
+configFiles:
+  Debug: Signing.xcconfig
+  Release: Signing.xcconfig
+
 settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
 
 targets:

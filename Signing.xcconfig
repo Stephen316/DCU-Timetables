@@ -1,0 +1,7 @@
+// Committed base signing config.
+// Personal Team IDs go in Local.xcconfig (git-ignored), which is optionally included
+// below — the "?" means generation still works if that file doesn't exist.
+//     cp Local.xcconfig.example Local.xcconfig   # then set your Team ID
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

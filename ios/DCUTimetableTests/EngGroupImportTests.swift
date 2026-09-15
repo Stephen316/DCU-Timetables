@@ -16,9 +16,24 @@ struct EngGroupImportTests {
         #expect(index["anand"]?.first?.group == "B")
         #expect(index["anand"]?.first?.subgroup == "B.1")
         #expect(index["anand"]?.first?.name == "Anand Amrit")
-        // multi-word surname indexed by both the full surname and its first token
+        // multi-word surname indexed by both the full surname and its parts
         #expect(index["mc bride"]?.first?.group == "A")
         #expect(index["mc"]?.first?.group == "A")
+        #expect(index["bride"]?.first?.group == "A")
+    }
+
+    @Test func indexesGivenNamesSoAnyPartOfTheNameMatches() {
+        // The class list is surname-first ("Harcourt Stephen") — a student typing only
+        // their given name should still be found.
+        let md = """
+        | Surname | First Name | Group | Sub-group | Day | Workshop | Drawing |
+        |---|---|---|---|---|---|---|
+        | Harcourt | Stephen | B | B.2 | Tue | SG24 | SB39 |
+        """
+        let index = EngGroupDirectory.parseTable(md)
+        #expect(index["harcourt"]?.first?.group == "B")
+        #expect(index["stephen"]?.first?.group == "B")
+        #expect(index["stephen"]?.first?.name == "Harcourt Stephen")
     }
 
     @Test func parsesCSVDerivingLetterFromSubgroup() {

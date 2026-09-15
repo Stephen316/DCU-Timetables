@@ -82,11 +82,23 @@ public enum EngGroupDirectory {
             .appendingPathComponent("eng_groups.json")
     }
 
-    /// The stored directory URL, or nil if nothing has been imported.
+    /// Development fallback bundled with the app as `eng_groups.local.json` (git-ignored).
+    ///
+    /// ⚠️ It contains real student names, so it **ships inside the app binary**. It exists
+    /// only so the app works on a fresh install while developing — delete
+    /// `ios/DCUTimetable/Resources/eng_groups.local.json` before any public release, and
+    /// replace it with the planned email-verified sign-in.
+    private static func bundledFileURL() -> URL? {
+        Bundle.main.url(forResource: "eng_groups.local", withExtension: "json")
+    }
+
+    /// The directory in use: an imported copy in Documents if present, else the bundled
+    /// development fallback.
     public static func fileURL() -> URL? {
-        guard let url = documentsFileURL(), FileManager.default.fileExists(atPath: url.path)
-        else { return nil }
-        return url
+        if let url = documentsFileURL(), FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        return bundledFileURL()
     }
 
     public static var isAvailable: Bool { fileURL() != nil }
@@ -127,9 +139,11 @@ public enum EngGroupDirectory {
         return Set(bySurname.values.flatMap { $0 }.map(\.name)).count
     }
 
-    /// Removes the imported directory.
+    /// Removes the imported directory (never the bundled fallback, which is read-only).
     public static func clear() {
-        if let url = fileURL() { try? FileManager.default.removeItem(at: url) }
+        guard let url = documentsFileURL(), FileManager.default.fileExists(atPath: url.path)
+        else { return }
+        try? FileManager.default.removeItem(at: url)
     }
 
     private static func error(_ message: String) -> NSError {
@@ -186,8 +200,13 @@ public enum EngGroupDirectory {
                 workshop: value(iWork),
                 drawing: value(iDraw)
             )
-            let firstToken = surname.split(separator: " ").first.map { String($0) } ?? surname
-            for key in Set([surname.lowercased(), firstToken.lowercased()]) {
+            // Index every part of the name. The list is surname-first ("Harcourt Stephen"),
+            // so indexing the given name too lets a student type their name in any order —
+            // or just one part of it.
+            var keys: Set<String> = [surname.lowercased()]
+            for part in surname.split(separator: " ") { keys.insert(String(part).lowercased()) }
+            for part in first.split(separator: " ") { keys.insert(String(part).lowercased()) }
+            for key in keys where !key.isEmpty {
                 out[key, default: []].append(record)
             }
         }

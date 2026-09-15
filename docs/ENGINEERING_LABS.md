@@ -13,6 +13,25 @@ so the app carries it as bundled data.
 - Student picks their **group letter (A–E)**, or types their **surname** to auto-detect it.
 - Shows their personal lab schedule for the semester: module, day/date, time, per week.
 
+## Profile-first onboarding
+
+On first launch the app shows a **profile creator** (`ProfileCreatorView`): the student
+types their name, it's matched against the imported class list, and — if found — a
+`StudentProfile` (name + lab group + rooms) is created. That profile drives a personal
+**Year-1 Engineering timetable** with no programme picking:
+
+- `ProfileTimetableSource` fetches the shared module set (`EngineeringYear1.json` →
+  EEG1000/1001/1002/1004/1006/1007/1017) via the Module API and combines them.
+- It **drops the generic lab slots** for the rotation modules and **injects the student's
+  own rotation sessions** (from `EngineeringLabRotation.json`, filtered to their group),
+  in the correct rooms.
+- Anyone not in the class list can tap **"Choose a programme instead"** to fall back to the
+  normal programme search.
+
+**Timezone note:** the rotation PDF's times are Irish local clock times, so rotation
+events are built in `Europe/Dublin` (the API's own events are true UTC and converted for
+display). Getting these mixed up shifts labs by an hour — see `ProfileTimetableSource`.
+
 ## Data — two files, two very different privacy levels
 
 ### 1. Rotation (bundled, no personal data)

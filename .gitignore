@@ -25,3 +25,6 @@ build/
 # Personal data — student name→group lists must never be committed or shipped
 local-data/
 *.local.json
+
+# Local signing (personal Team ID)
+Local.xcconfig

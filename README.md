@@ -26,10 +26,16 @@ undocumented, so the data layer is deliberately swappable (see
 Requires Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```bash
-brew install xcodegen            # once
-xcodegen generate                # regenerate the .xcodeproj (it is gitignored)
+brew install xcodegen                        # once
+cp Local.xcconfig.example Local.xcconfig     # once — set your Apple Team ID inside
+xcodegen generate                            # regenerate the .xcodeproj (it is gitignored)
 open DCUTimetable.xcodeproj
 ```
+
+**Signing:** `Signing.xcconfig` is committed and optionally includes `Local.xcconfig`
+(git-ignored), which holds your personal `DEVELOPMENT_TEAM`. Putting it there means the
+team survives `xcodegen generate` — setting it in Xcode's UI does not, because the
+`.xcodeproj` is regenerated. Simulator builds work without a team; a device build needs one.
 
 Build & test from the command line:
 

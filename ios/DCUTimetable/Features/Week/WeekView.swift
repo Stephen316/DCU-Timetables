@@ -2,18 +2,28 @@ import SwiftUI
 
 struct WeekView: View {
     let programme: TimetableCategory
-    let onChangeProgramme: () -> Void
+    let source: TimetableSource
+    let title: String
+    let resetLabel: String
+    let onReset: () -> Void
 
     @StateObject private var model: WeekViewModel
     @AppStorage("hiddenGroups") private var hiddenGroupsData = Data()
     @State private var showingGroups = false
     @State private var showingEngLabs = false
 
-    init(programme: TimetableCategory, onChangeProgramme: @escaping () -> Void) {
+    init(programme: TimetableCategory,
+         source: TimetableSource = DCUAPIClient(),
+         title: String? = nil,
+         resetLabel: String = "Change programme",
+         onReset: @escaping () -> Void) {
         self.programme = programme
-        self.onChangeProgramme = onChangeProgramme
+        self.source = source
+        self.title = title ?? programme.code
+        self.resetLabel = resetLabel
+        self.onReset = onReset
         let hidden = HiddenGroups.decode(UserDefaults.standard.data(forKey: "hiddenGroups") ?? Data())
-        _model = StateObject(wrappedValue: WeekViewModel(programme: programme, hiddenGroups: hidden))
+        _model = StateObject(wrappedValue: WeekViewModel(programme: programme, hiddenGroups: hidden, source: source))
     }
 
     var body: some View {
@@ -40,12 +50,12 @@ struct WeekView: View {
                     }
                 }
             }
-            .navigationTitle(programme.code)
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
-                        Text(programme.code).font(.headline)
+                        Text(title).font(.headline)
                         Text(model.weekLabel).font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -71,8 +81,8 @@ struct WeekView: View {
                                 showingEngLabs = true
                             }
                         }
-                        Button("Change programme", systemImage: "arrow.left.arrow.right",
-                               action: onChangeProgramme)
+                        Button(resetLabel, systemImage: "arrow.left.arrow.right",
+                               action: onReset)
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -81,7 +91,7 @@ struct WeekView: View {
             .overlay { if model.isLoading && model.events.isEmpty { ProgressView() } }
             .task { await model.start() }
             .sheet(isPresented: $showingGroups) {
-                GroupSelectionView(programme: programme)
+                GroupSelectionView(programme: programme, source: source)
             }
             .sheet(isPresented: $showingEngLabs) {
                 EngineeringLabsView()

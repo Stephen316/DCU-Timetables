@@ -33,10 +33,14 @@ public struct DCUAPIClient: TimetableSource {
     // MARK: - TimetableSource
 
     public func searchProgrammes(query: String, page: Int) async throws -> [TimetableCategory] {
-        // The search term goes in the URL query string — the endpoint ignores a body
-        // `query` and just pages through everything (see docs/API.md). Body is the (empty)
-        // parent-filter list.
-        let path = "Public/CategoryTypes/\(CategoryType.programme.rawValue)/Categories/FilterWithCache/\(config.institutionID)"
+        try await searchCategories(type: .programme, query: query, page: page)
+    }
+
+    /// Search any category type. The search term goes in the URL query string — the
+    /// endpoint ignores a body `query` and pages through everything (see docs/API.md).
+    /// Body is the (empty) parent-filter list.
+    private func searchCategories(type: CategoryType, query: String, page: Int) async throws -> [TimetableCategory] {
+        let path = "Public/CategoryTypes/\(type.rawValue)/Categories/FilterWithCache/\(config.institutionID)"
         var components = URLComponents(
             url: config.apiBase.appendingPathComponent(path),
             resolvingAgainstBaseURL: false
@@ -52,7 +56,7 @@ public struct DCUAPIClient: TimetableSource {
             TimetableCategory(
                 identity: $0.identity,
                 name: $0.name,
-                categoryTypeIdentity: $0.categoryTypeIdentity ?? CategoryType.programme.rawValue
+                categoryTypeIdentity: $0.categoryTypeIdentity ?? type.rawValue
             )
         }
     }
@@ -68,6 +72,31 @@ public struct DCUAPIClient: TimetableSource {
     }
 
     public func events(for category: TimetableCategory, weeks: [TeachingWeek]) async throws -> [TimetableEvent] {
+        try await fetchEvents(typeIdentity: category.categoryTypeIdentity,
+                              categoryIdentities: [category.identity], weeks: weeks)
+    }
+
+    /// Combined events for a set of module codes — used to build a cohort/profile timetable
+    /// from modules rather than a single programme.
+    public func events(forModuleCodes codes: [String], weeks: [TeachingWeek]) async throws -> [TimetableEvent] {
+        var identities: [String] = []
+        for code in codes {
+            if let id = try await moduleIdentity(for: code) { identities.append(id) }
+        }
+        return try await fetchEvents(typeIdentity: CategoryType.module.rawValue,
+                                     categoryIdentities: identities, weeks: weeks)
+    }
+
+    /// Resolve a module code (e.g. "EEG1001") to its category identity.
+    private func moduleIdentity(for code: String) async throws -> String? {
+        let matches = try await searchCategories(type: .module, query: code, page: 1)
+        let exact = matches.first { $0.name.uppercased().hasPrefix(code.uppercased()) }
+        return (exact ?? matches.first)?.identity
+    }
+
+    private func fetchEvents(typeIdentity: String, categoryIdentities: [String],
+                             weeks: [TeachingWeek]) async throws -> [TimetableEvent] {
+        guard !categoryIdentities.isEmpty else { return [] }
         let vo = try await rawViewOptions()
         let wanted = Set(weeks.map(\.number))
         let weekDTOs = vo.weeks
@@ -77,19 +106,17 @@ public struct DCUAPIClient: TimetableSource {
 
         let allDay = TimePeriodDTO(description: "All Day", startTime: "00:00",
                                    endTime: "23:59", isDefault: true)
-        let datePeriod = datePeriod(spanning: weekDTOs)
-
         let request = EventsRequestDTO(
             viewOptions: ViewOptionsRequestDTO(
                 days: vo.days,
                 weeks: weekDTOs,
                 timePeriods: [allDay],
-                datePeriods: [datePeriod]
+                datePeriods: [datePeriod(spanning: weekDTOs)]
             ),
             categoryTypesWithIdentities: [
                 CategoryTypeWithIdentitiesDTO(
-                    categoryTypeIdentity: category.categoryTypeIdentity,
-                    categoryIdentities: [category.identity]
+                    categoryTypeIdentity: typeIdentity,
+                    categoryIdentities: categoryIdentities
                 )
             ],
             fetchBookings: false,

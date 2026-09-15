@@ -6,6 +6,7 @@ import SwiftUI
 /// and surname splits; finer department allocations aren't exposed here).
 struct GroupSelectionView: View {
     let programme: TimetableCategory
+    var source: TimetableSource = DCUAPIClient()
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage("hiddenGroups") private var hiddenGroupsData = Data()
@@ -13,8 +14,6 @@ struct GroupSelectionView: View {
     @State private var modules: [ModuleGroups] = []
     @State private var isLoading = true
     @State private var errorText: String?
-
-    private let source: TimetableSource = DCUAPIClient()
 
     private var hidden: Set<String> { HiddenGroups.decode(hiddenGroupsData) }
 
