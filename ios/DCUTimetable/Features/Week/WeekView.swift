@@ -14,8 +14,6 @@ struct WeekView: View {
     @State private var showingEngLabs = false
     /// Mon–Fri index for the day view (0 = Monday).
     @State private var dayIndex = 0
-    /// Direction of the last page, so the slide matches the travel.
-    @State private var forward = true
 
     init(programme: TimetableCategory,
          source: TimetableSource = DCUAPIClient(),
@@ -33,33 +31,22 @@ struct WeekView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Group {
-                    if model.eventsByDay.isEmpty && !model.isLoading {
-                        ContentUnavailableView(
-                            model.errorText ?? "No classes this week",
-                            systemImage: model.errorText == nil ? "calendar" : "wifi.exclamationmark",
-                            description: Text(model.errorText == nil
-                                ? "Nothing scheduled for \(model.weekLabel.lowercased())."
-                                : "")
-                        )
-                    } else if showsCalendar {
-                        WeekCalendarView(eventsByDay: model.eventsByDay,
+            Group {
+                if let error = model.errorText, model.events.isEmpty {
+                    ContentUnavailableView("Couldn't load", systemImage: "wifi.exclamationmark",
+                                           description: Text(error))
+                } else if showsCalendar {
+                    // Same pager as the day view — weeks instead of days.
+                    WrappingPager(count: max(model.weeks.count, 1), index: $model.weekIndex) { index in
+                        WeekCalendarView(eventsByDay: model.eventsByDay(forWeekIndex: index),
                                          clashingIDs: model.clashingIDs)
-                    } else {
-                        WrappingPager(count: weekDays.count, index: $dayIndex) { day in
-                            dayList(for: day)
-                        }
+                    }
+                } else {
+                    WrappingPager(count: max(weekDays.count, 1), index: $dayIndex) { day in
+                        dayList(for: day)
                     }
                 }
-                .id(model.weekLabel)
-                .transition(slideTransition)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            .contentShape(Rectangle())
-            .pagingSwipe(onBack: { page(forward: false) },
-                         onForward: { page(forward: true) })
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -86,7 +73,7 @@ struct WeekView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .bottomBar) {
-                    Button { Task { await model.goToPreviousWeek() } } label: {
+                    Button { model.stepIndex(by: -1) } label: {
                         Image(systemName: "chevron.left")
                     }
                     Spacer()
@@ -95,7 +82,7 @@ struct WeekView: View {
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button { Task { await model.goToNextWeek() } } label: {
+                    Button { model.stepIndex(by: 1) } label: {
                         Image(systemName: "chevron.right")
                     }
                 }
@@ -121,6 +108,9 @@ struct WeekView: View {
             }
             .sheet(isPresented: $showingEngLabs) {
                 EngineeringLabsView()
+            }
+            .onChange(of: model.weekIndex) { _, _ in
+                Task { await model.loadCurrentWeek() }
             }
             .onChange(of: model.weekStart) { _, newValue in
                 guard let start = newValue else { return }
@@ -162,19 +152,6 @@ struct WeekView: View {
         model.eventsByDay.first { Calendar.current.isDate($0.day, inSameDayAs: day) }?.events ?? []
     }
 
-    /// Swiping pages the day in the day view (Mon–Fri, wrapping back to Monday) and the
-    /// week in the calendar. The toolbar chevrons always page weeks, so the day view can
-    /// still reach another week.
-    private func page(forward goForward: Bool) {
-        // The day view has its own interactive pager (WrappingPager); only the calendar
-        // pages from this gesture, because neighbouring weeks aren't loaded yet.
-        guard showsCalendar else { return }
-        forward = goForward
-        Task {
-            if goForward { await model.goToNextWeek() } else { await model.goToPreviousWeek() }
-        }
-    }
-
     /// Open the day view on today when today is in the week being shown.
     private static func defaultDayIndex(weekStart: Date) -> Int {
         let cal = Calendar.current
@@ -184,11 +161,6 @@ struct WeekView: View {
         return (0...4).contains(offset) ? offset : 0
     }
 
-    /// The incoming page slides in from the direction of travel.
-    private var slideTransition: AnyTransition {
-        .asymmetric(insertion: .move(edge: forward ? .trailing : .leading),
-                    removal: .move(edge: forward ? .leading : .trailing))
-    }
 
     private func dayHeader(_ date: Date) -> String {
         date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))

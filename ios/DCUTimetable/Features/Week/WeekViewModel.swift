@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class WeekViewModel: ObservableObject {
-    @Published var events: [TimetableEvent] = []          // filtered to the student's groups
+    @Published var events: [TimetableEvent] = []          // current week, filtered to groups
     @Published var clashingIDs: Set<String> = []
     @Published var isLoading = false
     @Published var errorText: String?
@@ -12,18 +12,19 @@ final class WeekViewModel: ObservableObject {
     @Published var hasEngineeringLabs = false
     /// Monday of the week being shown, so the day view can lay out Mon–Fri.
     @Published private(set) var weekStart: Date?
-    /// Which way the last week change went, so the view slides in the matching direction.
-    @Published private(set) var slide: SlideDirection = .none
+    /// Position in `weeks`. Bound directly to the calendar pager.
+    @Published var weekIndex = 0
+    /// Filtered events keyed by week number, for the weeks the pager can reach.
+    @Published private(set) var eventsByWeekNumber: [Int: [TimetableEvent]] = [:]
 
-    enum SlideDirection { case forward, backward, none }
+    private(set) var weeks: [TeachingWeek] = []
 
     let programme: TimetableCategory
     private let source: TimetableSource
     private let cache: TimetableCache
 
-    private var calendar: WeekCalendar?
-    private var week: TeachingWeek?
-    private var rawEvents: [TimetableEvent] = []          // everything fetched, unfiltered
+    private var rawByWeekNumber: [Int: [TimetableEvent]] = [:]
+    private var loadedAt: [Int: Date] = [:]
     private var hiddenGroups: Set<String>
     private let engLabModules = LabRotationLoader.bundled()?.moduleCodes ?? []
 
@@ -37,6 +38,10 @@ final class WeekViewModel: ObservableObject {
         self.cache = cache
     }
 
+    private var currentWeek: TeachingWeek? {
+        weeks.indices.contains(weekIndex) ? weeks[weekIndex] : nil
+    }
+
     /// The campus shared by every located class this week — nil if they span campuses (or
     /// nothing has a room, e.g. an all-online week).
     var campusName: String? {
@@ -45,30 +50,47 @@ final class WeekViewModel: ObservableObject {
         return campuses.first?.name
     }
 
-    /// Events grouped by calendar day, days in order.
+    /// Current week's events grouped by calendar day.
     var eventsByDay: [(day: Date, events: [TimetableEvent])] {
+        grouped(currentWeek.map { eventsByWeekNumber[$0.number] ?? [] } ?? [])
+    }
+
+    /// Any week's events grouped by day — the calendar pager asks for its neighbours.
+    func eventsByDay(forWeekIndex index: Int) -> [(day: Date, events: [TimetableEvent])] {
+        let wrapped = weeks.isEmpty ? 0 : ((index % weeks.count) + weeks.count) % weeks.count
+        guard weeks.indices.contains(wrapped) else { return [] }
+        return grouped(eventsByWeekNumber[weeks[wrapped].number] ?? [])
+    }
+
+    private func grouped(_ list: [TimetableEvent]) -> [(day: Date, events: [TimetableEvent])] {
         let cal = Foundation.Calendar.current
-        let groups = Dictionary(grouping: events) { cal.startOfDay(for: $0.start) }
-        return groups
+        return Dictionary(grouping: list) { cal.startOfDay(for: $0.start) }
             .map { (day: $0.key, events: $0.value.sorted { $0.start < $1.start }) }
             .sorted { $0.day < $1.day }
     }
 
     func start() async {
-        if calendar == nil {
+        if weeks.isEmpty {
             do {
                 let cal = try await source.weekCalendar()
-                calendar = cal
-                week = cal.current
+                weeks = cal.weeks
+                if let current = cal.current,
+                   let idx = cal.weeks.firstIndex(where: { $0.number == current.number }) {
+                    weekIndex = idx
+                }
             } catch {
                 errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't load the calendar."
             }
         }
-        await loadWeek()
+        await loadCurrentWeek()
     }
 
-    func goToPreviousWeek() async { await move(by: -1) }
-    func goToNextWeek() async { await move(by: 1) }
+    /// Move the pager without loading — the view's onChange drives the load, so a swipe
+    /// and a chevron press take the same path.
+    func stepIndex(by delta: Int) {
+        guard !weeks.isEmpty else { return }
+        weekIndex = ((weekIndex + delta) % weeks.count + weeks.count) % weeks.count
+    }
 
     /// Re-apply group filtering when the student changes their selection.
     func updateHiddenGroups(_ hidden: Set<String>) {
@@ -76,65 +98,64 @@ final class WeekViewModel: ObservableObject {
         applyFilter()
     }
 
-    private func move(by delta: Int) async {
-        guard let calendar, let current = week,
-              let idx = calendar.weeks.firstIndex(where: { $0.number == current.number }) else { return }
-        let next = idx + delta
-        guard calendar.weeks.indices.contains(next) else { return }
-
-        let target = calendar.weeks[next]
-        slide = delta > 0 ? .forward : .backward
-        isLoading = true                      // set before clearing, so no "no classes" flash
-        // Mutate inside an explicit transaction: the view keys its slide transition off
-        // weekLabel, and `.animation(_:value:)` alone does not reliably drive an
-        // identity (.id) change. Cleared here so the outgoing week doesn't slide out
-        // already relabelled.
-        withAnimation(.easeInOut(duration: 0.28)) {
-            week = target
-            weekLabel = "Week \(target.label)"
-            rawEvents = []
-            events = []
-            clashingIDs = []
-        }
-        await loadWeek()
-    }
-
-    private func loadWeek() async {
-        guard let week else { return }
-
-        // Read the cache *before* touching published state so the label and the events
-        // change together in one render pass. Otherwise the await suspends mid-update and
-        // the week-change animation slides in the previous week's classes.
-        let cached = await cache.snapshot(categoryID: programme.identity, weekNumber: week.number)
+    /// Idempotent: the pager re-asks for the same week constantly, so already-loaded weeks
+    /// only refresh their labels. Neighbours are fetched so a drag has real content to show.
+    func loadCurrentWeek() async {
+        guard let week = currentWeek else { return }
         weekLabel = "Week \(week.label)"
         weekStart = week.firstDay
-        rawEvents = cached?.events ?? []
-        lastUpdated = cached?.fetchedAt
         errorText = nil
+        lastUpdated = loadedAt[week.number]
         applyFilter()
 
-        isLoading = true
-        defer { isLoading = false }
+        if rawByWeekNumber[week.number] == nil {
+            isLoading = true
+            await load(week, isCurrent: true)
+            isLoading = false
+        }
+        for neighbour in neighbours(of: weekIndex) where rawByWeekNumber[neighbour.number] == nil {
+            await load(neighbour, isCurrent: false)
+        }
+    }
+
+    private func neighbours(of index: Int) -> [TeachingWeek] {
+        guard !weeks.isEmpty else { return [] }
+        return [-1, 1].compactMap { delta in
+            let i = ((index + delta) % weeks.count + weeks.count) % weeks.count
+            return weeks.indices.contains(i) ? weeks[i] : nil
+        }
+    }
+
+    private func load(_ week: TeachingWeek, isCurrent: Bool) async {
+        if let cached = await cache.snapshot(categoryID: programme.identity, weekNumber: week.number) {
+            rawByWeekNumber[week.number] = cached.events
+            loadedAt[week.number] = cached.fetchedAt
+            if isCurrent { lastUpdated = cached.fetchedAt }
+            applyFilter()
+        }
         do {
             let fetched = try await source.events(for: programme, weeks: [week])
-            rawEvents = fetched
-            lastUpdated = Date()
+            rawByWeekNumber[week.number] = fetched
+            loadedAt[week.number] = Date()
+            if isCurrent { lastUpdated = Date() }
             applyFilter()
             await cache.store(TimetableSnapshot(category: programme, weekNumber: week.number,
                                                 events: fetched, fetchedAt: Date()))
         } catch {
-            if rawEvents.isEmpty {
+            if isCurrent, (rawByWeekNumber[week.number] ?? []).isEmpty {
                 errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't load this week."
             }
         }
     }
 
     private func applyFilter() {
-        let filtered = GroupCatalog.filter(rawEvents, hiding: hiddenGroups)
-        events = filtered
-        clashingIDs = ClashDetector.clashingEventIDs(in: filtered)
+        eventsByWeekNumber = rawByWeekNumber.mapValues { GroupCatalog.filter($0, hiding: hiddenGroups) }
+        let current = currentWeek.map { eventsByWeekNumber[$0.number] ?? [] } ?? []
+        events = current
+        clashingIDs = ClashDetector.clashingEventIDs(in: current)
         if !engLabModules.isEmpty {
-            hasEngineeringLabs = rawEvents.contains { engLabModules.contains($0.moduleCode ?? "") }
+            hasEngineeringLabs = rawByWeekNumber.values.flatMap { $0 }
+                .contains { engLabModules.contains($0.moduleCode ?? "") }
         }
     }
 }
