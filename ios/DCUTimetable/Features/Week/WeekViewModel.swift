@@ -30,6 +30,14 @@ final class WeekViewModel: ObservableObject {
         self.cache = cache
     }
 
+    /// The campus shared by every located class this week — nil if they span campuses (or
+    /// nothing has a room, e.g. an all-online week).
+    var campusName: String? {
+        let campuses = Set(events.flatMap { $0.parsedLocations.compactMap(\.campus) })
+        guard campuses.count == 1 else { return nil }
+        return campuses.first?.name
+    }
+
     /// Events grouped by calendar day, days in order.
     var eventsByDay: [(day: Date, events: [TimetableEvent])] {
         let cal = Foundation.Calendar.current

@@ -9,6 +9,7 @@ struct WeekView: View {
 
     @StateObject private var model: WeekViewModel
     @AppStorage("hiddenGroups") private var hiddenGroupsData = Data()
+    @AppStorage("weekShowsCalendar") private var showsCalendar = false
     @State private var showingGroups = false
     @State private var showingEngLabs = false
 
@@ -37,6 +38,9 @@ struct WeekView: View {
                             ? "Nothing scheduled for \(model.weekLabel.lowercased())."
                             : "")
                     )
+                } else if showsCalendar {
+                    WeekCalendarView(eventsByDay: model.eventsByDay,
+                                     clashingIDs: model.clashingIDs)
                 } else {
                     List {
                         ForEach(model.eventsByDay, id: \.day) { group in
@@ -53,10 +57,26 @@ struct WeekView: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { showsCalendar.toggle() }
+                    } label: {
+                        Image(systemName: showsCalendar ? "list.bullet" : "calendar")
+                    }
+                    .accessibilityLabel(showsCalendar ? "Show list" : "Show weekly calendar")
+                }
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
                         Text(title).font(.headline)
-                        Text(model.weekLabel).font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 3) {
+                            Text(model.weekLabel)
+                            if let campus = model.campusName {
+                                Image(systemName: "mappin.and.ellipse")
+                                Text(campus)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
                 }
                 ToolbarItemGroup(placement: .bottomBar) {
@@ -125,10 +145,13 @@ private struct EventRow: View {
                 Text(event.title).font(.headline)
                 Text(event.activity.summary)
                     .font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 6) {
+                // One flowing string so a long room description wraps cleanly instead of
+                // leaving the delivery label stranded on the first line.
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "mappin.and.ellipse").font(.caption2)
-                    Text(event.locationText).font(.caption)
-                    Text("· \(event.type.label)").font(.caption).foregroundStyle(.secondary)
+                    Text("\(event.locationDisplay) · \(event.type.label)")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(.secondary)
                 if let staff = event.staffText {
