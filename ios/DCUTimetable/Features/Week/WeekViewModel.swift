@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 @MainActor
 final class WeekViewModel: ObservableObject {
@@ -9,6 +10,12 @@ final class WeekViewModel: ObservableObject {
     @Published var lastUpdated: Date?
     @Published var weekLabel: String = ""
     @Published var hasEngineeringLabs = false
+    /// Monday of the week being shown, so the day view can lay out Mon–Fri.
+    @Published private(set) var weekStart: Date?
+    /// Which way the last week change went, so the view slides in the matching direction.
+    @Published private(set) var slide: SlideDirection = .none
+
+    enum SlideDirection { case forward, backward, none }
 
     let programme: TimetableCategory
     private let source: TimetableSource
@@ -74,23 +81,39 @@ final class WeekViewModel: ObservableObject {
               let idx = calendar.weeks.firstIndex(where: { $0.number == current.number }) else { return }
         let next = idx + delta
         guard calendar.weeks.indices.contains(next) else { return }
-        week = calendar.weeks[next]
+
+        let target = calendar.weeks[next]
+        slide = delta > 0 ? .forward : .backward
+        isLoading = true                      // set before clearing, so no "no classes" flash
+        // Mutate inside an explicit transaction: the view keys its slide transition off
+        // weekLabel, and `.animation(_:value:)` alone does not reliably drive an
+        // identity (.id) change. Cleared here so the outgoing week doesn't slide out
+        // already relabelled.
+        withAnimation(.easeInOut(duration: 0.28)) {
+            week = target
+            weekLabel = "Week \(target.label)"
+            rawEvents = []
+            events = []
+            clashingIDs = []
+        }
         await loadWeek()
     }
 
     private func loadWeek() async {
         guard let week else { return }
-        weekLabel = "Week \(week.label)"
 
-        // Offline-first: show cached snapshot immediately.
-        if let snap = await cache.snapshot(categoryID: programme.identity, weekNumber: week.number) {
-            rawEvents = snap.events
-            lastUpdated = snap.fetchedAt
-            applyFilter()
-        }
+        // Read the cache *before* touching published state so the label and the events
+        // change together in one render pass. Otherwise the await suspends mid-update and
+        // the week-change animation slides in the previous week's classes.
+        let cached = await cache.snapshot(categoryID: programme.identity, weekNumber: week.number)
+        weekLabel = "Week \(week.label)"
+        weekStart = week.firstDay
+        rawEvents = cached?.events ?? []
+        lastUpdated = cached?.fetchedAt
+        errorText = nil
+        applyFilter()
 
         isLoading = true
-        errorText = nil
         defer { isLoading = false }
         do {
             let fetched = try await source.events(for: programme, weeks: [week])

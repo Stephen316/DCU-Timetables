@@ -12,6 +12,10 @@ struct WeekView: View {
     @AppStorage("weekShowsCalendar") private var showsCalendar = false
     @State private var showingGroups = false
     @State private var showingEngLabs = false
+    /// Mon–Fri index for the day view (0 = Monday).
+    @State private var dayIndex = 0
+    /// Direction of the last page, so the slide matches the travel.
+    @State private var forward = true
 
     init(programme: TimetableCategory,
          source: TimetableSource = DCUAPIClient(),
@@ -29,31 +33,33 @@ struct WeekView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if model.eventsByDay.isEmpty && !model.isLoading {
-                    ContentUnavailableView(
-                        model.errorText ?? "No classes this week",
-                        systemImage: model.errorText == nil ? "calendar" : "wifi.exclamationmark",
-                        description: Text(model.errorText == nil
-                            ? "Nothing scheduled for \(model.weekLabel.lowercased())."
-                            : "")
-                    )
-                } else if showsCalendar {
-                    WeekCalendarView(eventsByDay: model.eventsByDay,
-                                     clashingIDs: model.clashingIDs)
-                } else {
-                    List {
-                        ForEach(model.eventsByDay, id: \.day) { group in
-                            Section(dayHeader(group.day)) {
-                                ForEach(group.events) { event in
-                                    EventRow(event: event,
-                                             isClashing: model.clashingIDs.contains(event.id))
-                                }
-                            }
+            ZStack {
+                Group {
+                    if model.eventsByDay.isEmpty && !model.isLoading {
+                        ContentUnavailableView(
+                            model.errorText ?? "No classes this week",
+                            systemImage: model.errorText == nil ? "calendar" : "wifi.exclamationmark",
+                            description: Text(model.errorText == nil
+                                ? "Nothing scheduled for \(model.weekLabel.lowercased())."
+                                : "")
+                        )
+                    } else if showsCalendar {
+                        WeekCalendarView(eventsByDay: model.eventsByDay,
+                                         clashingIDs: model.clashingIDs)
+                    } else {
+                        WrappingPager(count: weekDays.count, index: $dayIndex) { day in
+                            dayList(for: day)
                         }
                     }
                 }
+                .id(model.weekLabel)
+                .transition(slideTransition)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .contentShape(Rectangle())
+            .pagingSwipe(onBack: { page(forward: false) },
+                         onForward: { page(forward: true) })
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -116,10 +122,72 @@ struct WeekView: View {
             .sheet(isPresented: $showingEngLabs) {
                 EngineeringLabsView()
             }
+            .onChange(of: model.weekStart) { _, newValue in
+                guard let start = newValue else { return }
+                dayIndex = Self.defaultDayIndex(weekStart: start)
+            }
             .onChange(of: hiddenGroupsData) { _, newValue in
                 model.updateHiddenGroups(HiddenGroups.decode(newValue))
             }
         }
+    }
+
+    /// Mon–Fri of the week on screen.
+    private var weekDays: [Date] {
+        guard let start = model.weekStart else { return [] }
+        let cal = Calendar.current
+        let monday = cal.startOfDay(for: start)
+        return (0..<5).compactMap { cal.date(byAdding: .day, value: $0, to: monday) }
+    }
+
+    @ViewBuilder
+    private func dayList(for index: Int) -> some View {
+        let day = weekDays.indices.contains(index) ? weekDays[index] : nil
+        let events = day.map(self.events(on:)) ?? []
+        List {
+            Section(day.map(dayHeader) ?? "") {
+                if events.isEmpty {
+                    Text("No classes").foregroundStyle(.secondary)
+                } else {
+                    ForEach(events) { event in
+                        EventRow(event: event,
+                                 isClashing: model.clashingIDs.contains(event.id))
+                    }
+                }
+            }
+        }
+    }
+
+    private func events(on day: Date) -> [TimetableEvent] {
+        model.eventsByDay.first { Calendar.current.isDate($0.day, inSameDayAs: day) }?.events ?? []
+    }
+
+    /// Swiping pages the day in the day view (Mon–Fri, wrapping back to Monday) and the
+    /// week in the calendar. The toolbar chevrons always page weeks, so the day view can
+    /// still reach another week.
+    private func page(forward goForward: Bool) {
+        // The day view has its own interactive pager (WrappingPager); only the calendar
+        // pages from this gesture, because neighbouring weeks aren't loaded yet.
+        guard showsCalendar else { return }
+        forward = goForward
+        Task {
+            if goForward { await model.goToNextWeek() } else { await model.goToPreviousWeek() }
+        }
+    }
+
+    /// Open the day view on today when today is in the week being shown.
+    private static func defaultDayIndex(weekStart: Date) -> Int {
+        let cal = Calendar.current
+        let offset = cal.dateComponents([.day],
+                                        from: cal.startOfDay(for: weekStart),
+                                        to: cal.startOfDay(for: Date())).day ?? 0
+        return (0...4).contains(offset) ? offset : 0
+    }
+
+    /// The incoming page slides in from the direction of travel.
+    private var slideTransition: AnyTransition {
+        .asymmetric(insertion: .move(edge: forward ? .trailing : .leading),
+                    removal: .move(edge: forward ? .leading : .trailing))
     }
 
     private func dayHeader(_ date: Date) -> String {

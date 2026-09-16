@@ -5,7 +5,6 @@ import SwiftUI
 struct WeekCalendarView: View {
     let eventsByDay: [(day: Date, events: [TimetableEvent])]
     let clashingIDs: Set<String>
-
     @State private var selected: TimetableEvent?
 
     private let hourHeight: CGFloat = 58
