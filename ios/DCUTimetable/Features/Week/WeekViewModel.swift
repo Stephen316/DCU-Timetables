@@ -7,7 +7,6 @@ final class WeekViewModel: ObservableObject {
     @Published var clashingIDs: Set<String> = []
     @Published var isLoading = false
     @Published var errorText: String?
-    @Published var lastUpdated: Date?
     @Published var weekLabel: String = ""
     @Published var hasEngineeringLabs = false
     /// Monday of the week being shown, so the day view can lay out Mon–Fri.
@@ -28,7 +27,6 @@ final class WeekViewModel: ObservableObject {
     private let cache: TimetableCache
 
     private var rawByWeekNumber: [Int: [TimetableEvent]] = [:]
-    private var loadedAt: [Int: Date] = [:]
     private var hiddenGroups: Set<String>
     private let cancellationStore: CancellationStore
     private let deadlineStore: DeadlineStore
@@ -168,7 +166,6 @@ final class WeekViewModel: ObservableObject {
         weekLabel = "Week \(week.label)"
         weekStart = week.firstDay
         errorText = nil
-        lastUpdated = loadedAt[week.number]
         applyFilter()
 
         if rawByWeekNumber[week.number] == nil {
@@ -195,15 +192,11 @@ final class WeekViewModel: ObservableObject {
     private func load(_ week: TeachingWeek, isCurrent: Bool) async {
         if let cached = await cache.snapshot(categoryID: programme.identity, weekNumber: week.number) {
             rawByWeekNumber[week.number] = cached.events
-            loadedAt[week.number] = cached.fetchedAt
-            if isCurrent { lastUpdated = cached.fetchedAt }
             applyFilter()
         }
         do {
             let fetched = try await source.events(for: programme, weeks: [week])
             rawByWeekNumber[week.number] = fetched
-            loadedAt[week.number] = Date()
-            if isCurrent { lastUpdated = Date() }
             applyFilter()
             await cache.store(TimetableSnapshot(category: programme, weekNumber: week.number,
                                                 events: fetched, fetchedAt: Date()))

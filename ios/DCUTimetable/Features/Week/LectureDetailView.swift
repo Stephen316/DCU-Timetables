@@ -37,6 +37,7 @@ struct LectureDetailView: View {
             cancellation
             deadlines
         }
+        .listStyle(.grouped)
         .navigationTitle(event.moduleCode ?? "Class")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
@@ -59,13 +60,13 @@ struct LectureDetailView: View {
                     HStack(spacing: 10) {
                         Image(systemName: deadline.kind.isSatInClass
                               ? "pencil.and.list.clipboard" : "doc.text")
-                            .foregroundStyle(deadline.kind.isSatInClass ? .blue : .yellow)
+                            .foregroundStyle(tint(for: deadline))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(deadline.kind.isSatInClass
                                  ? "\(deadline.kind.label) in this class"
                                  : "\(deadline.kind.label) due at this class")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(deadline.kind.isSatInClass ? .blue : .yellow)
+                                .foregroundStyle(tint(for: deadline))
                             Text(deadline.title).font(.headline)
                             Text(deadline.due.formatted(date: .complete, time: .shortened))
                                 .font(.caption).foregroundStyle(.secondary)
@@ -75,6 +76,11 @@ struct LectureDetailView: View {
                 }
             }
         }
+    }
+
+    /// Same meaning, same colour as the border in the timetable.
+    private func tint(for deadline: Deadline) -> Color {
+        deadline.kind.isSatInClass ? TimetableTint.test : TimetableTint.due
     }
 
     private var header: some View {
@@ -140,7 +146,7 @@ struct LectureDetailView: View {
             if model.status.isFlagged {
                 Label("Reported not on · \(model.status.reportCount) people",
                       systemImage: "exclamationmark.circle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(TimetableTint.off)
             } else if model.status.reportCount > 0 {
                 Text("\(model.status.reportCount) of \(CancellationRules.threshold) people say this isn't on")
                     .foregroundStyle(.secondary)
@@ -266,13 +272,13 @@ private struct DeadlineRow: View {
                 Label(standing.summary,
                       systemImage: standing.isConfirmed ? "checkmark.seal.fill" : "questionmark.circle")
                     .font(.caption2)
-                    .foregroundStyle(standing.isConfirmed ? .green : .secondary)
+                    .foregroundStyle(standing.isConfirmed ? TimetableTint.confirmed : .secondary)
                 Spacer(minLength: 0)
                 if !isMine {
                     Button(standing.confirmedByMe ? "Confirmed" : "This is right") { onConfirm() }
                         .font(.caption2)
                         .buttonStyle(.bordered)
-                        .tint(standing.confirmedByMe ? .green : .accentColor)
+                        .tint(standing.confirmedByMe ? TimetableTint.confirmed : .accentColor)
                 }
             }
             .padding(.leading, 34)
@@ -296,7 +302,7 @@ private struct DeadlineFormView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            List {
                 Section {
                     TextField("What's due?", text: $title)
                     Picker("Type", selection: $kind) {
@@ -309,6 +315,7 @@ private struct DeadlineFormView: View {
                     Text("Everyone taking this module will see this.")
                 }
             }
+            .listStyle(.grouped)
             .navigationTitle("Add a deadline")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

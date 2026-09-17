@@ -5,9 +5,9 @@ import SwiftUI
 extension ClassHighlight {
     var tint: Color {
         switch self {
-        case .cancelled: return .orange
-        case .test: return .blue
-        case .assignment: return .yellow
+        case .cancelled: return TimetableTint.off
+        case .test: return TimetableTint.test
+        case .assignment: return TimetableTint.due
         }
     }
 

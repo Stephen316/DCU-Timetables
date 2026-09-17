@@ -35,7 +35,7 @@ struct SignInView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            List {
                 Section {
                     Text("Sign in with your DCU email address")
                 }
@@ -46,6 +46,7 @@ struct SignInView: View {
                     credentials
                 }
             }
+            .listStyle(.grouped)
             .navigationTitle("Welcome")
         }
     }
@@ -107,6 +108,7 @@ struct SignInView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: 6))
                 .disabled(!canSubmit)
             }
 
@@ -147,6 +149,7 @@ struct SignInView: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.roundedRectangle(radius: 6))
             .disabled(isBusy)
         }
 

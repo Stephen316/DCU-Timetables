@@ -46,6 +46,7 @@ struct GroupSelectionView: View {
                     }
                 }
             }
+            .listStyle(.grouped)
             .navigationTitle("Your groups")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

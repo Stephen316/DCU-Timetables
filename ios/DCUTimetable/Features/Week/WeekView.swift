@@ -109,11 +109,6 @@ struct WeekView: View {
                     Image(systemName: "chevron.left")
                 }
                 Spacer()
-                if let updated = model.lastUpdated {
-                    Text("Updated \(updated.formatted(.relative(presentation: .named)))")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-                Spacer()
                 Button { model.stepIndex(by: 1) } label: {
                     Image(systemName: "chevron.right")
                 }
@@ -183,6 +178,7 @@ struct WeekView: View {
                 }
             }
         }
+        .listStyle(.grouped)
     }
 
     private func events(on day: Date) -> [TimetableEvent] {
@@ -234,7 +230,7 @@ private struct EventRow: View {
         .padding(highlight == nil ? 0 : 8)
         .overlay {
             if let highlight {
-                RoundedRectangle(cornerRadius: 8).strokeBorder(highlight.tint, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 4).strokeBorder(highlight.tint, lineWidth: 2)
             }
         }
     }
@@ -271,7 +267,7 @@ private struct EventRow: View {
 
             if isClashing {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(TimetableTint.off)
                     .help("Overlaps another class")
             }
         }

@@ -41,6 +41,7 @@ struct ProgrammePickerView: View {
                     )
                 }
             }
+            .listStyle(.grouped)
             .navigationTitle("Your programme")
             .searchable(text: $query, prompt: "Programme name or code")
             .overlay { if isLoading { ProgressView() } }

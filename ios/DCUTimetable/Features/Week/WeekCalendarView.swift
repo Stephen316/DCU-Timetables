@@ -160,16 +160,16 @@ struct WeekCalendarView: View {
             .padding(.horizontal, 3)
             .padding(.vertical, 2)
             .frame(width: max(width - 2, 10), height: height - 2, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 4).fill(tint.opacity(0.18)))
+            .background(RoundedRectangle(cornerRadius: 3).fill(tint.opacity(0.18)))
             .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 2.5)
+                Rectangle().fill(tint).frame(width: 2.5)
             }
             .overlay {
                 // A highlight outranks a clash outline: not running, or a deadline today,
                 // matters more than an overlap the student has already seen.
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: 3)
                     .strokeBorder(highlight?.tint
-                                  ?? (isClashing ? Color.orange.opacity(0.55) : Color.clear),
+                                  ?? (isClashing ? TimetableTint.off.opacity(0.55) : Color.clear),
                                   lineWidth: highlight == nil ? 1.5 : 2)
             }
             .overlay(alignment: .topTrailing) {
@@ -212,13 +212,11 @@ struct WeekCalendarView: View {
         return first.buildingName ?? first.code
     }
 
-    private static let palette: [Color] = [.blue, .green, .purple, .teal, .indigo, .pink, .brown]
-
     private func tint(for event: TimetableEvent) -> Color {
         let key = event.moduleCode ?? event.title
         var hash = 5381
         for byte in key.utf8 { hash = (hash &* 33) &+ Int(byte) }
-        let count = Self.palette.count
-        return Self.palette[((hash % count) + count) % count]
+        let count = TimetableTint.modules.count
+        return TimetableTint.modules[((hash % count) + count) % count]
     }
 }

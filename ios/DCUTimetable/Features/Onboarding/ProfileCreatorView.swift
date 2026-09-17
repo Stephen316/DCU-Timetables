@@ -18,7 +18,7 @@ struct ProfileCreatorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            List {
                 Section {
                     Text("Setting up your timetable").font(.title2.weight(.bold))
                     if let email = user.email {
@@ -67,6 +67,7 @@ struct ProfileCreatorView: View {
                     }
                 }
             }
+            .listStyle(.grouped)
             .navigationTitle("Welcome")
             .fileImporter(
                 isPresented: $showImporter,

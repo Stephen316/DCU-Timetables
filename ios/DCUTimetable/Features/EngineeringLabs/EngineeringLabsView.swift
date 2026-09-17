@@ -25,6 +25,7 @@ struct EngineeringLabsView: View {
                     ContentUnavailableView("Rotation unavailable", systemImage: "wrench.and.screwdriver")
                 }
             }
+            .listStyle(.grouped)
             .navigationTitle("Engineering labs")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
