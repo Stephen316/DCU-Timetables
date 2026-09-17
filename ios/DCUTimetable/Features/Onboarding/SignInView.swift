@@ -63,12 +63,14 @@ struct SignInView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
 
+                    // `.password`, never `.newPassword`: the latter opts the field into iOS's
+                    // automatic "Use Strong Password?" sheet, which slides up and covers the
+                    // fields — with a confirm box present that makes them impossible to type in.
                     SecureField("Password", text: $password)
-                        .textContentType(mode == .createAccount ? .newPassword : .password)
+                        .textContentType(.password)
 
                     if mode == .createAccount {
                         SecureField("Confirm password", text: $confirmPassword)
-                            .textContentType(.newPassword)
                         if let passwordProblem {
                             Text(passwordProblem.message)
                                 .font(.caption).foregroundStyle(.secondary)
