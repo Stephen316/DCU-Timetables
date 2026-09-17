@@ -14,7 +14,7 @@ import Foundation
 /// The group number and cohort are what identify a *student's* stream, which drives
 /// group-filtering and clash detection. Parsing is defensive: unknown shapes keep `raw`
 /// and fall back to `.other`.
-public struct ActivityCode: Equatable, Sendable, Codable {
+public struct ActivityCode: Hashable, Sendable, Codable {
     public let raw: String
     public let moduleCode: String?
     public let occurrence: String?

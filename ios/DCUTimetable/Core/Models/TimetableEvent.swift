@@ -1,7 +1,7 @@
 import Foundation
 
 /// One class in a timetable — the Core domain type the UI renders.
-public struct TimetableEvent: Identifiable, Equatable, Sendable, Codable {
+public struct TimetableEvent: Identifiable, Hashable, Sendable, Codable {
     public let id: String
     public let start: Date
     public let end: Date
