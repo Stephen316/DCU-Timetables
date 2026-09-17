@@ -41,11 +41,6 @@ public struct TimetableEvent: Identifiable, Hashable, Sendable, Codable {
         moduleName ?? activity.moduleCode ?? activity.raw
     }
 
-    /// Room(s), or an em dash when there is no location (e.g. recorded classes).
-    public var locationText: String {
-        locations.isEmpty ? "—" : locations.joined(separator: ", ")
-    }
-
     public var staffText: String? {
         staff.isEmpty ? nil : staff.joined(separator: ", ")
     }

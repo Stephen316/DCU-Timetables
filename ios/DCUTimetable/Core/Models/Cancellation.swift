@@ -23,6 +23,17 @@ public struct CancellationStatus: Sendable, Equatable {
 
     public var isFlagged: Bool { reportCount >= CancellationRules.threshold }
 
+    /// Always the real number, never "x of 3" — the threshold decides whether the class is
+    /// *flagged*, but eleven people saying a lecture is off means more than three, and
+    /// capping the wording hides that. Same rule as `DeadlineStanding.summary`.
+    public var summary: String {
+        switch reportCount {
+        case ..<1: return "Nobody has reported this class as off"
+        case 1: return "1 person says this isn't on"
+        default: return "\(reportCount) people say this isn't on"
+        }
+    }
+
     public init(reportCount: Int, reportedByMe: Bool) {
         self.reportCount = reportCount
         self.reportedByMe = reportedByMe

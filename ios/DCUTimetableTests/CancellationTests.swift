@@ -56,4 +56,17 @@ struct CancellationTests {
         #expect(all["b"]?.reportCount == 1)
         #expect(all["b"]?.reportedByMe == false)
     }
+
+    /// Counts are stated in full, never "x of 3" — the threshold decides whether a class is
+    /// flagged, not how many people are worth mentioning.
+    @Test func summaryNeverCapsTheCount() {
+        #expect(CancellationStatus(reportCount: 0, reportedByMe: false).summary
+                == "Nobody has reported this class as off")
+        #expect(CancellationStatus(reportCount: 1, reportedByMe: true).summary
+                == "1 person says this isn't on")
+        #expect(CancellationStatus(reportCount: 2, reportedByMe: false).summary
+                == "2 people say this isn't on")
+        #expect(CancellationStatus(reportCount: 11, reportedByMe: false).summary
+                == "11 people say this isn't on")
+    }
 }

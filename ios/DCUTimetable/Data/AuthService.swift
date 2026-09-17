@@ -17,7 +17,8 @@ public struct AuthenticatedUser: Codable, Sendable, Equatable {
 
 public enum AuthError: LocalizedError, Equatable {
     case notConfigured
-    /// The address exists but hasn't been verified yet, so the code screen should open.
+    /// The address exists but hasn't been confirmed yet, so the "check your email" step
+    /// should open instead of the sign-in failing.
     case emailNotConfirmed
     case server(String)
 
@@ -49,7 +50,8 @@ public protocol AuthService: Sendable {
     func sendPasswordReset(to email: DCUEmail) async throws
 }
 
-/// Supabase Auth one-time-code sign-in.
+/// Supabase Auth email-and-password sign-in, with the address confirmed by the link
+/// Supabase emails.
 public struct SupabaseAuthService: AuthService {
     private let config: SupabaseConfig
     private let session: URLSession
@@ -82,8 +84,8 @@ public struct SupabaseAuthService: AuthService {
                 "password": password,
             ])
         } catch let error as AuthError {
-            // Supabase reports an unverified address as a plain sign-in failure; the view
-            // needs to tell the two apart so it can open the code screen instead.
+            // Supabase reports an unconfirmed address as a plain sign-in failure; the view
+            // needs to tell the two apart so it can open the confirmation step instead.
             if case .server(let message) = error, Self.isUnconfirmed(message) {
                 throw AuthError.emailNotConfirmed
             }
@@ -158,9 +160,24 @@ public enum SignedInUser {
     }
 
     public static func signOut() {
-        UserDefaults.standard.removeObject(forKey: key)
+        forgetLocally()
         Task { await SupabaseSession.shared.clear() }
     }
+
+    /// Forget who was signed in without touching the Keychain. Used when the session has
+    /// already been discarded because it couldn't be refreshed — going back through
+    /// `signOut` from inside `SupabaseSession` would be a round trip into the actor that
+    /// is already mid-clear.
+    public static func forgetLocally() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+}
+
+public extension Notification.Name {
+    /// The refresh token is dead and the student has been signed out. Without this the app
+    /// keeps showing them as signed in while every write is silently rejected, because
+    /// `SignedInUser` lives in `UserDefaults` and the token lives in the Keychain.
+    static let authSessionExpired = Notification.Name("ie.dcu.timetable.authSessionExpired")
 }
 
 public enum AuthServiceFactory {

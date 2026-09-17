@@ -44,16 +44,19 @@ public struct SupabaseDeadlineStore: DeadlineStore {
     public func deadlines(forModules moduleKeys: [String]) async throws -> [Deadline] {
         let unique = Set(moduleKeys).sorted()
         guard !unique.isEmpty else { return [] }
-        let list = unique.map { "\"\($0.replacingOccurrences(of: "\"", with: ""))\"" }.joined(separator: ",")
-        return try await deadlines(matching: "in.(\(list))")
+        return try await deadlines(matching: PostgREST.inList(unique))
     }
 
     private func deadlines(matching moduleFilter: String) async throws -> [Deadline] {
+        // Nothing prunes the table, so without a floor this download grows for the life of
+        // the module. `DeadlineRules.horizon` is the same cut-off the client filters on.
+        let since = ISO8601DateFormatter().string(from: DeadlineRules.horizon())
         var components = URLComponents(string: "\(config.url)/rest/v1/\(table)")!
         components.queryItems = [
             URLQueryItem(name: "select",
                          value: "id,module_key,at_group_key,title,due_at,kind,submitter_id,submitted_at"),
             URLQueryItem(name: "module_key", value: moduleFilter),
+            URLQueryItem(name: "due_at", value: "gte.\(since)"),
             URLQueryItem(name: "order", value: "due_at.asc"),
         ]
         var request = URLRequest(url: components.url!)
@@ -113,7 +116,7 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         var components = URLComponents(string: "\(config.url)/rest/v1/\(confirmationTable)")!
         components.queryItems = [
             URLQueryItem(name: "select", value: "deadline_id,confirmer_id"),
-            URLQueryItem(name: "deadline_id", value: "in.(\(ids.joined(separator: ",")))"),
+            URLQueryItem(name: "deadline_id", value: PostgREST.inList(ids)),
         ]
         var request = URLRequest(url: components.url!)
         await apply(&request)
@@ -128,8 +131,9 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         request.httpMethod = "POST"
         await apply(&request)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // The composite primary key makes confirming twice a no-op, not a second vote.
-        request.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+        // `ON CONFLICT DO NOTHING`: confirming twice is a no-op, not a second vote. See
+        // the note in `SupabaseCancellationStore.submit` for why not `merge-duplicates`.
+        request.setValue("resolution=ignore-duplicates", forHTTPHeaderField: "Prefer")
         request.httpBody = try JSONEncoder().encode([
             ConfirmationRow(deadline_id: deadlineID, confirmer_id: confirmerID)
         ])
@@ -189,12 +193,12 @@ public actor LocalDeadlineStore: DeadlineStore {
     }
 
     public func deadlines(forModule moduleKey: String) async throws -> [Deadline] {
-        load().filter { $0.moduleKey == moduleKey }.sorted { $0.due < $1.due }
+        DeadlineRules.upcoming(load().filter { $0.moduleKey == moduleKey })
     }
 
     public func deadlines(forModules moduleKeys: [String]) async throws -> [Deadline] {
         let wanted = Set(moduleKeys)
-        return load().filter { wanted.contains($0.moduleKey) }.sorted { $0.due < $1.due }
+        return DeadlineRules.upcoming(load().filter { wanted.contains($0.moduleKey) })
     }
 
     public func submit(_ deadline: Deadline) async throws {

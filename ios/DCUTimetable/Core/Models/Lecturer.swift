@@ -50,7 +50,9 @@ public enum LecturerDirectory {
         let role: String?
     }
 
-    private static var entries: [String: Entry] = load()
+    // `let`, not `var`: it is written once and read from every view. A mutable static is a
+    // data race waiting for strict concurrency to be turned on.
+    private static let entries: [String: Entry] = load()
 
     private static func load(bundle: Bundle = .main) -> [String: Entry] {
         guard let url = bundle.url(forResource: "lecturers", withExtension: "json"),

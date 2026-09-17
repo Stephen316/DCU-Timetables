@@ -27,6 +27,9 @@ drop policy if exists "delete"     on cancellation_reports;
 drop policy if exists "insert own" on cancellation_reports;
 drop policy if exists "delete own" on cancellation_reports;
 
+-- No update policy anywhere in this file, on purpose. The app only ever inserts and
+-- deletes; its repeat-write path is `ON CONFLICT DO NOTHING`, which needs insert alone.
+-- An update grant would let a row's owner column be rewritten and buy nothing.
 create policy "read" on cancellation_reports
   for select using (true);
 create policy "insert own" on cancellation_reports
@@ -58,15 +61,14 @@ alter table module_deadlines enable row level security;
 
 drop policy if exists "read"       on module_deadlines;
 drop policy if exists "insert own" on module_deadlines;
-drop policy if exists "update own" on module_deadlines;
 drop policy if exists "delete own" on module_deadlines;
+-- Granted by an earlier version of this file and never used by the app.
+drop policy if exists "update own" on module_deadlines;
 
 create policy "read" on module_deadlines
   for select using (true);
 create policy "insert own" on module_deadlines
   for insert with check (auth.uid()::text = submitter_id);
-create policy "update own" on module_deadlines
-  for update using (auth.uid()::text = submitter_id);
 create policy "delete own" on module_deadlines
   for delete using (auth.uid()::text = submitter_id);
 
@@ -93,3 +95,15 @@ create policy "insert own" on deadline_confirmations
   for insert with check (auth.uid()::text = confirmer_id);
 create policy "delete own" on deadline_confirmations
   for delete using (auth.uid()::text = confirmer_id);
+
+-- ---------------------------------------------------------------------------
+-- 4. Housekeeping
+-- ---------------------------------------------------------------------------
+--
+-- The app only ever asks for deadlines due today or later, so old rows are invisible
+-- long before they are large. Run this occasionally (or from a scheduled job) to stop
+-- the table growing for the life of each module:
+--
+--   delete from module_deadlines where due_at < now() - interval '60 days';
+--
+-- Confirmations cascade with the row they belong to.

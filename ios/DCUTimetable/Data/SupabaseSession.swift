@@ -61,9 +61,12 @@ public actor SupabaseSession {
         guard let current = cached else { return nil }
         if current.isValid() { return current.accessToken }
         guard let refreshed = await refresh(current, config: config) else {
-            // The refresh token is dead — the student has to sign in again, and until then
-            // they act as an anonymous client rather than being silently broken.
+            // The refresh token is dead. Clearing the Keychain isn't enough on its own:
+            // `SignedInUser` would still say they're signed in, so every write would be
+            // made anonymously and rejected by RLS while the UI showed nothing wrong.
             clear()
+            SignedInUser.forgetLocally()
+            NotificationCenter.default.post(name: .authSessionExpired, object: nil)
             return nil
         }
         save(refreshed)

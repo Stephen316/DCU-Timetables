@@ -10,16 +10,34 @@ public protocol CancellationStore: Sendable {
 /// Anonymous, per-install id. Not a name or account — it exists only so one device can't
 /// flag a class by reporting repeatedly.
 public enum ReporterID {
-    private static let key = "cancellationReporterID"
+    public static let storageKey = "cancellationReporterID"
 
     public static var current: String {
         // A signed-in student is the same person across reinstalls, which is a much better
         // basis for one-vote-per-person than a per-install UUID.
         if let user = SignedInUser.current { return user.id }
-        if let existing = UserDefaults.standard.string(forKey: key) { return existing }
+        if let existing = UserDefaults.standard.string(forKey: storageKey) { return existing }
         let fresh = UUID().uuidString
-        UserDefaults.standard.set(fresh, forKey: key)
+        UserDefaults.standard.set(fresh, forKey: storageKey)
         return fresh
+    }
+
+    /// Dropped on sign-out: the next person to use this device is a different voter.
+    public static func reset() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+}
+
+/// Small shared pieces of PostgREST's query syntax, in one place so every caller quotes
+/// the same way — an unquoted value containing a comma silently becomes two filters.
+public enum PostgREST {
+    /// `in.("a","b")`, with embedded quotes stripped rather than escaped: none of the keys
+    /// this app filters on can legitimately contain one.
+    public static func inList(_ values: [String]) -> String {
+        let quoted = values
+            .map { "\"\($0.replacingOccurrences(of: "\"", with: ""))\"" }
+            .joined(separator: ",")
+        return "in.(\(quoted))"
     }
 }
 
@@ -56,12 +74,10 @@ public struct SupabaseCancellationStore: CancellationStore {
 
     public func reports(forKeys keys: [String]) async throws -> [CancellationReport] {
         guard !keys.isEmpty else { return [] }
-        // PostgREST `in.(…)` needs each value quoted, since keys contain commas and slashes.
-        let list = keys.map { "\"\($0.replacingOccurrences(of: "\"", with: ""))\"" }.joined(separator: ",")
         var components = URLComponents(string: "\(config.url)/rest/v1/\(table)")!
         components.queryItems = [
             URLQueryItem(name: "select", value: "event_key,reporter_id,reported_at"),
-            URLQueryItem(name: "event_key", value: "in.(\(list))"),
+            URLQueryItem(name: "event_key", value: PostgREST.inList(keys)),
         ]
         var request = URLRequest(url: components.url!)
         await apply(&request)
@@ -81,9 +97,10 @@ public struct SupabaseCancellationStore: CancellationStore {
         request.httpMethod = "POST"
         await apply(&request)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Upsert: the table's (event_key, reporter_id) primary key makes a repeat report a
-        // no-op rather than a second vote.
-        request.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+        // A repeat report is genuinely a no-op, so this is `ON CONFLICT DO NOTHING`.
+        // `merge-duplicates` would be `DO UPDATE`, which RLS refuses without an UPDATE
+        // policy — and granting one would let a row's owner be rewritten for no gain.
+        request.setValue("resolution=ignore-duplicates", forHTTPHeaderField: "Prefer")
         request.httpBody = try JSONEncoder().encode([
             ["event_key": report.eventKey, "reporter_id": report.reporterID]
         ])
