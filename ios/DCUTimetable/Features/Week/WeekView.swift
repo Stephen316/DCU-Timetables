@@ -14,6 +14,7 @@ struct WeekView: View {
     @State private var showingEngLabs = false
     /// Mon–Fri index for the day view (0 = Monday).
     @State private var dayIndex = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     init(programme: TimetableCategory,
          source: TimetableSource = DCUAPIClient(),
@@ -116,9 +117,15 @@ struct WeekView: View {
             .onChange(of: model.weekIndex) { _, _ in
                 Task { await model.loadCurrentWeek() }
             }
-            .onChange(of: model.weekStart) { _, newValue in
-                guard let start = newValue else { return }
-                dayIndex = Self.defaultDayIndex(weekStart: start)
+            .onChange(of: model.weekStart) { _, _ in
+                resetToDefaultDay()
+            }
+            .onChange(of: scenePhase) { previous, phase in
+                // Coming back to the app is a fresh look at the timetable: whatever day was
+                // last swiped to is stale, so start again from today (or tomorrow evening).
+                // Only after a real trip to the background — pulling down Control Centre
+                // gives .inactive, and shouldn't throw away the day being read.
+                if previous == .background, phase == .active { resetToDefaultDay() }
             }
             .onChange(of: hiddenGroupsData) { _, newValue in
                 model.updateHiddenGroups(HiddenGroups.decode(newValue))
@@ -165,13 +172,9 @@ struct WeekView: View {
         model.eventsByDay.first { Calendar.current.isDate($0.day, inSameDayAs: day) }?.events ?? []
     }
 
-    /// Open the day view on today when today is in the week being shown.
-    private static func defaultDayIndex(weekStart: Date) -> Int {
-        let cal = Calendar.current
-        let offset = cal.dateComponents([.day],
-                                        from: cal.startOfDay(for: weekStart),
-                                        to: cal.startOfDay(for: Date())).day ?? 0
-        return (0...4).contains(offset) ? offset : 0
+    private func resetToDefaultDay() {
+        guard let start = model.weekStart else { return }
+        dayIndex = DefaultDay.index(weekStart: start)
     }
 
 
