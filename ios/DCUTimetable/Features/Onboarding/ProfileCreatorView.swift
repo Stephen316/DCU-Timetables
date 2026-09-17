@@ -1,60 +1,69 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// First-launch profile creator: the student just types their name and taps Continue.
-/// The match against the class list happens silently on the backend (no identity is shown
-/// — verification / email sign-in will come later). Falls back to picking a programme.
+/// After sign-in the student's name comes from their verified DCU address, so there is
+/// nothing to type — this just resolves that name to a lab group and creates the profile,
+/// showing fallbacks only when the name isn't in the class list.
 struct ProfileCreatorView: View {
+    let user: AuthenticatedUser
     let onCreate: (StudentProfile) -> Void
     let onChooseProgramme: () -> Void
+    let onSignOut: () -> Void
 
-    @State private var name = ""
-    @State private var directoryAvailable = EngGroupDirectory.isAvailable
+    private enum Status { case resolving, noList, notFound, ambiguous }
+
+    @State private var status: Status = .resolving
     @State private var showImporter = false
-    @State private var errorText: String?
-
-    private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
+    @State private var note: String?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Set up your timetable").font(.title2.weight(.bold))
-                    Text("Enter your name and we'll build your timetable.")
-                        .foregroundStyle(.secondary)
+                    Text("Setting up your timetable").font(.title2.weight(.bold))
+                    if let email = user.email {
+                        Text("Signed in as \(email.displayName) · \(email.address)")
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                Section("Your name") {
-                    TextField("Full name", text: $name)
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-                        .onSubmit(continueTapped)
-                        .onChange(of: name) { _, _ in errorText = nil }
-                }
-
-                if let errorText {
+                switch status {
+                case .resolving:
+                    Section { ProgressView("Finding your group…") }
+                case .noList:
                     Section {
-                        Text(errorText).font(.callout).foregroundStyle(.secondary)
+                        Text("No class list has been imported yet, so your lab group can't be looked up.")
+                            .foregroundStyle(.secondary)
+                    }
+                case .notFound:
+                    Section {
+                        Text("You're not in the imported class list, so we can't tell which lab group you're in. You can still pick your programme.")
+                            .foregroundStyle(.secondary)
+                    }
+                case .ambiguous:
+                    Section {
+                        Text("More than one student matches that name — pick your programme instead.")
+                            .foregroundStyle(.secondary)
                     }
                 }
 
-                Section {
-                    Button(action: continueTapped) {
-                        Text("Continue").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(trimmedName.isEmpty)
+                if let note {
+                    Section { Text(note).font(.caption).foregroundStyle(.secondary) }
                 }
 
-                Section {
-                    Button {
-                        showImporter = true
-                    } label: {
-                        Label(directoryAvailable ? "Replace class list…" : "Import class list…",
-                              systemImage: "square.and.arrow.down")
-                    }
-                    Button(action: onChooseProgramme) {
-                        Label("Choose a programme instead", systemImage: "magnifyingglass")
+                if status != .resolving {
+                    Section {
+                        Button {
+                            showImporter = true
+                        } label: {
+                            Label("Import class list…", systemImage: "square.and.arrow.down")
+                        }
+                        Button(action: onChooseProgramme) {
+                            Label("Choose a programme instead", systemImage: "magnifyingglass")
+                        }
+                        Button(role: .destructive, action: onSignOut) {
+                            Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
                     }
                 }
             }
@@ -66,43 +75,32 @@ struct ProfileCreatorView: View {
             ) { result in
                 handleImport(result)
             }
+            .task { resolve() }
         }
     }
 
-    private func continueTapped() {
-        guard !trimmedName.isEmpty else { return }
+    /// Match the name from the address against the class list. The list is surname-first
+    /// ("Harcourt Stephen") while the address is given-name-first, so compare the parts as
+    /// a set rather than in order.
+    private func resolve() {
+        guard EngGroupDirectory.isAvailable else { status = .noList; return }
+        guard let email = user.email else { status = .notFound; return }
 
-        // Look up every word typed (handles "Armstrong", "Luke Armstrong", "Armstrong Luke").
-        let tokens = trimmedName.split(separator: " ").map(String.init)
-        var matches: [EngGroupRecord] = []
-        for token in tokens {
-            for record in EngGroupDirectory.lookup(surname: token) where !matches.contains(record) {
-                matches.append(record)
+        var candidates: [EngGroupRecord] = []
+        for part in email.nameParts {
+            for record in EngGroupDirectory.lookup(surname: part) where !candidates.contains(record) {
+                candidates.append(record)
             }
         }
+        let wanted = Set(email.nameParts)
+        let exact = candidates.filter { Set($0.name.lowercased().split(separator: " ").map(String.init)) == wanted }
 
-        guard !matches.isEmpty else {
-            errorText = directoryAvailable
-                ? "We couldn't find “\(trimmedName)”. Check the spelling of your surname, or choose a programme below."
-                : "No class list is loaded yet — import one, or choose a programme below."
-            return
+        if let match = exact.first ?? (candidates.count == 1 ? candidates.first : nil) {
+            onCreate(StudentProfile(name: match.name, group: match.group, subgroup: match.subgroup,
+                                    workshop: match.workshop, drawing: match.drawing))
+        } else {
+            status = candidates.isEmpty ? .notFound : .ambiguous
         }
-
-        // The list is surname-first and every name part is indexed, so a single word can
-        // match several students. Prefer an exact full-name match; if it's still ambiguous
-        // ask for the full name rather than silently assigning the wrong person's group.
-        let typedParts = Set(trimmedName.lowercased().split(separator: " "))
-        let exact = matches.first {
-            Set($0.name.lowercased().split(separator: " ")) == typedParts
-        }
-
-        guard let record = exact ?? (matches.count == 1 ? matches.first : nil) else {
-            errorText = "That matches more than one student — please enter your full name."
-            return
-        }
-
-        onCreate(StudentProfile(name: record.name, group: record.group, subgroup: record.subgroup,
-                                workshop: record.workshop, drawing: record.drawing))
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
@@ -110,14 +108,15 @@ struct ProfileCreatorView: View {
         case .success(let urls):
             guard let url = urls.first else { return }
             do {
-                _ = try EngGroupDirectory.importFile(at: url)
-                directoryAvailable = true
-                errorText = nil
+                let count = try EngGroupDirectory.importFile(at: url)
+                note = "Imported \(count) students."
+                status = .resolving
+                resolve()
             } catch {
-                errorText = error.localizedDescription
+                note = error.localizedDescription
             }
         case .failure(let error):
-            errorText = error.localizedDescription
+            note = error.localizedDescription
         }
     }
 }

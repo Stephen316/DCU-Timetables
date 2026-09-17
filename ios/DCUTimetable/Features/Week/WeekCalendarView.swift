@@ -5,6 +5,10 @@ import SwiftUI
 struct WeekCalendarView: View {
     let eventsByDay: [(day: Date, events: [TimetableEvent])]
     let clashingIDs: Set<String>
+    var cancellation: (TimetableEvent) -> CancellationStatus = { _ in
+        CancellationStatus(reportCount: 0, reportedByMe: false)
+    }
+    var onToggleReport: (TimetableEvent) -> Void = { _ in }
     @State private var selected: TimetableEvent?
 
     private let hourHeight: CGFloat = 58
@@ -68,7 +72,10 @@ struct WeekCalendarView: View {
             }
         }
         .sheet(item: $selected) { event in
-            EventDetailSheet(event: event, isClashing: clashingIDs.contains(event.id))
+            EventDetailSheet(event: event,
+                             isClashing: clashingIDs.contains(event.id),
+                             status: cancellation(event),
+                             onToggleReport: { onToggleReport(event) })
                 .presentationDetents([.medium])
         }
     }
@@ -137,6 +144,7 @@ struct WeekCalendarView: View {
         let height = max(26, duration(of: item.event))
         let tint = tint(for: item.event)
         let isClashing = clashingIDs.contains(item.event.id)
+        let flagged = cancellation(item.event).isFlagged
 
         return Button {
             selected = item.event
@@ -160,8 +168,19 @@ struct WeekCalendarView: View {
                 RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 2.5)
             }
             .overlay {
+                // A crowd-reported cancellation outranks a clash outline.
                 RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(isClashing ? Color.orange : Color.clear, lineWidth: 1.5)
+                    .strokeBorder(flagged ? Color.orange
+                                  : (isClashing ? Color.orange.opacity(0.55) : Color.clear),
+                                  lineWidth: flagged ? 2 : 1.5)
+            }
+            .overlay(alignment: .topTrailing) {
+                if flagged {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.orange)
+                        .padding(1)
+                }
             }
             .contentShape(Rectangle())
         }
@@ -210,6 +229,8 @@ struct WeekCalendarView: View {
 private struct EventDetailSheet: View {
     let event: TimetableEvent
     let isClashing: Bool
+    let status: CancellationStatus
+    let onToggleReport: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -234,6 +255,25 @@ private struct EventDetailSheet: View {
                         Label("Overlaps another class", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                     }
+                }
+                Section {
+                    if status.isFlagged {
+                        Label("Reported not on · \(status.reportCount) people",
+                              systemImage: "exclamationmark.circle.fill")
+                            .foregroundStyle(.orange)
+                    } else if status.reportCount > 0 {
+                        Text("\(status.reportCount) of \(CancellationRules.threshold) people say this isn't on")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Button(role: status.reportedByMe ? nil : .destructive) {
+                        onToggleReport()
+                        dismiss()
+                    } label: {
+                        Label(status.reportedByMe ? "Undo my report" : "Report: lecture not on",
+                              systemImage: status.reportedByMe ? "arrow.uturn.backward" : "exclamationmark.bubble")
+                    }
+                } footer: {
+                    Text("Reports are anonymous. A class is flagged once \(CancellationRules.threshold) people report it.")
                 }
             }
             .navigationTitle(event.moduleCode ?? "Class")

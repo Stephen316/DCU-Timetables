@@ -18,6 +18,8 @@ final class WeekViewModel: ObservableObject {
     @Published private(set) var eventsByWeekNumber: [Int: [TimetableEvent]] = [:]
 
     private(set) var weeks: [TeachingWeek] = []
+    /// Crowd-sourced "not on" tallies for the visible week, keyed by event key.
+    @Published private(set) var cancellations: [String: CancellationStatus] = [:]
 
     let programme: TimetableCategory
     private let source: TimetableSource
@@ -26,16 +28,55 @@ final class WeekViewModel: ObservableObject {
     private var rawByWeekNumber: [Int: [TimetableEvent]] = [:]
     private var loadedAt: [Int: Date] = [:]
     private var hiddenGroups: Set<String>
+    private let cancellationStore: CancellationStore
+    private let reporterID = ReporterID.current
     private let engLabModules = LabRotationLoader.bundled()?.moduleCodes ?? []
 
     init(programme: TimetableCategory,
          hiddenGroups: Set<String> = [],
          source: TimetableSource = DCUAPIClient(),
-         cache: TimetableCache = TimetableCache()) {
+         cache: TimetableCache = TimetableCache(),
+         cancellationStore: CancellationStore = CancellationStoreFactory.make()) {
         self.programme = programme
         self.hiddenGroups = hiddenGroups
         self.source = source
         self.cache = cache
+        self.cancellationStore = cancellationStore
+    }
+
+    // MARK: - Cancellation reports
+
+    func status(for event: TimetableEvent) -> CancellationStatus {
+        cancellations[CancellationRules.eventKey(for: event)]
+            ?? CancellationStatus(reportCount: 0, reportedByMe: false)
+    }
+
+    /// Reporting is a toggle, so a mistaken report can be taken back.
+    func toggleReport(for event: TimetableEvent) async {
+        let key = CancellationRules.eventKey(for: event)
+        let reported = status(for: event).reportedByMe
+        do {
+            if reported {
+                try await cancellationStore.withdraw(eventKey: key, reporterID: reporterID)
+            } else {
+                try await cancellationStore.submit(
+                    CancellationReport(eventKey: key, reporterID: reporterID))
+            }
+            await refreshCancellations()
+        } catch {
+            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't send that report."
+        }
+    }
+
+    /// Non-fatal: a reporting outage must never stop the timetable itself showing.
+    func refreshCancellations() async {
+        let keys = events.map { CancellationRules.eventKey(for: $0) }
+        guard !keys.isEmpty else {
+            cancellations = [:]
+            return
+        }
+        guard let reports = try? await cancellationStore.reports(forKeys: keys) else { return }
+        cancellations = CancellationRules.statuses(from: reports, reporterID: reporterID)
     }
 
     private var currentWeek: TeachingWeek? {
@@ -113,6 +154,8 @@ final class WeekViewModel: ObservableObject {
             await load(week, isCurrent: true)
             isLoading = false
         }
+        await refreshCancellations()
+
         for neighbour in neighbours(of: weekIndex) where rawByWeekNumber[neighbour.number] == nil {
             await load(neighbour, isCurrent: false)
         }

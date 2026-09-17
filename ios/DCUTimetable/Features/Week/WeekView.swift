@@ -39,7 +39,11 @@ struct WeekView: View {
                     // Same pager as the day view — weeks instead of days.
                     WrappingPager(count: max(model.weeks.count, 1), index: $model.weekIndex) { index in
                         WeekCalendarView(eventsByDay: model.eventsByDay(forWeekIndex: index),
-                                         clashingIDs: model.clashingIDs)
+                                         clashingIDs: model.clashingIDs,
+                                         cancellation: { model.status(for: $0) },
+                                         onToggleReport: { event in
+                                             Task { await model.toggleReport(for: event) }
+                                         })
                     }
                 } else {
                     WrappingPager(count: max(weekDays.count, 1), index: $dayIndex) { day in
@@ -141,7 +145,16 @@ struct WeekView: View {
                 } else {
                     ForEach(events) { event in
                         EventRow(event: event,
-                                 isClashing: model.clashingIDs.contains(event.id))
+                                 isClashing: model.clashingIDs.contains(event.id),
+                                 cancellation: model.status(for: event))
+                            .contextMenu {
+                                Button(model.status(for: event).reportedByMe
+                                       ? "Undo \"not on\" report" : "Report: lecture not on",
+                                       systemImage: model.status(for: event).reportedByMe
+                                       ? "arrow.uturn.backward" : "exclamationmark.bubble") {
+                                    Task { await model.toggleReport(for: event) }
+                                }
+                            }
                     }
                 }
             }
@@ -170,8 +183,27 @@ struct WeekView: View {
 private struct EventRow: View {
     let event: TimetableEvent
     let isClashing: Bool
+    var cancellation = CancellationStatus(reportCount: 0, reportedByMe: false)
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if cancellation.isFlagged {
+                Label("Reported not on · \(cancellation.reportCount) people",
+                      systemImage: "exclamationmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
+            rowBody
+        }
+        .padding(cancellation.isFlagged ? 8 : 0)
+        .overlay {
+            if cancellation.isFlagged {
+                RoundedRectangle(cornerRadius: 8).strokeBorder(.orange, lineWidth: 2)
+            }
+        }
+    }
+
+    private var rowBody: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(event.start.formatted(date: .omitted, time: .shortened))
