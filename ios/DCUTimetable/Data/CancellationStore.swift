@@ -64,7 +64,7 @@ public struct SupabaseCancellationStore: CancellationStore {
             URLQueryItem(name: "event_key", value: "in.(\(list))"),
         ]
         var request = URLRequest(url: components.url!)
-        apply(&request)
+        await apply(&request)
         let (data, response) = try await session.data(for: request)
         try check(response)
         let decoder = JSONDecoder()
@@ -79,7 +79,7 @@ public struct SupabaseCancellationStore: CancellationStore {
     public func submit(_ report: CancellationReport) async throws {
         var request = URLRequest(url: URL(string: "\(config.url)/rest/v1/\(table)")!)
         request.httpMethod = "POST"
-        apply(&request)
+        await apply(&request)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // Upsert: the table's (event_key, reporter_id) primary key makes a repeat report a
         // no-op rather than a second vote.
@@ -99,14 +99,18 @@ public struct SupabaseCancellationStore: CancellationStore {
         ]
         var request = URLRequest(url: components.url!)
         request.httpMethod = "DELETE"
-        apply(&request)
+        await apply(&request)
         let (_, response) = try await session.data(for: request)
         try check(response)
     }
 
-    private func apply(_ request: inout URLRequest) {
+    /// Authorised as the signed-in student when there's a session, so the database can
+    /// check `auth.uid()` against the row's reporter. Falls back to the anon key, which RLS
+    /// then treats as an anonymous client with read-only access.
+    private func apply(_ request: inout URLRequest) async {
         request.setValue(config.anonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
+        let token = await SupabaseSession.shared.accessToken(config: config) ?? config.anonKey
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 
     private func check(_ response: URLResponse) throws {

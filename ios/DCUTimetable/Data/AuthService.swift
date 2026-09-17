@@ -67,9 +67,9 @@ public struct SupabaseAuthService: AuthService {
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         // A session only comes back when email confirmation is disabled; otherwise Supabase
         // has emailed a confirmation link and the account isn't usable yet.
-        if json["access_token"] is String,
-           let id = Self.user(from: json["user"]) ?? Self.user(from: json) {
-            return .signedIn(AuthenticatedUser(id: id, address: email.address))
+        if let session = AuthSessionParser.session(from: json) {
+            await SupabaseSession.shared.save(session)
+            return .signedIn(AuthenticatedUser(id: session.userID, address: email.address))
         }
         return .needsEmailConfirmation
     }
@@ -90,10 +90,13 @@ public struct SupabaseAuthService: AuthService {
             throw error
         }
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-        guard let id = Self.user(from: json["user"]) else {
+        guard let session = AuthSessionParser.session(from: json) else {
             throw AuthError.server("Couldn't sign in. Check your email and password.")
         }
-        return AuthenticatedUser(id: id, address: email.address)
+        // The tokens go to the Keychain: every later write to Supabase is made as this
+        // student, which is what lets the database check they own what they're changing.
+        await SupabaseSession.shared.save(session)
+        return AuthenticatedUser(id: session.userID, address: email.address)
     }
 
     public func resendConfirmation(to email: DCUEmail) async throws {
@@ -110,10 +113,6 @@ public struct SupabaseAuthService: AuthService {
     private static func isUnconfirmed(_ message: String) -> Bool {
         let lowered = message.lowercased()
         return lowered.contains("not confirmed") || lowered.contains("email_not_confirmed")
-    }
-
-    private static func user(from object: Any?) -> String? {
-        (object as? [String: Any])?["id"] as? String
     }
 
     private func post(_ path: String, body: [String: Any]) async throws -> Data {
@@ -160,6 +159,7 @@ public enum SignedInUser {
 
     public static func signOut() {
         UserDefaults.standard.removeObject(forKey: key)
+        Task { await SupabaseSession.shared.clear() }
     }
 }
 
