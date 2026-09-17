@@ -78,6 +78,7 @@ struct EngineeringLabsView: View {
                             .onSubmit(findBySurname)
                         Button("Find", action: findBySurname)
                             .buttonStyle(.borderedProminent)
+                            .buttonBorderShape(.roundedRectangle(radius: 6))
                             .controlSize(.small)
                     }
                 }

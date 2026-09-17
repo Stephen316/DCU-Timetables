@@ -79,11 +79,12 @@ alter table deadline_confirmations enable row level security;
 create policy "read" on module_deadlines for select using (true);
 create policy "read" on deadline_confirmations for select using (true);
 
--- You may only write rows that say they are yours, and only change your own.
+-- You may only write rows that say they are yours, and only remove your own. There is no
+-- update policy anywhere: the app inserts and deletes, and its repeat-write path is
+-- `ON CONFLICT DO NOTHING`, which needs insert alone. Granting update would let a row's
+-- owner column be rewritten and buy nothing.
 create policy "insert own" on module_deadlines
   for insert with check (auth.uid()::text = submitter_id);
-create policy "update own" on module_deadlines
-  for update using (auth.uid()::text = submitter_id);
 create policy "delete own" on module_deadlines
   for delete using (auth.uid()::text = submitter_id);
 
@@ -167,5 +168,6 @@ and by the composite primary key.
 
 - **A confirmed deadline is still only a claim by students.** Three people can agree and be
   wrong; the module's own Loop page remains the authority. The UI never says "official".
-- **Nothing expires.** Old deadlines are hidden from the list once their date passes, but the
-  rows stay in the table. A periodic delete of rows past their due date is worth adding.
+- **Nothing expires on its own.** Deadlines due before today are no longer fetched — both the
+  query and the client filter cut at `DeadlineRules.horizon` — but the rows stay in the table.
+  `supabase/schema.sql` ends with the delete to run periodically.

@@ -25,11 +25,18 @@ final class LectureDetailViewModel: ObservableObject {
     private var eventKey: String { CancellationRules.eventKey(for: event) }
     private var moduleKey: String { DeadlineRules.moduleKey(for: event) }
 
-    init(event: TimetableEvent, cancellations: CancellationStore, deadlines: DeadlineStore) {
+    init(event: TimetableEvent,
+         cancellations: CancellationStore,
+         deadlines: DeadlineStore,
+         known: [Deadline] = []) {
         self.event = event
         self.cancellations = cancellations
         self.deadlineStore = deadlines
         self.lecturers = LecturerDirectory.lecturers(for: event)
+        // Seeded from the timetable's own copy so the page opens with its banner already
+        // drawn; `load()` then replaces it with the authoritative list.
+        self.deadlines = DeadlineRules.upcoming(
+            known.filter { $0.moduleKey == DeadlineRules.moduleKey(for: event) })
     }
 
     func isMine(_ deadline: Deadline) -> Bool { deadline.submitterID == reporterID }
@@ -108,7 +115,13 @@ final class LectureDetailViewModel: ObservableObject {
     func removeDeadline(_ deadline: Deadline) async {
         guard isMine(deadline) else { return }
         deadlines.removeAll { $0.id == deadline.id }
-        try? await deadlineStore.withdraw(id: deadline.id, submitterID: reporterID)
+        do {
+            try await deadlineStore.withdraw(id: deadline.id, submitterID: reporterID)
+        } catch {
+            // Say so rather than letting the reload quietly put the row back, which looks
+            // like the delete was ignored.
+            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't remove that deadline."
+        }
         await load()
     }
 }

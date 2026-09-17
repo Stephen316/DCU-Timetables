@@ -16,13 +16,15 @@ struct LectureDetailView: View {
 
     init(event: TimetableEvent,
          isClashing: Bool,
+         knownDeadlines: [Deadline] = [],
          cancellations: CancellationStore = CancellationStoreFactory.make(),
          deadlines: DeadlineStore = DeadlineStoreFactory.make()) {
         self.event = event
         self.isClashing = isClashing
         _model = StateObject(wrappedValue: LectureDetailViewModel(event: event,
                                                                  cancellations: cancellations,
-                                                                 deadlines: deadlines))
+                                                                 deadlines: deadlines,
+                                                                 known: knownDeadlines))
     }
 
     private var eventKey: String { CancellationRules.eventKey(for: event) }
@@ -144,17 +146,15 @@ struct LectureDetailView: View {
     private var cancellation: some View {
         Section {
             if model.status.isFlagged {
-                Label("Reported not on · \(model.status.reportCount) people",
-                      systemImage: "exclamationmark.circle.fill")
+                Label(model.status.summary, systemImage: "exclamationmark.circle.fill")
                     .foregroundStyle(TimetableTint.off)
-            } else if model.status.reportCount > 0 {
-                Text("\(model.status.reportCount) of \(CancellationRules.threshold) people say this isn't on")
-                    .foregroundStyle(.secondary)
             } else {
-                Text("Nobody has reported this class as off").foregroundStyle(.secondary)
+                Text(model.status.summary).foregroundStyle(.secondary)
             }
 
-            Button(role: model.status.reportedByMe ? nil : .destructive) {
+            // No destructive role: reporting a class as off isn't a delete, and red read
+            // as one.
+            Button {
                 Task { await model.toggleReport() }
             } label: {
                 Label(model.status.reportedByMe ? "Undo my report" : "Report: lecture not on",
