@@ -20,6 +20,8 @@ final class WeekViewModel: ObservableObject {
     private(set) var weeks: [TeachingWeek] = []
     /// Crowd-sourced "not on" tallies for the visible week, keyed by event key.
     @Published private(set) var cancellations: [String: CancellationStatus] = [:]
+    /// Deadlines for every module on screen, so a class can be outlined on the day one falls.
+    @Published private(set) var deadlines: [Deadline] = []
 
     let programme: TimetableCategory
     private let source: TimetableSource
@@ -29,6 +31,7 @@ final class WeekViewModel: ObservableObject {
     private var loadedAt: [Int: Date] = [:]
     private var hiddenGroups: Set<String>
     private let cancellationStore: CancellationStore
+    private let deadlineStore: DeadlineStore
     private let reporterID = ReporterID.current
     private let engLabModules = LabRotationLoader.bundled()?.moduleCodes ?? []
 
@@ -36,12 +39,14 @@ final class WeekViewModel: ObservableObject {
          hiddenGroups: Set<String> = [],
          source: TimetableSource = DCUAPIClient(),
          cache: TimetableCache = TimetableCache(),
-         cancellationStore: CancellationStore = CancellationStoreFactory.make()) {
+         cancellationStore: CancellationStore = CancellationStoreFactory.make(),
+         deadlineStore: DeadlineStore = DeadlineStoreFactory.make()) {
         self.programme = programme
         self.hiddenGroups = hiddenGroups
         self.source = source
         self.cache = cache
         self.cancellationStore = cancellationStore
+        self.deadlineStore = deadlineStore
     }
 
     // MARK: - Cancellation reports
@@ -77,6 +82,23 @@ final class WeekViewModel: ObservableObject {
         }
         guard let reports = try? await cancellationStore.reports(forKeys: keys) else { return }
         cancellations = CancellationRules.statuses(from: reports, reporterID: reporterID)
+    }
+
+    /// What (if anything) to outline a class with: not running, a quiz today, or something
+    /// due today.
+    func highlight(for event: TimetableEvent) -> ClassHighlight? {
+        DeadlineRules.highlight(for: event, deadlines: deadlines, cancellation: status(for: event))
+    }
+
+    /// Non-fatal, like the reports: no deadlines just means no coloured borders.
+    func refreshDeadlines() async {
+        let modules = Set(events.map(DeadlineRules.moduleKey(for:)))
+        guard !modules.isEmpty else {
+            deadlines = []
+            return
+        }
+        guard let shared = try? await deadlineStore.deadlines(forModules: Array(modules)) else { return }
+        deadlines = shared
     }
 
     private var currentWeek: TeachingWeek? {
@@ -155,6 +177,7 @@ final class WeekViewModel: ObservableObject {
             isLoading = false
         }
         await refreshCancellations()
+        await refreshDeadlines()
 
         for neighbour in neighbours(of: weekIndex) where rawByWeekNumber[neighbour.number] == nil {
             await load(neighbour, isCurrent: false)

@@ -14,6 +14,8 @@ struct WeekView: View {
     @State private var showingEngLabs = false
     /// Mon–Fri index for the day view (0 = Monday).
     @State private var dayIndex = 0
+    /// The class whose page is open, pushed from a day row or a calendar block.
+    @State private var selectedEvent: TimetableEvent?
     @Environment(\.scenePhase) private var scenePhase
 
     init(programme: TimetableCategory,
@@ -32,80 +34,41 @@ struct WeekView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let error = model.errorText, model.events.isEmpty {
-                    ContentUnavailableView("Couldn't load", systemImage: "wifi.exclamationmark",
-                                           description: Text(error))
-                } else if showsCalendar {
-                    // Same pager as the day view — weeks instead of days.
-                    WrappingPager(count: max(model.weeks.count, 1), index: $model.weekIndex) { index in
-                        WeekCalendarView(eventsByDay: model.eventsByDay(forWeekIndex: index),
-                                         clashingIDs: model.clashingIDs,
-                                         cancellation: { model.status(for: $0) },
-                                         onToggleReport: { event in
-                                             Task { await model.toggleReport(for: event) }
-                                         })
-                    }
-                } else {
-                    WrappingPager(count: max(weekDays.count, 1), index: $dayIndex) { day in
-                        dayList(for: day)
-                    }
+            timetable
+                .navigationDestination(item: $selectedEvent) { event in
+                    LectureDetailView(event: event,
+                                      isClashing: model.clashingIDs.contains(event.id))
                 }
-            }
+                .onChange(of: selectedEvent) { _, newValue in
+                    // Back from a class's page: its reports may have changed.
+                    if newValue == nil { Task { await model.refreshCancellations() } }
+                }
+                .onChange(of: model.weekIndex) { _, _ in
+                    Task { await model.loadCurrentWeek() }
+                }
+                .onChange(of: model.weekStart) { _, _ in
+                    resetToDefaultDay()
+                }
+                .onChange(of: scenePhase) { previous, phase in
+                    // Coming back to the app is a fresh look at the timetable: whatever day
+                    // was last swiped to is stale, so start again from today (or tomorrow
+                    // evening). Only after a real trip to the background — pulling down
+                    // Control Centre gives .inactive, and shouldn't discard the day being read.
+                    if previous == .background, phase == .active { resetToDefaultDay() }
+                }
+                .onChange(of: hiddenGroupsData) { _, newValue in
+                    model.updateHiddenGroups(HiddenGroups.decode(newValue))
+                }
+        }
+    }
+
+    /// The screen itself. Split from `body`'s modifiers because one chain of this length
+    /// defeats the type-checker.
+    private var timetable: some View {
+        pages
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { showsCalendar.toggle() }
-                    } label: {
-                        Image(systemName: showsCalendar ? "list.bullet" : "calendar")
-                    }
-                    .accessibilityLabel(showsCalendar ? "Show list" : "Show weekly calendar")
-                }
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 0) {
-                        Text(title).font(.headline)
-                        HStack(spacing: 3) {
-                            Text(model.weekLabel)
-                            if let campus = model.campusName {
-                                Image(systemName: "mappin.and.ellipse")
-                                Text(campus)
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                ToolbarItemGroup(placement: .bottomBar) {
-                    Button { model.stepIndex(by: -1) } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    Spacer()
-                    if let updated = model.lastUpdated {
-                        Text("Updated \(updated.formatted(.relative(presentation: .named)))")
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button { model.stepIndex(by: 1) } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Select groups", systemImage: "person.2") { showingGroups = true }
-                        if model.hasEngineeringLabs {
-                            Button("Engineering labs", systemImage: "wrench.and.screwdriver") {
-                                showingEngLabs = true
-                            }
-                        }
-                        Button(resetLabel, systemImage: "arrow.left.arrow.right",
-                               action: onReset)
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
-            }
+            .toolbar { toolbarContent }
             .overlay { if model.isLoading && model.events.isEmpty { ProgressView() } }
             .task { await model.start() }
             .sheet(isPresented: $showingGroups) {
@@ -114,21 +77,82 @@ struct WeekView: View {
             .sheet(isPresented: $showingEngLabs) {
                 EngineeringLabsView()
             }
-            .onChange(of: model.weekIndex) { _, _ in
-                Task { await model.loadCurrentWeek() }
+    }
+
+    /// Extracted from `body` for the type-checker's sake, same as `pages`.
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { showsCalendar.toggle() }
+                } label: {
+                    Image(systemName: showsCalendar ? "list.bullet" : "calendar")
+                }
+                .accessibilityLabel(showsCalendar ? "Show list" : "Show weekly calendar")
             }
-            .onChange(of: model.weekStart) { _, _ in
-                resetToDefaultDay()
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 0) {
+                    Text(title).font(.headline)
+                    HStack(spacing: 3) {
+                        Text(model.weekLabel)
+                        if let campus = model.campusName {
+                            Image(systemName: "mappin.and.ellipse")
+                            Text(campus)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
-            .onChange(of: scenePhase) { previous, phase in
-                // Coming back to the app is a fresh look at the timetable: whatever day was
-                // last swiped to is stale, so start again from today (or tomorrow evening).
-                // Only after a real trip to the background — pulling down Control Centre
-                // gives .inactive, and shouldn't throw away the day being read.
-                if previous == .background, phase == .active { resetToDefaultDay() }
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button { model.stepIndex(by: -1) } label: {
+                    Image(systemName: "chevron.left")
+                }
+                Spacer()
+                if let updated = model.lastUpdated {
+                    Text("Updated \(updated.formatted(.relative(presentation: .named)))")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { model.stepIndex(by: 1) } label: {
+                    Image(systemName: "chevron.right")
+                }
             }
-            .onChange(of: hiddenGroupsData) { _, newValue in
-                model.updateHiddenGroups(HiddenGroups.decode(newValue))
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Select groups", systemImage: "person.2") { showingGroups = true }
+                    if model.hasEngineeringLabs {
+                        Button("Engineering labs", systemImage: "wrench.and.screwdriver") {
+                            showingEngLabs = true
+                        }
+                    }
+                    Button(resetLabel, systemImage: "arrow.left.arrow.right",
+                           action: onReset)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+            
+    }
+
+    /// The week grid or the day list, whichever is switched on. Extracted from `body`
+    /// because the modifier chain below it is already at the type-checker's limit.
+    @ViewBuilder
+    private var pages: some View {
+        if let error = model.errorText, model.events.isEmpty {
+            ContentUnavailableView("Couldn't load", systemImage: "wifi.exclamationmark",
+                                   description: Text(error))
+        } else if showsCalendar {
+            // Same pager as the day view — weeks instead of days.
+            WrappingPager(count: max(model.weeks.count, 1), index: $model.weekIndex) { index in
+                WeekCalendarView(eventsByDay: model.eventsByDay(forWeekIndex: index),
+                                 clashingIDs: model.clashingIDs,
+                                 highlight: { model.highlight(for: $0) },
+                                 onSelect: { selectedEvent = $0 })
+            }
+        } else {
+            WrappingPager(count: max(weekDays.count, 1), index: $dayIndex) { day in
+                dayList(for: day)
             }
         }
     }
@@ -151,17 +175,18 @@ struct WeekView: View {
                     Text("No classes").foregroundStyle(.secondary)
                 } else {
                     ForEach(events) { event in
-                        EventRow(event: event,
-                                 isClashing: model.clashingIDs.contains(event.id),
-                                 cancellation: model.status(for: event))
-                            .contextMenu {
-                                Button(model.status(for: event).reportedByMe
-                                       ? "Undo \"not on\" report" : "Report: lecture not on",
-                                       systemImage: model.status(for: event).reportedByMe
-                                       ? "arrow.uturn.backward" : "exclamationmark.bubble") {
-                                    Task { await model.toggleReport(for: event) }
-                                }
-                            }
+                        // A plain tap opens the detail sheet, which is where a class can be
+                        // reported as not on — a long-press menu hid that from anyone who
+                        // didn't already know it was there.
+                        Button {
+                            selectedEvent = event
+                        } label: {
+                            EventRow(event: event,
+                                     isClashing: model.clashingIDs.contains(event.id),
+                                     highlight: model.highlight(for: event))
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -186,22 +211,21 @@ struct WeekView: View {
 private struct EventRow: View {
     let event: TimetableEvent
     let isClashing: Bool
-    var cancellation = CancellationStatus(reportCount: 0, reportedByMe: false)
+    var highlight: ClassHighlight?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if cancellation.isFlagged {
-                Label("Reported not on · \(cancellation.reportCount) people",
-                      systemImage: "exclamationmark.circle.fill")
+            if let highlight {
+                Label(highlight.reason, systemImage: highlight.symbol)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(highlight.tint)
             }
             rowBody
         }
-        .padding(cancellation.isFlagged ? 8 : 0)
+        .padding(highlight == nil ? 0 : 8)
         .overlay {
-            if cancellation.isFlagged {
-                RoundedRectangle(cornerRadius: 8).strokeBorder(.orange, lineWidth: 2)
+            if let highlight {
+                RoundedRectangle(cornerRadius: 8).strokeBorder(highlight.tint, lineWidth: 2)
             }
         }
     }

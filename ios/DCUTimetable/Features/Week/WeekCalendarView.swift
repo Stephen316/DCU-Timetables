@@ -5,11 +5,12 @@ import SwiftUI
 struct WeekCalendarView: View {
     let eventsByDay: [(day: Date, events: [TimetableEvent])]
     let clashingIDs: Set<String>
-    var cancellation: (TimetableEvent) -> CancellationStatus = { _ in
-        CancellationStatus(reportCount: 0, reportedByMe: false)
-    }
-    var onToggleReport: (TimetableEvent) -> Void = { _ in }
-    @State private var selected: TimetableEvent?
+    /// What to outline each class with — nothing, something due today, a quiz, or a
+    /// reported cancellation.
+    var highlight: (TimetableEvent) -> ClassHighlight? = { _ in nil }
+    /// Tapping a block opens the class's page, which the parent owns — the grid itself
+    /// has no navigation stack.
+    var onSelect: (TimetableEvent) -> Void = { _ in }
 
     private let hourHeight: CGFloat = 58
     private let gutterWidth: CGFloat = 40
@@ -70,13 +71,6 @@ struct WeekCalendarView: View {
                     .padding(.bottom, 64)
                 }
             }
-        }
-        .sheet(item: $selected) { event in
-            EventDetailSheet(event: event,
-                             isClashing: clashingIDs.contains(event.id),
-                             status: cancellation(event),
-                             onToggleReport: { onToggleReport(event) })
-                .presentationDetents([.medium])
         }
     }
 
@@ -144,10 +138,10 @@ struct WeekCalendarView: View {
         let height = max(26, duration(of: item.event))
         let tint = tint(for: item.event)
         let isClashing = clashingIDs.contains(item.event.id)
-        let flagged = cancellation(item.event).isFlagged
+        let highlight = highlight(item.event)
 
         return Button {
-            selected = item.event
+            onSelect(item.event)
         } label: {
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.event.moduleCode ?? item.event.title)
@@ -168,17 +162,18 @@ struct WeekCalendarView: View {
                 RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 2.5)
             }
             .overlay {
-                // A crowd-reported cancellation outranks a clash outline.
+                // A highlight outranks a clash outline: not running, or a deadline today,
+                // matters more than an overlap the student has already seen.
                 RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(flagged ? Color.orange
-                                  : (isClashing ? Color.orange.opacity(0.55) : Color.clear),
-                                  lineWidth: flagged ? 2 : 1.5)
+                    .strokeBorder(highlight?.tint
+                                  ?? (isClashing ? Color.orange.opacity(0.55) : Color.clear),
+                                  lineWidth: highlight == nil ? 1.5 : 2)
             }
             .overlay(alignment: .topTrailing) {
-                if flagged {
-                    Image(systemName: "exclamationmark.circle.fill")
+                if let highlight {
+                    Image(systemName: highlight.symbol)
                         .font(.system(size: 9))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(highlight.tint)
                         .padding(1)
                 }
             }
@@ -222,67 +217,5 @@ struct WeekCalendarView: View {
         for byte in key.utf8 { hash = (hash &* 33) &+ Int(byte) }
         let count = Self.palette.count
         return Self.palette[((hash % count) + count) % count]
-    }
-}
-
-/// Tapping a block shows the full detail the grid has no room for.
-private struct EventDetailSheet: View {
-    let event: TimetableEvent
-    let isClashing: Bool
-    let status: CancellationStatus
-    let onToggleReport: () -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text(event.title).font(.headline)
-                    Text(event.activity.summary).foregroundStyle(.secondary)
-                }
-                Section {
-                    LabeledContent("Time",
-                        value: "\(event.start.formatted(date: .omitted, time: .shortened))–\(event.end.formatted(date: .omitted, time: .shortened))")
-                    LabeledContent("Day", value: event.start.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
-                    LabeledContent("Where", value: event.locationDisplay)
-                    LabeledContent("Delivery", value: event.type.label)
-                    if let staff = event.staffText {
-                        LabeledContent("Staff", value: staff)
-                    }
-                }
-                if isClashing {
-                    Section {
-                        Label("Overlaps another class", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                    }
-                }
-                Section {
-                    if status.isFlagged {
-                        Label("Reported not on · \(status.reportCount) people",
-                              systemImage: "exclamationmark.circle.fill")
-                            .foregroundStyle(.orange)
-                    } else if status.reportCount > 0 {
-                        Text("\(status.reportCount) of \(CancellationRules.threshold) people say this isn't on")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                    Button(role: status.reportedByMe ? nil : .destructive) {
-                        onToggleReport()
-                        dismiss()
-                    } label: {
-                        Label(status.reportedByMe ? "Undo my report" : "Report: lecture not on",
-                              systemImage: status.reportedByMe ? "arrow.uturn.backward" : "exclamationmark.bubble")
-                    }
-                } footer: {
-                    Text("Reports are anonymous. A class is flagged once \(CancellationRules.threshold) people report it.")
-                }
-            }
-            .navigationTitle(event.moduleCode ?? "Class")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.fontWeight(.semibold)
-                }
-            }
-        }
     }
 }
