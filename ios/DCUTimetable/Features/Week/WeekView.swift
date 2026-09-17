@@ -175,18 +175,10 @@ struct WeekView: View {
                     Text("No classes").foregroundStyle(.secondary)
                 } else {
                     ForEach(events) { event in
-                        // A plain tap opens the detail sheet, which is where a class can be
-                        // reported as not on — a long-press menu hid that from anyone who
-                        // didn't already know it was there.
-                        Button {
-                            selectedEvent = event
-                        } label: {
-                            EventRow(event: event,
-                                     isClashing: model.clashingIDs.contains(event.id),
-                                     highlight: model.highlight(for: event))
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        EventRow(event: event,
+                                 isClashing: model.clashingIDs.contains(event.id),
+                                 highlight: model.highlight(for: event),
+                                 onSelect: { selectedEvent = event })
                     }
                 }
             }
@@ -212,8 +204,25 @@ private struct EventRow: View {
     let event: TimetableEvent
     let isClashing: Bool
     var highlight: ClassHighlight?
+    var onSelect: () -> Void = {}
+
+    /// Read at tap time, not at build time — this is how a swipe that ends on this row is
+    /// told apart from a tap on it.
+    @Environment(\.pagerDrag) private var pagerDrag
 
     var body: some View {
+        // A plain tap opens the class's page; reporting used to hide behind a long press,
+        // which nobody found.
+        Button {
+            guard !pagerDrag.isSuppressingTaps() else { return }
+            onSelect()
+        } label: {
+            card.contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let highlight {
                 Label(highlight.reason, systemImage: highlight.symbol)

@@ -11,6 +11,8 @@ struct WeekCalendarView: View {
     /// Tapping a block opens the class's page, which the parent owns — the grid itself
     /// has no navigation stack.
     var onSelect: (TimetableEvent) -> Void = { _ in }
+    /// See `PagerDragState`: a block must not open when the finger was swiping past it.
+    @Environment(\.pagerDrag) private var pagerDrag
 
     private let hourHeight: CGFloat = 58
     private let gutterWidth: CGFloat = 40
@@ -141,6 +143,7 @@ struct WeekCalendarView: View {
         let highlight = highlight(item.event)
 
         return Button {
+            guard !pagerDrag.isSuppressingTaps() else { return }
             onSelect(item.event)
         } label: {
             VStack(alignment: .leading, spacing: 1) {

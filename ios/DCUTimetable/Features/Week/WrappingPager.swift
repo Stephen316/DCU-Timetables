@@ -12,6 +12,8 @@ struct WrappingPager<Content: View>: View {
     @ViewBuilder var content: (Int) -> Content
 
     @State private var drag: CGFloat = 0
+    /// Shared with the pages so a swipe can't be mistaken for a tap on the row it started on.
+    @State private var dragState = PagerDragState()
 
     private let commitFraction: CGFloat = 0.22
 
@@ -23,6 +25,7 @@ struct WrappingPager<Content: View>: View {
                 content(index).frame(width: width)
                 content(wrapped(index + 1)).frame(width: width)
             }
+            .environment(\.pagerDrag, dragState)
             .offset(x: -width + drag)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 12)
@@ -30,10 +33,12 @@ struct WrappingPager<Content: View>: View {
                         // Only follow decisively horizontal drags, so each page's own
                         // vertical scrolling still works.
                         guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        dragState.begin()
                         drag = value.translation.width
                     }
                     .onEnded { value in
                         let dx = value.translation.width
+                        dragState.end()
                         guard abs(dx) > abs(value.translation.height) else { return settle() }
                         if dx < -width * commitFraction { commit(step: 1, width: width) }
                         else if dx > width * commitFraction { commit(step: -1, width: width) }
