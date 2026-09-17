@@ -15,14 +15,18 @@ public struct AuthenticatedUser: Codable, Sendable, Equatable {
     }
 }
 
-public enum AuthError: LocalizedError {
+public enum AuthError: LocalizedError, Equatable {
     case notConfigured
+    /// The address exists but hasn't been verified yet, so the code screen should open.
+    case emailNotConfirmed
     case server(String)
 
     public var errorDescription: String? {
         switch self {
         case .notConfigured:
             return "Sign-in isn't configured yet (missing supabase.local.json)."
+        case .emailNotConfirmed:
+            return "Confirm your DCU email address first."
         case .server(let message):
             return message
         }
@@ -40,6 +44,8 @@ public enum SignUpOutcome: Sendable, Equatable {
 public protocol AuthService: Sendable {
     func signUp(email: DCUEmail, password: String) async throws -> SignUpOutcome
     func signIn(email: DCUEmail, password: String) async throws -> AuthenticatedUser
+    /// Send the confirmation email again to an address that hasn't been confirmed yet.
+    func resendConfirmation(to email: DCUEmail) async throws
     func sendPasswordReset(to email: DCUEmail) async throws
 }
 
@@ -69,10 +75,20 @@ public struct SupabaseAuthService: AuthService {
     }
 
     public func signIn(email: DCUEmail, password: String) async throws -> AuthenticatedUser {
-        let data = try await post("/auth/v1/token?grant_type=password", body: [
-            "email": email.address,
-            "password": password,
-        ])
+        let data: Data
+        do {
+            data = try await post("/auth/v1/token?grant_type=password", body: [
+                "email": email.address,
+                "password": password,
+            ])
+        } catch let error as AuthError {
+            // Supabase reports an unverified address as a plain sign-in failure; the view
+            // needs to tell the two apart so it can open the code screen instead.
+            if case .server(let message) = error, Self.isUnconfirmed(message) {
+                throw AuthError.emailNotConfirmed
+            }
+            throw error
+        }
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         guard let id = Self.user(from: json["user"]) else {
             throw AuthError.server("Couldn't sign in. Check your email and password.")
@@ -80,8 +96,20 @@ public struct SupabaseAuthService: AuthService {
         return AuthenticatedUser(id: id, address: email.address)
     }
 
+    public func resendConfirmation(to email: DCUEmail) async throws {
+        _ = try await post("/auth/v1/resend", body: [
+            "email": email.address,
+            "type": "signup",
+        ])
+    }
+
     public func sendPasswordReset(to email: DCUEmail) async throws {
         _ = try await post("/auth/v1/recover", body: ["email": email.address])
+    }
+
+    private static func isUnconfirmed(_ message: String) -> Bool {
+        let lowered = message.lowercased()
+        return lowered.contains("not confirmed") || lowered.contains("email_not_confirmed")
     }
 
     private static func user(from object: Any?) -> String? {

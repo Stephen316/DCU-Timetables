@@ -2,9 +2,10 @@ import SwiftUI
 
 /// DCU-only sign-in with an email address and password.
 ///
-/// The address must be a DCU one, and Supabase emails a confirmation link on sign-up, so
-/// an account only works once the student has proved they control that address. The name
-/// then comes from the address — nothing else is typed.
+/// Creating an account sends Supabase's confirmation email. The student taps the link in
+/// it, comes back, and presses Continue — the account can't be used until they do, which
+/// is what proves the address is theirs. The name then comes from the address, so nothing
+/// else is ever typed.
 struct SignInView: View {
     let onSignedIn: (AuthenticatedUser) -> Void
 
@@ -16,6 +17,8 @@ struct SignInView: View {
     @State private var confirmPassword = ""
     @State private var isBusy = false
     @State private var note: String?
+    /// Set once the confirmation email has been sent — the form then shows only that step.
+    @State private var awaitingConfirmation: DCUEmail?
 
     private let auth = AuthServiceFactory.make()
     private var email: DCUEmail? { DCUEmail(address) }
@@ -37,99 +40,179 @@ struct SignInView: View {
                     Text("Sign in with your DCU email address")
                 }
 
-                Section {
-                    Picker("", selection: $mode) {
-                        Text("Sign in").tag(Mode.signIn)
-                        Text("Create account").tag(Mode.createAccount)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: mode) { _, _ in
-                        confirmPassword = ""
-                        note = nil
-                    }
-                }
-
-                Section {
-                    TextField("Email", text: $address)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    if addressLooksWrong {
-                        Text("\(address.trimmingCharacters(in: .whitespaces)) is not a valid email address")
-                            .font(.caption).foregroundStyle(.secondary)
-                    } else if let email {
-                        Text("Signing in as \(email.displayName)")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-
-                    // `.password`, never `.newPassword`: the latter opts the field into iOS's
-                    // automatic "Use Strong Password?" sheet, which slides up and covers the
-                    // fields — with a confirm box present that makes them impossible to type in.
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-
-                    if mode == .createAccount {
-                        SecureField("Confirm password", text: $confirmPassword)
-                        if let passwordProblem {
-                            Text(passwordProblem.message)
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                if let note {
-                    Section { Text(note).font(.callout).foregroundStyle(.secondary) }
-                }
-
-                Section {
-                    Button(action: submit) {
-                        HStack {
-                            if isBusy { ProgressView().controlSize(.small) }
-                            Text(mode == .signIn ? "Sign in" : "Create account")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!canSubmit)
-                }
-
-                if mode == .signIn {
-                    Section {
-                        Button("Forgot password?") {
-                            run { auth in
-                                try await auth.sendPasswordReset(to: email!)
-                                note = "Password reset sent to your DCU email."
-                            }
-                        }
-                        .disabled(email == nil || isBusy)
-                    }
+                if let pending = awaitingConfirmation {
+                    confirmation(for: pending)
+                } else {
+                    credentials
                 }
             }
             .navigationTitle("Welcome")
         }
     }
 
+    @ViewBuilder
+    private var credentials: some View {
+        Group {
+            Section {
+                Picker("", selection: $mode) {
+                    Text("Sign in").tag(Mode.signIn)
+                    Text("Create account").tag(Mode.createAccount)
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: mode) { _, _ in
+                    confirmPassword = ""
+                    note = nil
+                }
+            }
+
+            Section {
+                TextField("Email", text: $address)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if addressLooksWrong {
+                    Text("\(address.trimmingCharacters(in: .whitespaces)) is not a valid email address")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else if let email {
+                    Text("Signing in as \(email.displayName)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                // `.password`, never `.newPassword`: the latter opts the field into iOS's
+                // automatic "Use Strong Password?" sheet, which slides up and covers the
+                // fields — with a confirm box present that makes them impossible to type in.
+                SecureField("Password", text: $password)
+                    .textContentType(.password)
+
+                if mode == .createAccount {
+                    SecureField("Confirm password", text: $confirmPassword)
+                    if let passwordProblem {
+                        Text(passwordProblem.message)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if let note {
+                Section { Text(note).font(.callout).foregroundStyle(.secondary) }
+            }
+
+            Section {
+                Button(action: submit) {
+                    HStack {
+                        if isBusy { ProgressView().controlSize(.small) }
+                        Text(mode == .signIn ? "Sign in" : "Create account")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canSubmit)
+            }
+
+            if mode == .signIn {
+                Section {
+                    Button("Forgot password?") {
+                        run { auth in
+                            try await auth.sendPasswordReset(to: email!)
+                            note = "Password reset sent to your DCU email."
+                        }
+                    }
+                    .disabled(email == nil || isBusy)
+                }
+            }
+        }
+    }
+
+    /// The confirmation step. Confirming happens in the browser when the student taps the
+    /// link, so the app can't observe it — Continue simply asks Supabase again.
+    @ViewBuilder
+    private func confirmation(for pending: DCUEmail) -> some View {
+        Section {
+            Text("Check your email").font(.headline)
+            Text("We've sent a confirmation link to \(pending.address). Tap it, then come back here.")
+                .foregroundStyle(.secondary)
+        }
+
+        if let note {
+            Section { Text(note).font(.callout).foregroundStyle(.secondary) }
+        }
+
+        Section {
+            Button(action: { checkConfirmed(pending) }) {
+                HStack {
+                    if isBusy { ProgressView().controlSize(.small) }
+                    Text("Continue")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isBusy)
+        }
+
+        Section {
+            Button("Send the email again") {
+                run { auth in
+                    try await auth.resendConfirmation(to: pending)
+                    note = "Sent again to \(pending.address)."
+                }
+            }
+            .disabled(isBusy)
+            Button("Use a different email") {
+                awaitingConfirmation = nil
+                note = nil
+            }
+            .disabled(isBusy)
+        }
+    }
+
+    private func checkConfirmed(_ pending: DCUEmail) {
+        run { auth in
+            do {
+                let user = try await auth.signIn(email: pending, password: password)
+                SignedInUser.save(user)
+                onSignedIn(user)
+            } catch AuthError.emailNotConfirmed {
+                note = "Not confirmed yet — tap the link in the email, then press Continue."
+            }
+        }
+    }
+
     private func submit() {
         switch mode {
         case .signIn:
+            let account = email!
             run { auth in
-                let user = try await auth.signIn(email: email!, password: password)
-                SignedInUser.save(user)
-                onSignedIn(user)
+                do {
+                    let user = try await auth.signIn(email: account, password: password)
+                    SignedInUser.save(user)
+                    onSignedIn(user)
+                } catch AuthError.emailNotConfirmed {
+                    // The account exists but was never confirmed — send the email again and
+                    // say so, rather than letting a correct password look wrong.
+                    try? await auth.resendConfirmation(to: account)
+                    startConfirmation(of: account, note: "This address hasn't been confirmed yet.")
+                }
             }
         case .createAccount:
             run { auth in
                 switch try await auth.signUp(email: email!, password: password) {
                 case .needsEmailConfirmation:
-                    note = "Account created. Check your DCU email to confirm the address, then sign in."
-                    mode = .signIn
+                    startConfirmation(of: email!, note: nil)
                 case .signedIn(let user):
                     SignedInUser.save(user)
                     onSignedIn(user)
                 }
             }
         }
+    }
+
+    /// `password` is deliberately kept — Continue re-tries the sign-in with it.
+    private func startConfirmation(of account: DCUEmail, note message: String?) {
+        awaitingConfirmation = account
+        confirmPassword = ""
+        mode = .signIn
+        note = message
     }
 
     /// Shared busy/error handling so each action stays a single statement.
