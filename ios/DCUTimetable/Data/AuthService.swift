@@ -29,9 +29,18 @@ public enum AuthError: LocalizedError {
     }
 }
 
+/// What happened when an account was created.
+public enum SignUpOutcome: Sendable, Equatable {
+    /// Supabase sent a confirmation email; the address must be confirmed before sign-in.
+    case needsEmailConfirmation
+    /// Confirmations are switched off in Supabase, so the account is usable immediately.
+    case signedIn(AuthenticatedUser)
+}
+
 public protocol AuthService: Sendable {
-    func sendCode(to email: DCUEmail) async throws
-    func verify(email: DCUEmail, code: String) async throws -> AuthenticatedUser
+    func signUp(email: DCUEmail, password: String) async throws -> SignUpOutcome
+    func signIn(email: DCUEmail, password: String) async throws -> AuthenticatedUser
+    func sendPasswordReset(to email: DCUEmail) async throws
 }
 
 /// Supabase Auth one-time-code sign-in.
@@ -44,24 +53,39 @@ public struct SupabaseAuthService: AuthService {
         self.session = session
     }
 
-    public func sendCode(to email: DCUEmail) async throws {
-        _ = try await post("/auth/v1/otp", body: [
+    public func signUp(email: DCUEmail, password: String) async throws -> SignUpOutcome {
+        let data = try await post("/auth/v1/signup", body: [
             "email": email.address,
-            "create_user": true,
+            "password": password,
         ])
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        // A session only comes back when email confirmation is disabled; otherwise Supabase
+        // has emailed a confirmation link and the account isn't usable yet.
+        if json["access_token"] is String,
+           let id = Self.user(from: json["user"]) ?? Self.user(from: json) {
+            return .signedIn(AuthenticatedUser(id: id, address: email.address))
+        }
+        return .needsEmailConfirmation
     }
 
-    public func verify(email: DCUEmail, code: String) async throws -> AuthenticatedUser {
-        let data = try await post("/auth/v1/verify", body: [
+    public func signIn(email: DCUEmail, password: String) async throws -> AuthenticatedUser {
+        let data = try await post("/auth/v1/token?grant_type=password", body: [
             "email": email.address,
-            "token": code.trimmingCharacters(in: .whitespaces),
-            "type": "email",
+            "password": password,
         ])
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let user = json["user"] as? [String: Any],
-              let id = user["id"] as? String
-        else { throw AuthError.server("That code didn't work. Check it and try again.") }
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        guard let id = Self.user(from: json["user"]) else {
+            throw AuthError.server("Couldn't sign in. Check your email and password.")
+        }
         return AuthenticatedUser(id: id, address: email.address)
+    }
+
+    public func sendPasswordReset(to email: DCUEmail) async throws {
+        _ = try await post("/auth/v1/recover", body: ["email": email.address])
+    }
+
+    private static func user(from object: Any?) -> String? {
+        (object as? [String: Any])?["id"] as? String
     }
 
     private func post(_ path: String, body: [String: Any]) async throws -> Data {

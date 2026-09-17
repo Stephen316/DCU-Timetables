@@ -1,8 +1,7 @@
 # Sign-in (DCU email only)
 
-Students sign in with a DCU address and a one-time code emailed by Supabase Auth. Verifying
-the address is what proves they're a student — and it supplies their name, so nothing is
-typed by hand.
+Students sign in with a DCU address and a password. Confirming the emailed link proves they
+control that DCU address — and the address supplies their name, so nothing else is typed.
 
 ## Name from the address
 
@@ -20,13 +19,26 @@ given-name-first, so the profile match compares name parts as a **set**, not in 
 
 ## One-off Supabase setup
 
-**You must edit the email template**, or students get a magic *link* instead of a code and
-sign-in can't complete:
+Sign-in is **email + password**:
 
-1. Supabase → **Authentication → Email Templates → Magic Link**
-2. Include the token in the body, e.g.
-   `Your DCU Timetable code is {{ .Token }}`
-3. Authentication → **Providers → Email**: ensure Email is enabled.
+- **Create account** → Supabase emails a confirmation link → the student confirms → they can
+  sign in.
+- **Sign in** → email + password.
+- **Forgot password?** → Supabase emails a reset link.
+
+Steps:
+
+1. Authentication → **Providers → Email**: enable Email.
+2. Authentication → **Providers → Email → Confirm email: ON**. ⚠️ **This is what makes the
+   DCU rule mean anything.** With confirmations off, anyone could sign up as
+   `someone.else@dcu.ie` without ever receiving mail at that address, and the domain check
+   would be decoration. With it on, an account only works once the student has proved they
+   control the DCU mailbox.
+3. Set a minimum password length under Authentication → Policies if you want more than
+   Supabase's default of 6 (the app asks for 8 when creating an account).
+
+No email-template editing is needed — the default confirmation and recovery templates both
+send links, which is exactly what this flow uses.
 
 The built-in SMTP is rate-limited (a few emails per hour) — fine for development, but a real
 launch needs a custom SMTP provider configured in Supabase.
