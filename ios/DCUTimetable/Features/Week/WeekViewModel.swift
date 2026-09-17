@@ -28,8 +28,9 @@ final class WeekViewModel: ObservableObject {
 
     private var rawByWeekNumber: [Int: [TimetableEvent]] = [:]
     private var hiddenGroups: Set<String>
-    private let cancellationStore: CancellationStore
-    private let deadlineStore: DeadlineStore
+    /// Handed to the class page so it talks to the same stores rather than making its own.
+    let cancellationStore: CancellationStore
+    let deadlineStore: DeadlineStore
     private let reporterID = ReporterID.current
     private let engLabModules = LabRotationLoader.bundled()?.moduleCodes ?? []
 
@@ -52,23 +53,6 @@ final class WeekViewModel: ObservableObject {
     func status(for event: TimetableEvent) -> CancellationStatus {
         cancellations[CancellationRules.eventKey(for: event)]
             ?? CancellationStatus(reportCount: 0, reportedByMe: false)
-    }
-
-    /// Reporting is a toggle, so a mistaken report can be taken back.
-    func toggleReport(for event: TimetableEvent) async {
-        let key = CancellationRules.eventKey(for: event)
-        let reported = status(for: event).reportedByMe
-        do {
-            if reported {
-                try await cancellationStore.withdraw(eventKey: key, reporterID: reporterID)
-            } else {
-                try await cancellationStore.submit(
-                    CancellationReport(eventKey: key, reporterID: reporterID))
-            }
-            await refreshCancellations()
-        } catch {
-            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't send that report."
-        }
     }
 
     /// Non-fatal: a reporting outage must never stop the timetable itself showing.

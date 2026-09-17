@@ -17,6 +17,25 @@ struct DeadlineTests {
         #expect(upcoming.map(\.title) == ["Quiz", "Lab 3"])
     }
 
+    /// The bug this pins: `upcoming` used to cut at the current instant while `isDue`
+    /// colours the class for the whole calendar day, so an 11am hand-in kept its border on
+    /// the timetable at 11:01 but had already vanished from the class page.
+    @Test func upcomingKeepsTodaysDeadlinesForTheWholeDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Dublin")!
+        let now = DateComponents(calendar: calendar, year: 2026, month: 9, day: 17, hour: 14).date!
+        let thisMorning = DateComponents(calendar: calendar, year: 2026, month: 9, day: 17, hour: 11).date!
+        let lastNight = DateComponents(calendar: calendar, year: 2026, month: 9, day: 16, hour: 23).date!
+
+        let list = [
+            Deadline(moduleKey: "EEG1001", title: "Handed in this morning",
+                     due: thisMorning, submitterID: "someone"),
+            Deadline(moduleKey: "EEG1001", title: "Yesterday", due: lastNight, submitterID: "someone"),
+        ]
+        let upcoming = DeadlineRules.upcoming(list, now: now, calendar: calendar)
+        #expect(upcoming.map(\.title) == ["Handed in this morning"])
+    }
+
     @Test func rejectsEmptyTitlesAndPastDates() {
         let future = Date().addingTimeInterval(3600)
         #expect(DeadlineRules.isValid(title: "Assignment 1", due: future))

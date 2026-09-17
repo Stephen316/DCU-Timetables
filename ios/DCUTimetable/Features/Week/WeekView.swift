@@ -16,6 +16,7 @@ struct WeekView: View {
     @State private var dayIndex = 0
     /// The class whose page is open, pushed from a day row or a calendar block.
     @State private var selectedEvent: TimetableEvent?
+    @AppStorage(Attendance.storageKey) private var skippedData = Data()
     @Environment(\.scenePhase) private var scenePhase
 
     init(programme: TimetableCategory,
@@ -36,12 +37,22 @@ struct WeekView: View {
         NavigationStack {
             timetable
                 .navigationDestination(item: $selectedEvent) { event in
+                    // The same stores and the deadlines already in hand, so the page opens
+                    // with content instead of a spinner over a second copy of the fetch.
                     LectureDetailView(event: event,
-                                      isClashing: model.clashingIDs.contains(event.id))
+                                      isClashing: model.clashingIDs.contains(event.id),
+                                      knownDeadlines: model.deadlines,
+                                      cancellations: model.cancellationStore,
+                                      deadlines: model.deadlineStore)
                 }
                 .onChange(of: selectedEvent) { _, newValue in
-                    // Back from a class's page: its reports may have changed.
-                    if newValue == nil { Task { await model.refreshCancellations() } }
+                    // Back from a class's page: a report or a deadline may have been added
+                    // there, and both decide what the timetable outlines.
+                    guard newValue == nil else { return }
+                    Task {
+                        await model.refreshCancellations()
+                        await model.refreshDeadlines()
+                    }
                 }
                 .onChange(of: model.weekIndex) { _, _ in
                     Task { await model.loadCurrentWeek() }
@@ -169,10 +180,12 @@ struct WeekView: View {
                 if events.isEmpty {
                     Text("No classes").foregroundStyle(.secondary)
                 } else {
+                    let skipped = Attendance.decode(skippedData)
                     ForEach(events) { event in
                         EventRow(event: event,
                                  isClashing: model.clashingIDs.contains(event.id),
                                  highlight: model.highlight(for: event),
+                                 isSkipped: skipped.contains(CancellationRules.eventKey(for: event)),
                                  onSelect: { selectedEvent = event })
                     }
                 }
@@ -185,9 +198,14 @@ struct WeekView: View {
         model.eventsByDay.first { Calendar.current.isDate($0.day, inSameDayAs: day) }?.events ?? []
     }
 
+    /// Friday evening and the weekend want Monday of the *next* week, so this can move the
+    /// pager as well as the day. Stepping changes `weekStart`, which calls this again — the
+    /// second pass finds the day inside the new week and stops.
     private func resetToDefaultDay() {
         guard let start = model.weekStart else { return }
-        dayIndex = DefaultDay.index(weekStart: start)
+        let target = DefaultDay.target(weekStart: start)
+        dayIndex = target.dayIndex
+        if target.weekStep != 0 { model.stepIndex(by: target.weekStep) }
     }
 
 
@@ -200,6 +218,9 @@ private struct EventRow: View {
     let event: TimetableEvent
     let isClashing: Bool
     var highlight: ClassHighlight?
+    /// Marked "I won't attend". Dimmed rather than hidden — it's still on, and the student
+    /// can change their mind.
+    var isSkipped = false
     var onSelect: () -> Void = {}
 
     /// Read at tap time, not at build time — this is how a swipe that ends on this row is
@@ -227,6 +248,7 @@ private struct EventRow: View {
             }
             rowBody
         }
+        .opacity(isSkipped ? 0.45 : 1)
         .padding(highlight == nil ? 0 : 8)
         .overlay {
             if let highlight {
@@ -264,6 +286,12 @@ private struct EventRow: View {
             }
 
             Spacer(minLength: 0)
+
+            if isSkipped {
+                Image(systemName: "person.slash")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("You're not attending this")
+            }
 
             if isClashing {
                 Image(systemName: "exclamationmark.triangle.fill")

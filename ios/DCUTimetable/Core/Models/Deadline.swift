@@ -140,8 +140,20 @@ public enum DeadlineRules {
 
     /// Soonest first, and anything already past dropped — a noticeboard of last term's
     /// deadlines is just noise.
-    public static func upcoming(_ deadlines: [Deadline], now: Date = Date()) -> [Deadline] {
-        deadlines.filter { $0.due >= now }.sorted { $0.due < $1.due }
+    ///
+    /// "Past" means *before today*, not before this instant. `isDue` colours a class for
+    /// the whole calendar day a deadline falls on, so dropping an 11am hand-in at 11:01
+    /// would leave the timetable outlined for something the page no longer lists.
+    public static func upcoming(_ deadlines: [Deadline], now: Date = Date(),
+                                calendar: Calendar = .current) -> [Deadline] {
+        let floor = horizon(from: now, calendar: calendar)
+        return deadlines.filter { $0.due >= floor }.sorted { $0.due < $1.due }
+    }
+
+    /// The oldest deadline still worth fetching or showing. Shared by the client filter and
+    /// the database query so the two can't drift apart.
+    public static func horizon(from now: Date = Date(), calendar: Calendar = .current) -> Date {
+        calendar.startOfDay(for: now)
     }
 
     /// A submission is only accepted with a real title and a due date in the future.
