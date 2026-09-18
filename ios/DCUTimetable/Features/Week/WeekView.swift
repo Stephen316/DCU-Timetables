@@ -7,7 +7,9 @@ struct WeekView: View {
     let resetLabel: String
     let onReset: () -> Void
 
-    @StateObject private var model: WeekViewModel
+    /// Owned by `TimetableShell`, not by this view — the deadlines tab reads the same
+    /// model for the module list, and two copies would fetch the timetable twice.
+    @ObservedObject var model: WeekViewModel
     @AppStorage("hiddenGroups") private var hiddenGroupsData = Data()
     @AppStorage("weekShowsCalendar") private var showsCalendar = false
     @State private var showingGroups = false
@@ -19,18 +21,18 @@ struct WeekView: View {
     @AppStorage(Attendance.storageKey) private var skippedData = Data()
     @Environment(\.scenePhase) private var scenePhase
 
-    init(programme: TimetableCategory,
+    init(model: WeekViewModel,
+         programme: TimetableCategory,
          source: TimetableSource = DCUAPIClient(),
          title: String? = nil,
          resetLabel: String = "Change programme",
          onReset: @escaping () -> Void) {
+        self.model = model
         self.programme = programme
         self.source = source
         self.title = title ?? programme.code
         self.resetLabel = resetLabel
         self.onReset = onReset
-        let hidden = HiddenGroups.decode(UserDefaults.standard.data(forKey: "hiddenGroups") ?? Data())
-        _model = StateObject(wrappedValue: WeekViewModel(programme: programme, hiddenGroups: hidden, source: source))
     }
 
     var body: some View {
@@ -116,13 +118,18 @@ struct WeekView: View {
                 }
             }
             ToolbarItemGroup(placement: .bottomBar) {
+                // Disabled at each end of the year rather than silently doing nothing.
                 Button { model.stepIndex(by: -1) } label: {
                     Image(systemName: "chevron.left")
                 }
+                .disabled(!model.canStep(by: -1))
+                .accessibilityLabel("Previous week")
                 Spacer()
                 Button { model.stepIndex(by: 1) } label: {
                     Image(systemName: "chevron.right")
                 }
+                .disabled(!model.canStep(by: 1))
+                .accessibilityLabel("Next week")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -150,7 +157,9 @@ struct WeekView: View {
                                    description: Text(error))
         } else if showsCalendar {
             // Same pager as the day view — weeks instead of days.
-            WrappingPager(count: max(model.weeks.count, 1), index: $model.weekIndex) { index in
+            WrappingPager(count: max(model.weeks.count, 1),
+                          bounds: WeekViewModel.weekBounds,
+                          index: $model.weekIndex) { index in
                 WeekCalendarView(eventsByDay: model.eventsByDay(forWeekIndex: index),
                                  clashingIDs: model.clashingIDs,
                                  highlight: { model.highlight(for: $0) },
@@ -174,24 +183,45 @@ struct WeekView: View {
     @ViewBuilder
     private func dayList(for index: Int) -> some View {
         let day = weekDays.indices.contains(index) ? weekDays[index] : nil
-        let events = day.map(self.events(on:)) ?? []
+        let slots = DaySchedule.slots(for: day.map(self.events(on:)) ?? [])
         List {
-            Section(day.map(dayHeader) ?? "") {
-                if events.isEmpty {
+            Section {
+                if slots.isEmpty {
                     Text("No classes").foregroundStyle(.secondary)
                 } else {
                     let skipped = Attendance.decode(skippedData)
-                    ForEach(events) { event in
-                        EventRow(event: event,
-                                 isClashing: model.clashingIDs.contains(event.id),
-                                 highlight: model.highlight(for: event),
-                                 isSkipped: skipped.contains(CancellationRules.eventKey(for: event)),
-                                 onSelect: { selectedEvent = event })
+                    ForEach(slots) { slot in
+                        switch slot {
+                        case .session(let event):
+                            EventRow(event: event,
+                                     isClashing: model.clashingIDs.contains(event.id),
+                                     highlight: model.highlight(for: event),
+                                     isSkipped: skipped.contains(CancellationRules.eventKey(for: event)),
+                                     onSelect: { selectedEvent = event })
+                        case .gap(let gap):
+                            GapRow(gap: gap)
+                        }
                     }
                 }
+            } header: {
+                dayHeader(day, slots: slots)
             }
         }
         .listStyle(.grouped)
+    }
+
+    /// The date, plus how much of the day is actually free — the number a student is doing
+    /// in their head when they look at a day with holes in it.
+    @ViewBuilder
+    private func dayHeader(_ day: Date?, slots: [DaySlot]) -> some View {
+        let free = DaySchedule.freeMinutes(in: slots)
+        HStack {
+            Text(day.map(dayTitle) ?? "")
+            if free > 0 {
+                Spacer()
+                Text(DaySchedule.freeLabel(minutes: free))
+            }
+        }
     }
 
     private func events(on day: Date) -> [TimetableEvent] {
@@ -209,8 +239,54 @@ struct WeekView: View {
     }
 
 
-    private func dayHeader(_ date: Date) -> String {
+    private func dayTitle(_ date: Date) -> String {
         date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
+    }
+}
+
+/// The empty stretch between two classes.
+///
+/// The left column carries the same times in the same place as `EventRow`, so the edge of
+/// the list reads as one continuous clock down the day — that column is what makes a gap
+/// legible at a glance, not the label.
+private struct GapRow: View {
+    let gap: DayGap
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(gap.start.formatted(date: .omitted, time: .shortened))
+                    .font(.subheadline).monospacedDigit()
+                Text(gap.end.formatted(date: .omitted, time: .shortened))
+                    .font(.caption).monospacedDigit()
+            }
+            .foregroundStyle(.tertiary)
+            .frame(width: 60, alignment: .trailing)
+
+            Line()
+                .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                .foregroundStyle(.quaternary)
+                .frame(height: 1)
+
+            Text(gap.label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .layoutPriority(1)
+        }
+        .padding(.vertical, 6)
+        .listRowSeparator(.hidden)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(gap.label), \(gap.start.formatted(date: .omitted, time: .shortened)) to \(gap.end.formatted(date: .omitted, time: .shortened))")
+    }
+}
+
+/// A single horizontal rule. `Divider()` can't be dashed.
+private struct Line: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        return path
     }
 }
 
