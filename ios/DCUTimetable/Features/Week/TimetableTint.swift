@@ -17,17 +17,17 @@ enum TimetableTint {
     /// Enough people have vouched for a deadline.
     static let confirmed = dynamic(light: 0x047857, dark: 0x34D399)
 
-    /// Module colours for the calendar blocks. Deliberately muted and deliberately *not*
-    /// amber, blue or orange: a module tinted blue sitting beside a blue "quiz today"
-    /// border would read as if the colour meant something it doesn't.
-    static let modules: [Color] = [
-        dynamic(light: 0x4B5563, dark: 0x9CA3AF),   // slate
-        dynamic(light: 0x5B6B5A, dark: 0xA3B3A2),   // sage
-        dynamic(light: 0x6B5B6E, dark: 0xB7A5BA),   // mauve
-        dynamic(light: 0x4C5A66, dark: 0x9BAAB8),   // steel
-        dynamic(light: 0x6E5F4B, dark: 0xC0AC8E),   // clay
-        dynamic(light: 0x585B72, dark: 0xA6A9C4),   // dusk
-    ]
+    /// Module colours for the calendar blocks: full-strength hues, one per module.
+    ///
+    /// These are decoration, not meaning — which module is which, at a glance, on a grid
+    /// where every block is two words of 10pt text. Muting them (an earlier pass did) makes
+    /// the week read as one grey mass and throws away the fastest thing about the grid.
+    ///
+    /// The tints above *do* carry meaning, and blue appears in both sets. They stay apart by
+    /// role rather than by hue: a module is a 0.18-opacity wash with a bar down its left
+    /// edge, while a highlight is a stroked border **and** a symbol in the corner. The
+    /// symbol is what settles it — a colour alone was never carrying that load.
+    static let modules: [Color] = [.blue, .green, .purple, .teal, .indigo, .pink, .brown]
 
     private static func dynamic(light: Int, dark: Int) -> Color {
         Color(uiColor: UIColor { traits in
