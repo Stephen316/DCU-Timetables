@@ -21,6 +21,8 @@ final class WeekViewModel: ObservableObject {
     @Published private(set) var cancellations: [String: CancellationStatus] = [:]
     /// Deadlines for every module on screen, so a class can be outlined on the day one falls.
     @Published private(set) var deadlines: [Deadline] = []
+    /// `moduleKeys` as of the last load, published so the deadlines tab can watch it.
+    @Published private(set) var loadedModuleKeys: [String] = []
 
     let programme: TimetableCategory
     private let source: TimetableSource
@@ -83,6 +85,15 @@ final class WeekViewModel: ObservableObject {
         deadlines = shared
     }
 
+    /// Every module seen in any week loaded so far, for the deadlines tab.
+    ///
+    /// Taken from the raw events, before group filtering: hiding a lab group you're not in
+    /// doesn't stop you taking the module, so it must not hide the module's dates. Spans
+    /// every loaded week because a module that doesn't run this week still has deadlines.
+    var moduleKeys: [String] {
+        Set(rawByWeekNumber.values.flatMap { $0 }.map(DeadlineRules.moduleKey(for:))).sorted()
+    }
+
     private var currentWeek: TeachingWeek? {
         weeks.indices.contains(weekIndex) ? weeks[weekIndex] : nil
     }
@@ -102,9 +113,9 @@ final class WeekViewModel: ObservableObject {
 
     /// Any week's events grouped by day — the calendar pager asks for its neighbours.
     func eventsByDay(forWeekIndex index: Int) -> [(day: Date, events: [TimetableEvent])] {
-        let wrapped = weeks.isEmpty ? 0 : ((index % weeks.count) + weeks.count) % weeks.count
-        guard weeks.indices.contains(wrapped) else { return [] }
-        return grouped(eventsByWeekNumber[weeks[wrapped].number] ?? [])
+        guard let resolved = PagerIndex.resolve(index, count: weeks.count, bounds: Self.weekBounds)
+        else { return [] }
+        return grouped(eventsByWeekNumber[weeks[resolved].number] ?? [])
     }
 
     private func grouped(_ list: [TimetableEvent]) -> [(day: Date, events: [TimetableEvent])] {
@@ -130,11 +141,21 @@ final class WeekViewModel: ObservableObject {
         await loadCurrentWeek()
     }
 
+    /// The academic year has a first and a last week; the pager stops at both.
+    static let weekBounds: PagerBounds = .clamped
+
     /// Move the pager without loading — the view's onChange drives the load, so a swipe
     /// and a chevron press take the same path.
     func stepIndex(by delta: Int) {
         guard !weeks.isEmpty else { return }
-        weekIndex = ((weekIndex + delta) % weeks.count + weeks.count) % weeks.count
+        weekIndex = PagerIndex.step(from: weekIndex, by: delta,
+                                    count: weeks.count, bounds: Self.weekBounds)
+    }
+
+    /// Whether the chevron in that direction has anywhere to go.
+    func canStep(by delta: Int) -> Bool {
+        PagerIndex.canStep(from: weekIndex, by: delta,
+                           count: weeks.count, bounds: Self.weekBounds)
     }
 
     /// Re-apply group filtering when the student changes their selection.
@@ -168,8 +189,8 @@ final class WeekViewModel: ObservableObject {
     private func neighbours(of index: Int) -> [TeachingWeek] {
         guard !weeks.isEmpty else { return [] }
         return [-1, 1].compactMap { delta in
-            let i = ((index + delta) % weeks.count + weeks.count) % weeks.count
-            return weeks.indices.contains(i) ? weeks[i] : nil
+            PagerIndex.resolve(index + delta, count: weeks.count, bounds: Self.weekBounds)
+                .map { weeks[$0] }
         }
     }
 
@@ -193,6 +214,9 @@ final class WeekViewModel: ObservableObject {
 
     private func applyFilter() {
         eventsByWeekNumber = rawByWeekNumber.mapValues { GroupCatalog.filter($0, hiding: hiddenGroups) }
+        // `moduleKeys` reads `rawByWeekNumber`, which isn't published; mirroring it here is
+        // what tells the deadlines tab a newly-loaded week brought a module with it.
+        loadedModuleKeys = moduleKeys
         let current = currentWeek.map { eventsByWeekNumber[$0.number] ?? [] } ?? []
         events = current
         clashingIDs = ClashDetector.clashingEventIDs(in: current)

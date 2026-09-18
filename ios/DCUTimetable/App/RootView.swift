@@ -33,7 +33,7 @@ struct RootView: View {
         if signedIn == nil {
             SignInView { user in signedIn = user }
         } else if let profile {
-            WeekView(
+            TimetableShell(
                 programme: TimetableCategory(identity: "profile-\(profile.group)",
                                              name: "Year 1 Engineering",
                                              categoryTypeIdentity: ""),
@@ -42,7 +42,7 @@ struct RootView: View {
                 resetLabel: "Sign out"
             ) { signOut() }
         } else if let selectedProgramme {
-            WeekView(programme: selectedProgramme, resetLabel: "Sign out") { signOut() }
+            TimetableShell(programme: selectedProgramme, resetLabel: "Sign out") { signOut() }
         } else if useProgrammePicker {
             ProgrammePickerView { category in
                 selectedProgrammeData = (try? JSONEncoder().encode(category)) ?? Data()
