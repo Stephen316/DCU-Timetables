@@ -246,6 +246,11 @@ struct WeekView: View {
 
 /// The empty stretch between two classes.
 ///
+/// Drawn on the list's own background rather than on a row, so a gap is literally a hole in
+/// the column of classes — the same way free time in the weekly grid is just background with
+/// no block on it. On a white row it read as another entry, which is the opposite of what it
+/// means.
+///
 /// The left column carries the same times in the same place as `EventRow`, so the edge of
 /// the list reads as one continuous clock down the day — that column is what makes a gap
 /// legible at a glance, not the label.
@@ -274,6 +279,7 @@ private struct GapRow: View {
                 .layoutPriority(1)
         }
         .padding(.vertical, 6)
+        .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(gap.label), \(gap.start.formatted(date: .omitted, time: .shortened)) to \(gap.end.formatted(date: .omitted, time: .shortened))")
