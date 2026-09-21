@@ -145,26 +145,85 @@ struct LectureDetailView: View {
 
     private var cancellation: some View {
         Section {
-            if model.status.isFlagged {
-                Label(model.status.summary, systemImage: "exclamationmark.circle.fill")
-                    .foregroundStyle(TimetableTint.off)
-            } else {
-                Text(model.status.summary).foregroundStyle(.secondary)
-            }
+            standingRow
 
-            // No destructive role: reporting a class as off isn't a delete, and red read
-            // as one.
-            Button {
-                Task { await model.toggleReport() }
-            } label: {
-                Label(model.status.reportedByMe ? "Undo my report" : "Report: lecture not on",
-                      systemImage: model.status.reportedByMe ? "arrow.uturn.backward" : "exclamationmark.bubble")
+            if model.canDecide {
+                decideButtons
+            } else {
+                // No destructive role: reporting a class as off isn't a delete, and red read
+                // as one.
+                Button {
+                    Task { await model.toggleReport() }
+                } label: {
+                    Label(model.status.reportedByMe ? "Undo my report" : "Report: lecture not on",
+                          systemImage: model.status.reportedByMe ? "arrow.uturn.backward" : "exclamationmark.bubble")
+                }
+                .disabled(model.isBusy)
             }
-            .disabled(model.isBusy)
         } header: {
             Text("Is it on?")
         } footer: {
-            Text("Reports are anonymous. A class is flagged with an orange ! once \(CancellationRules.threshold) people report it.")
+            if model.canDecide {
+                Text("Your decision replaces the count for everyone straight away. "
+                     + "Say it's on to clear a wrong report.")
+            } else {
+                Text("Reports are anonymous. A class is flagged with an orange ! once \(CancellationRules.threshold) people report it.")
+            }
+        }
+    }
+
+    /// A stated verdict and a tally of guesses are different claims, so they are drawn
+    /// differently: the verdict gets a filled badge and a source, the crowd stays plain.
+    /// Collapsing the two would make one person's mistake look like a consensus.
+    @ViewBuilder
+    private var standingRow: some View {
+        if let verdict = model.status.verdict {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(verdict.headline, systemImage: symbol(for: verdict.state))
+                    .foregroundStyle(verdict.state == .running ? Color.primary : TimetableTint.off)
+                    .font(.body.weight(.semibold))
+                if let note = verdict.note, !note.isEmpty {
+                    Text(note).font(.callout).foregroundStyle(.secondary)
+                }
+                // The crowd is shown underneath rather than replaced: students disagreeing
+                // with an organiser is worth seeing.
+                if let crowd = model.status.crowdSummary {
+                    Text(crowd).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        } else if model.status.isFlagged {
+            Label(model.status.summary, systemImage: "exclamationmark.circle.fill")
+                .foregroundStyle(TimetableTint.off)
+        } else {
+            Text(model.status.summary).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var decideButtons: some View {
+        ForEach(VerdictState.allCases, id: \.self) { state in
+            Button {
+                Task { await model.decide(state) }
+            } label: {
+                Label(title(for: state), systemImage: symbol(for: state))
+            }
+            .disabled(model.isBusy || model.status.verdict?.state == state)
+        }
+    }
+
+    private func title(for state: VerdictState) -> String {
+        switch state {
+        case .cancelled: return "Mark as off"
+        case .running:   return "Mark as on"
+        case .moved:     return "Mark as moved"
+        }
+    }
+
+    private func symbol(for state: VerdictState) -> String {
+        switch state {
+        case .cancelled: return "xmark.circle.fill"
+        case .running:   return "checkmark.circle.fill"
+        case .moved:     return "arrow.turn.up.right"
         }
     }
 

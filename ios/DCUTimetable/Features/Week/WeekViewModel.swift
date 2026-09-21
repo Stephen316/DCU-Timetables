@@ -33,6 +33,7 @@ final class WeekViewModel: ObservableObject {
     /// Handed to the class page so it talks to the same stores rather than making its own.
     let cancellationStore: CancellationStore
     let deadlineStore: DeadlineStore
+    let verdictStore: VerdictStore
     private let reporterID = ReporterID.current
     private let engLabModules = LabRotationLoader.bundled()?.moduleCodes ?? []
 
@@ -41,13 +42,15 @@ final class WeekViewModel: ObservableObject {
          source: TimetableSource = DCUAPIClient(),
          cache: TimetableCache = TimetableCache(),
          cancellationStore: CancellationStore = CancellationStoreFactory.make(),
-         deadlineStore: DeadlineStore = DeadlineStoreFactory.make()) {
+         deadlineStore: DeadlineStore = DeadlineStoreFactory.make(),
+         verdictStore: VerdictStore = VerdictStoreFactory.make()) {
         self.programme = programme
         self.hiddenGroups = hiddenGroups
         self.source = source
         self.cache = cache
         self.cancellationStore = cancellationStore
         self.deadlineStore = deadlineStore
+        self.verdictStore = verdictStore
     }
 
     // MARK: - Cancellation reports
@@ -64,8 +67,16 @@ final class WeekViewModel: ObservableObject {
             cancellations = [:]
             return
         }
-        guard let reports = try? await cancellationStore.reports(forKeys: keys) else { return }
-        cancellations = CancellationRules.statuses(from: reports, reporterID: reporterID)
+        // Fetched together so one pass builds the statuses. A verdict is the thing most
+        // worth showing, so a failed report fetch degrades to verdicts-only rather than
+        // leaving the week blank of both.
+        async let reportsTask = try? await cancellationStore.reports(forKeys: keys)
+        async let verdictsTask = try? await verdictStore.verdicts(forKeys: keys)
+        let (reports, verdicts) = await (reportsTask, verdictsTask)
+        guard reports != nil || verdicts != nil else { return }
+        cancellations = CancellationRules.statuses(from: reports ?? [],
+                                                   reporterID: reporterID,
+                                                   verdicts: verdicts ?? [])
     }
 
     /// What (if anything) to outline a class with: not running, a quiz today, or something

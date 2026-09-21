@@ -14,7 +14,14 @@ final class LectureDetailViewModel: ObservableObject {
     private let event: TimetableEvent
     private let cancellations: CancellationStore
     private let deadlineStore: DeadlineStore
+    private let verdicts: VerdictStore
+    private let profiles: ProfileStore
     private let reporterID = ReporterID.current
+
+    /// Whether this person may decide rather than vote. A cached hint, refreshed from the
+    /// server on load — the database is what actually enforces it, so the worst a stale
+    /// `true` can do is offer a button that comes back 403.
+    @Published private(set) var canDecide = CachedRole.current.canDecide
 
     /// Everything due at *this* class today — the banner at the top of the page. Other
     /// classes in the module list these at the bottom but don't lead with them.
@@ -28,10 +35,14 @@ final class LectureDetailViewModel: ObservableObject {
     init(event: TimetableEvent,
          cancellations: CancellationStore,
          deadlines: DeadlineStore,
+         verdicts: VerdictStore = VerdictStoreFactory.make(),
+         profiles: ProfileStore = ProfileStoreFactory.make(),
          known: [Deadline] = []) {
         self.event = event
         self.cancellations = cancellations
         self.deadlineStore = deadlines
+        self.verdicts = verdicts
+        self.profiles = profiles
         self.lecturers = LecturerDirectory.lecturers(for: event)
         // Seeded from the timetable's own copy so the page opens with its banner already
         // drawn; `load()` then replaces it with the authoritative list.
@@ -46,8 +57,18 @@ final class LectureDetailViewModel: ObservableObject {
     func load() async {
         isLoading = true
         defer { isLoading = false }
+        let verdict = (try? await verdicts.verdicts(forKeys: [eventKey]))?.first
         if let reports = try? await cancellations.reports(forKeys: [eventKey]) {
-            status = CancellationRules.status(forKey: eventKey, reports: reports, reporterID: reporterID)
+            status = CancellationRules.status(forKey: eventKey, reports: reports,
+                                              reporterID: reporterID, verdict: verdict)
+        } else if let verdict {
+            // A verdict must still show when the report fetch failed. Losing the tally is
+            // a degraded view; losing "this lecture is cancelled" is a wasted journey.
+            status = CancellationStatus(reportCount: 0, reportedByMe: false, verdict: verdict)
+        }
+        if let profile = try? await profiles.myProfile() {
+            CachedRole.save(profile.role)
+            canDecide = profile.canDecide()
         }
         if let shared = try? await deadlineStore.deadlines(forModule: moduleKey) {
             deadlines = DeadlineRules.upcoming(shared)
@@ -74,6 +95,23 @@ final class LectureDetailViewModel: ObservableObject {
             await load()
         } catch {
             errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't send that."
+        }
+    }
+
+    /// Post a definitive verdict, or withdraw one by posting `.running` over it. The
+    /// button that calls this is only shown to a trusted account, and the database refuses
+    /// it for anyone else — the check exists twice because only one of them is enforcement.
+    func decide(_ state: VerdictState, note: String? = nil) async {
+        guard let userID = SignedInUser.current?.id else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            try await verdicts.set(EventVerdict(eventKey: eventKey, state: state, note: note),
+                                   moduleKey: moduleKey,
+                                   decidedBy: userID)
+            await load()
+        } catch {
+            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't post that."
         }
     }
 
