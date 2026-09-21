@@ -16,17 +16,42 @@ public struct CancellationReport: Codable, Sendable, Equatable {
     }
 }
 
-/// How many people say a class is off, and whether this device is one of them.
+/// What is known about whether a class is on: what the crowd says, whether this person is
+/// part of it, and any definitive verdict that outranks both.
 public struct CancellationStatus: Sendable, Equatable {
     public let reportCount: Int
     public let reportedByMe: Bool
+    /// A trusted person's statement. When present it decides the outcome and the crowd
+    /// count becomes context, not evidence.
+    public let verdict: EventVerdict?
 
-    public var isFlagged: Bool { reportCount >= CancellationRules.threshold }
+    /// Precedence: a verdict, then the crowd, then nothing.
+    ///
+    /// Note `.running` deliberately returns false even with a hundred reports behind it —
+    /// that is the entire purpose of a `running` verdict, and treating it as merely one
+    /// more vote would make it useless.
+    public var isFlagged: Bool {
+        switch verdict?.state {
+        case .cancelled: return true
+        case .running:   return false
+        case .moved:     return false
+        case nil:        return reportCount >= CancellationRules.threshold
+        }
+    }
+
+    /// On, but not where or when the timetable says. Kept apart from `isFlagged` because
+    /// turning up to the wrong room and not turning up at all need different warnings.
+    public var isMoved: Bool { verdict?.state == .moved }
+
+    /// Whether the claim is someone's stated fact rather than a tally of guesses. The UI
+    /// leans on this to style the two differently.
+    public var isDecided: Bool { verdict != nil }
 
     /// Always the real number, never "x of 3" — the threshold decides whether the class is
     /// *flagged*, but eleven people saying a lecture is off means more than three, and
     /// capping the wording hides that. Same rule as `DeadlineStanding.summary`.
     public var summary: String {
+        if let verdict { return verdict.headline }
         switch reportCount {
         case ..<1: return "Nobody has reported this class as off"
         case 1: return "1 person says this isn't on"
@@ -34,9 +59,19 @@ public struct CancellationStatus: Sendable, Equatable {
         }
     }
 
-    public init(reportCount: Int, reportedByMe: Bool) {
+    /// What the crowd said, shown *underneath* a verdict rather than instead of it. Three
+    /// students disagreeing with an organiser is worth seeing, not worth hiding.
+    public var crowdSummary: String? {
+        guard verdict != nil, reportCount > 0 else { return nil }
+        return reportCount == 1
+            ? "1 person had reported this as off"
+            : "\(reportCount) people had reported this as off"
+    }
+
+    public init(reportCount: Int, reportedByMe: Bool, verdict: EventVerdict? = nil) {
         self.reportCount = reportCount
         self.reportedByMe = reportedByMe
+        self.verdict = verdict
     }
 }
 
@@ -64,21 +99,37 @@ public enum CancellationRules {
     /// single person can't flag a lecture on their own.
     public static func status(forKey key: String,
                               reports: [CancellationReport],
-                              reporterID: String) -> CancellationStatus {
+                              reporterID: String,
+                              verdict: EventVerdict? = nil) -> CancellationStatus {
         let reporters = Set(reports.filter { $0.eventKey == key }.map(\.reporterID))
         return CancellationStatus(reportCount: reporters.count,
-                                  reportedByMe: reporters.contains(reporterID))
+                                  reportedByMe: reporters.contains(reporterID),
+                                  verdict: verdict)
     }
 
     /// Tally every class in one pass, keyed by event key.
     public static func statuses(from reports: [CancellationReport],
-                                reporterID: String) -> [String: CancellationStatus] {
+                                reporterID: String,
+                                verdicts: [EventVerdict] = []) -> [String: CancellationStatus] {
         var reporters: [String: Set<String>] = [:]
         for report in reports {
             reporters[report.eventKey, default: []].insert(report.reporterID)
         }
-        return reporters.mapValues {
-            CancellationStatus(reportCount: $0.count, reportedByMe: $0.contains(reporterID))
+        let byKey = Dictionary(verdicts.map { ($0.eventKey, $0) }) { first, _ in first }
+
+        var result = reporters.mapValues {
+            CancellationStatus(reportCount: $0.count,
+                               reportedByMe: $0.contains(reporterID),
+                               verdict: nil)
         }
+        // A verdict on a class nobody reported still has to appear, so this walks the
+        // verdicts rather than only decorating rows the crowd happened to create.
+        for (key, verdict) in byKey {
+            let existing = result[key]
+            result[key] = CancellationStatus(reportCount: existing?.reportCount ?? 0,
+                                             reportedByMe: existing?.reportedByMe ?? false,
+                                             verdict: verdict)
+        }
+        return result
     }
 }
