@@ -28,3 +28,4 @@ local-data/
 
 # Local signing (personal Team ID)
 Local.xcconfig
+docs/ADMIN_CONSOLE.md
