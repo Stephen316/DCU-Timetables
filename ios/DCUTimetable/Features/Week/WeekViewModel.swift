@@ -70,12 +70,11 @@ final class WeekViewModel: ObservableObject {
         // Fetched together so one pass builds the statuses. A verdict is the thing most
         // worth showing, so a failed report fetch degrades to verdicts-only rather than
         // leaving the week blank of both.
-        async let reportsTask = try? await cancellationStore.reports(forKeys: keys)
+        async let talliesTask = try? await cancellationStore.tallies(forKeys: keys)
         async let verdictsTask = try? await verdictStore.verdicts(forKeys: keys)
-        let (reports, verdicts) = await (reportsTask, verdictsTask)
-        guard reports != nil || verdicts != nil else { return }
-        cancellations = CancellationRules.statuses(from: reports ?? [],
-                                                   reporterID: reporterID,
+        let (tallies, verdicts) = await (talliesTask, verdictsTask)
+        guard tallies != nil || verdicts != nil else { return }
+        cancellations = CancellationRules.statuses(from: tallies ?? [],
                                                    verdicts: verdicts ?? [])
     }
 

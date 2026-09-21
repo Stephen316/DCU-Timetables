@@ -2,7 +2,10 @@ import Foundation
 
 /// Where cancellation reports are shared between students.
 public protocol CancellationStore: Sendable {
-    func reports(forKeys keys: [String]) async throws -> [CancellationReport]
+    /// Counts from the server, plus whether this person is one of them. Replaces reading
+    /// raw report rows: the device is no longer allowed to see who reported what, and no
+    /// longer needs to (see `supabase/phase3_anonymity.sql`).
+    func tallies(forKeys keys: [String]) async throws -> [CancellationTally]
     func submit(_ report: CancellationReport) async throws
     func withdraw(eventKey: String, reporterID: String) async throws
 }
@@ -72,23 +75,31 @@ public struct SupabaseCancellationStore: CancellationStore {
         let reported_at: Date?
     }
 
-    public func reports(forKeys keys: [String]) async throws -> [CancellationReport] {
+    private struct TallyRow: Decodable {
+        let event_key: String
+        let report_count: Int
+        /// Null when the view has no row for this key — `bool_or` over nothing.
+        let mine: Bool?
+    }
+
+    /// One request. The view counts every row (it runs with its owner's rights, so RLS
+    /// does not hide the other reporters from it) and answers `mine` from `auth.uid()`,
+    /// which still resolves to this caller. No reporter id is returned either way.
+    public func tallies(forKeys keys: [String]) async throws -> [CancellationTally] {
         guard !keys.isEmpty else { return [] }
-        var components = URLComponents(string: "\(config.url)/rest/v1/\(table)")!
+        var components = URLComponents(string: "\(config.url)/rest/v1/cancellation_tallies")!
         components.queryItems = [
-            URLQueryItem(name: "select", value: "event_key,reporter_id,reported_at"),
+            URLQueryItem(name: "select", value: "event_key,report_count,mine"),
             URLQueryItem(name: "event_key", value: PostgREST.inList(keys)),
         ]
         var request = URLRequest(url: components.url!)
         await apply(&request)
         let (data, response) = try await session.data(for: request)
         try check(response)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let rows = (try? decoder.decode([Row].self, from: data)) ?? []
+        let rows = (try? JSONDecoder().decode([TallyRow].self, from: data)) ?? []
         return rows.map {
-            CancellationReport(eventKey: $0.event_key, reporterID: $0.reporter_id,
-                               reportedAt: $0.reported_at ?? Date())
+            CancellationTally(eventKey: $0.event_key, reportCount: $0.report_count,
+                              reportedByMe: $0.mine ?? false)
         }
     }
 
@@ -159,9 +170,12 @@ public actor LocalCancellationStore: CancellationStore {
         try? data.write(to: fileURL, options: .atomic)
     }
 
-    public func reports(forKeys keys: [String]) async throws -> [CancellationReport] {
+    public func tallies(forKeys keys: [String]) async throws -> [CancellationTally] {
         let wanted = Set(keys)
-        return load().filter { wanted.contains($0.eventKey) }
+        let mine = load().filter { wanted.contains($0.eventKey) }
+        return Dictionary(grouping: mine, by: \.eventKey).map { key, rows in
+            CancellationTally(eventKey: key, reportCount: rows.count, reportedByMe: true)
+        }
     }
 
     public func submit(_ report: CancellationReport) async throws {

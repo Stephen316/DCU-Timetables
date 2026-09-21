@@ -10,7 +10,9 @@ public protocol DeadlineStore: Sendable {
     /// policy, not just by hiding the button.
     func withdraw(id: String, submitterID: String) async throws
     /// Who has vouched for these deadlines being right.
-    func confirmations(forDeadlineIDs ids: [String]) async throws -> [DeadlineConfirmation]
+    /// How many vouched for each deadline, and which of them this person vouched for —
+    /// without the device seeing who the others are.
+    func standings(forDeadlineIDs ids: [String]) async throws -> [String: DeadlineStanding]
     func confirm(deadlineID: String, confirmerID: String) async throws
     func unconfirm(deadlineID: String, confirmerID: String) async throws
 }
@@ -19,6 +21,9 @@ public struct SupabaseDeadlineStore: DeadlineStore {
     private let config: SupabaseConfig
     private let session: URLSession
     private let table = "module_deadlines"
+    /// Reads go to the view, which swaps `submitter_id` for `is_mine`; writes go to the
+    /// table, which is where the row actually lives.
+    private let readTable = "module_deadlines_public"
     private let confirmationTable = "deadline_confirmations"
 
     public init(config: SupabaseConfig, session: URLSession = .shared) {
@@ -26,7 +31,11 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         self.session = session
     }
 
-    private struct Row: Codable {
+    /// Reads and writes have genuinely different shapes now: the view hands back
+    /// `is_mine` and no submitter, while an insert must carry the submitter and cannot
+    /// set `is_mine` (it is computed). One struct doing both would have to make every
+    /// field optional and lose the compiler's help.
+    private struct InsertRow: Encodable {
         let id: String
         let module_key: String
         let at_group_key: String?
@@ -34,6 +43,16 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         let due_at: Date
         let kind: String
         let submitter_id: String
+    }
+
+    private struct Row: Decodable {
+        let id: String
+        let module_key: String
+        let at_group_key: String?
+        let title: String
+        let due_at: Date
+        let kind: String
+        let is_mine: Bool?
         let submitted_at: Date?
     }
 
@@ -51,10 +70,10 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         // Nothing prunes the table, so without a floor this download grows for the life of
         // the module. `DeadlineRules.horizon` is the same cut-off the client filters on.
         let since = ISO8601DateFormatter().string(from: DeadlineRules.horizon())
-        var components = URLComponents(string: "\(config.url)/rest/v1/\(table)")!
+        var components = URLComponents(string: "\(config.url)/rest/v1/\(readTable)")!
         components.queryItems = [
             URLQueryItem(name: "select",
-                         value: "id,module_key,at_group_key,title,due_at,kind,submitter_id,submitted_at"),
+                         value: "id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at"),
             URLQueryItem(name: "module_key", value: moduleFilter),
             URLQueryItem(name: "due_at", value: "gte.\(since)"),
             URLQueryItem(name: "order", value: "due_at.asc"),
@@ -67,10 +86,12 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         decoder.dateDecodingStrategy = .iso8601
         let rows = (try? decoder.decode([Row].self, from: data)) ?? []
         return rows.map {
+            // No submitter id comes back any more — `is_mine` is all the app used it for.
             Deadline(id: $0.id, moduleKey: $0.module_key, atGroupKey: $0.at_group_key,
                      title: $0.title, due: $0.due_at,
                      kind: DeadlineKind(rawValue: $0.kind) ?? .other,
-                     submitterID: $0.submitter_id, submittedAt: $0.submitted_at ?? Date())
+                     submitterID: "", submittedAt: $0.submitted_at ?? Date(),
+                     isMine: $0.is_mine ?? false)
         }
     }
 
@@ -82,10 +103,10 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         request.httpBody = try encoder.encode([
-            Row(id: deadline.id, module_key: deadline.moduleKey,
-                at_group_key: deadline.atGroupKey, title: deadline.title,
-                due_at: deadline.due, kind: deadline.kind.rawValue,
-                submitter_id: deadline.submitterID, submitted_at: nil)
+            InsertRow(id: deadline.id, module_key: deadline.moduleKey,
+                      at_group_key: deadline.atGroupKey, title: deadline.title,
+                      due_at: deadline.due, kind: deadline.kind.rawValue,
+                      submitter_id: deadline.submitterID)
         ])
         let (_, response) = try await session.data(for: request)
         try check(response)
@@ -111,19 +132,32 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         let confirmer_id: String
     }
 
-    public func confirmations(forDeadlineIDs ids: [String]) async throws -> [DeadlineConfirmation] {
-        guard !ids.isEmpty else { return [] }
-        var components = URLComponents(string: "\(config.url)/rest/v1/\(confirmationTable)")!
+    private struct StandingRow: Decodable {
+        let deadline_id: String
+        let confirm_count: Int
+        let mine: Bool?
+    }
+
+    /// One request, same shape as `SupabaseCancellationStore.tallies`: the view counts
+    /// every confirmer and answers `mine` from `auth.uid()`, returning nobody's id.
+    public func standings(forDeadlineIDs ids: [String]) async throws -> [String: DeadlineStanding] {
+        guard !ids.isEmpty else { return [:] }
+        var components = URLComponents(string: "\(config.url)/rest/v1/deadline_confirmation_tallies")!
         components.queryItems = [
-            URLQueryItem(name: "select", value: "deadline_id,confirmer_id"),
+            URLQueryItem(name: "select", value: "deadline_id,confirm_count,mine"),
             URLQueryItem(name: "deadline_id", value: PostgREST.inList(ids)),
         ]
         var request = URLRequest(url: components.url!)
         await apply(&request)
         let (data, response) = try await session.data(for: request)
         try check(response)
-        let rows = (try? JSONDecoder().decode([ConfirmationRow].self, from: data)) ?? []
-        return rows.map { DeadlineConfirmation(deadlineID: $0.deadline_id, confirmerID: $0.confirmer_id) }
+        let rows = (try? JSONDecoder().decode([StandingRow].self, from: data)) ?? []
+        var result: [String: DeadlineStanding] = [:]
+        for row in rows {
+            result[row.deadline_id] = DeadlineStanding(confirmCount: row.confirm_count,
+                                                       confirmedByMe: row.mine ?? false)
+        }
+        return result
     }
 
     public func confirm(deadlineID: String, confirmerID: String) async throws {
@@ -211,9 +245,11 @@ public actor LocalDeadlineStore: DeadlineStore {
         save(load().filter { !($0.id == id && $0.submitterID == submitterID) })
     }
 
-    public func confirmations(forDeadlineIDs ids: [String]) async throws -> [DeadlineConfirmation] {
+    public func standings(forDeadlineIDs ids: [String]) async throws -> [String: DeadlineStanding] {
         let wanted = Set(ids)
-        return loadConfirmations().filter { wanted.contains($0.deadlineID) }
+        let mine = loadConfirmations().filter { wanted.contains($0.deadlineID) }
+        return DeadlineRules.standings(counts: mine.reduce(into: [:]) { $0[$1.deadlineID, default: 0] += 1 },
+                                       mine: Set(mine.map(\.deadlineID)))
     }
 
     public func confirm(deadlineID: String, confirmerID: String) async throws {

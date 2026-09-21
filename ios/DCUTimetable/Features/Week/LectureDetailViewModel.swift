@@ -50,7 +50,7 @@ final class LectureDetailViewModel: ObservableObject {
             known.filter { $0.moduleKey == DeadlineRules.moduleKey(for: event) })
     }
 
-    func isMine(_ deadline: Deadline) -> Bool { deadline.submitterID == reporterID }
+    func isMine(_ deadline: Deadline) -> Bool { deadline.belongsTo(reporterID) }
 
     /// The deadlines shown at the bottom keep every class in the module, including ones
     /// pinned elsewhere — `upcoming` only drops what's already past.
@@ -58,9 +58,9 @@ final class LectureDetailViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         let verdict = (try? await verdicts.verdicts(forKeys: [eventKey]))?.first
-        if let reports = try? await cancellations.reports(forKeys: [eventKey]) {
-            status = CancellationRules.status(forKey: eventKey, reports: reports,
-                                              reporterID: reporterID, verdict: verdict)
+        if let tally = (try? await cancellations.tallies(forKeys: [eventKey]))?.first {
+            status = CancellationStatus(reportCount: tally.reportCount,
+                                        reportedByMe: tally.reportedByMe, verdict: verdict)
         } else if let verdict {
             // A verdict must still show when the report fetch failed. Losing the tally is
             // a degraded view; losing "this lecture is cancelled" is a wasted journey.
@@ -72,8 +72,8 @@ final class LectureDetailViewModel: ObservableObject {
         }
         if let shared = try? await deadlineStore.deadlines(forModule: moduleKey) {
             deadlines = DeadlineRules.upcoming(shared)
-            if let confirmations = try? await deadlineStore.confirmations(forDeadlineIDs: deadlines.map(\.id)) {
-                standings = DeadlineRules.standings(from: confirmations, confirmerID: reporterID)
+            if let fetched = try? await deadlineStore.standings(forDeadlineIDs: deadlines.map(\.id)) {
+                standings = fetched
             }
         }
     }
@@ -135,7 +135,8 @@ final class LectureDetailViewModel: ObservableObject {
         // Pinned to this class, so only this lecture or practical leads with it — a lab
         // report due at Thursday's practical shouldn't headline Monday's lecture.
         let deadline = Deadline(moduleKey: moduleKey, atGroupKey: event.groupKey,
-                                title: title, due: due, kind: kind, submitterID: reporterID)
+                                title: title, due: due, kind: kind, submitterID: reporterID,
+                                isMine: true)
         // Show it straight away; the reload confirms it landed.
         deadlines = DeadlineRules.upcoming(deadlines + [deadline])
         do {

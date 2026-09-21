@@ -30,7 +30,7 @@ final class DeadlinesViewModel: ObservableObject {
 
     var total: Int { sections.reduce(0) { $0 + $1.deadlines.count } }
 
-    func isMine(_ deadline: Deadline) -> Bool { deadline.submitterID == reporterID }
+    func isMine(_ deadline: Deadline) -> Bool { deadline.belongsTo(reporterID) }
 
     func standing(for deadline: Deadline) -> DeadlineStanding {
         standings[deadline.id] ?? DeadlineStanding(confirmCount: 0, confirmedByMe: false)
@@ -53,8 +53,7 @@ final class DeadlinesViewModel: ObservableObject {
         do {
             let all = try await store.deadlines(forModules: modules)
             sections = DeadlineSchedule.grouped(all)
-            let confirmations = try await store.confirmations(forDeadlineIDs: all.map(\.id))
-            standings = DeadlineRules.standings(from: confirmations, confirmerID: reporterID)
+            standings = try await store.standings(forDeadlineIDs: all.map(\.id))
             errorText = nil
         } catch {
             // Keep whatever is already on screen: a stale list beats an empty one when the

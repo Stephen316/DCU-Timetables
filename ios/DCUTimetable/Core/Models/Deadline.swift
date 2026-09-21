@@ -18,6 +18,11 @@ public struct Deadline: Identifiable, Codable, Sendable, Equatable {
     /// can delete their own without anyone being named.
     public let submitterID: String
     public let submittedAt: Date
+    /// Whether this device's owner submitted it, answered by the server so the submitter's
+    /// id never has to leave it. Optional because rows cached by an older build, and rows
+    /// from the local fallback store, do not carry it — synthesised `Decodable` ignores
+    /// property defaults, so a non-optional here would break every existing cache.
+    public let isMine: Bool?
 
     public init(id: String = UUID().uuidString,
                 moduleKey: String,
@@ -26,7 +31,8 @@ public struct Deadline: Identifiable, Codable, Sendable, Equatable {
                 due: Date,
                 kind: DeadlineKind = .assignment,
                 submitterID: String,
-                submittedAt: Date = Date()) {
+                submittedAt: Date = Date(),
+                isMine: Bool? = nil) {
         self.id = id
         self.moduleKey = moduleKey
         self.atGroupKey = atGroupKey
@@ -35,6 +41,12 @@ public struct Deadline: Identifiable, Codable, Sendable, Equatable {
         self.kind = kind
         self.submitterID = submitterID
         self.submittedAt = submittedAt
+        self.isMine = isMine
+    }
+
+    /// Falls back to comparing ids for the local store, which still has them.
+    public func belongsTo(_ userID: String) -> Bool {
+        isMine ?? (submitterID == userID)
     }
 }
 
@@ -211,6 +223,21 @@ public enum DeadlineRules {
     }
 
     /// Tally confirmations for every deadline in one pass, keyed by deadline id.
+    /// Standings from server-side counts, where the device is told how many vouched and
+    /// whether it was one of them, but never by whom.
+    public static func standings(counts: [String: Int],
+                                 mine: Set<String>) -> [String: DeadlineStanding] {
+        var result: [String: DeadlineStanding] = [:]
+        for (id, count) in counts {
+            result[id] = DeadlineStanding(confirmCount: count, confirmedByMe: mine.contains(id))
+        }
+        // Vouched by you alone and by nobody else is still a standing worth showing.
+        for id in mine where result[id] == nil {
+            result[id] = DeadlineStanding(confirmCount: 1, confirmedByMe: true)
+        }
+        return result
+    }
+
     public static func standings(from confirmations: [DeadlineConfirmation],
                                  confirmerID: String) -> [String: DeadlineStanding] {
         var byDeadline: [String: Set<String>] = [:]

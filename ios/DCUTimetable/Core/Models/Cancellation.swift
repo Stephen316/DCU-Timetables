@@ -16,6 +16,23 @@ public struct CancellationReport: Codable, Sendable, Equatable {
     }
 }
 
+/// How many people reported a class, counted by the server rather than on the device.
+///
+/// The device no longer sees who reported what — that is the point (see
+/// `supabase/phase3_anonymity.sql`). It gets a number and one boolean about itself, which
+/// is everything it ever displayed.
+public struct CancellationTally: Sendable, Equatable {
+    public let eventKey: String
+    public let reportCount: Int
+    public let reportedByMe: Bool
+
+    public init(eventKey: String, reportCount: Int, reportedByMe: Bool) {
+        self.eventKey = eventKey
+        self.reportCount = reportCount
+        self.reportedByMe = reportedByMe
+    }
+}
+
 /// What is known about whether a class is on: what the crowd says, whether this person is
 /// part of it, and any definitive verdict that outranks both.
 public struct CancellationStatus: Sendable, Equatable {
@@ -108,6 +125,24 @@ public enum CancellationRules {
     }
 
     /// Tally every class in one pass, keyed by event key.
+    /// Build statuses from server-side tallies. Same precedence as the report-based
+    /// version below, which stays for the local fallback store and for the pure tests.
+    public static func statuses(from tallies: [CancellationTally],
+                                verdicts: [EventVerdict] = []) -> [String: CancellationStatus] {
+        let byKey = Dictionary(verdicts.map { ($0.eventKey, $0) }) { first, _ in first }
+        var result: [String: CancellationStatus] = [:]
+        for tally in tallies {
+            result[tally.eventKey] = CancellationStatus(reportCount: tally.reportCount,
+                                                        reportedByMe: tally.reportedByMe,
+                                                        verdict: byKey[tally.eventKey])
+        }
+        // A verdict on a class nobody reported has no tally row to decorate.
+        for (key, verdict) in byKey where result[key] == nil {
+            result[key] = CancellationStatus(reportCount: 0, reportedByMe: false, verdict: verdict)
+        }
+        return result
+    }
+
     public static func statuses(from reports: [CancellationReport],
                                 reporterID: String,
                                 verdicts: [EventVerdict] = []) -> [String: CancellationStatus] {

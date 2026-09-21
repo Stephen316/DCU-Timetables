@@ -192,3 +192,78 @@ struct VerdictHighlightTests {
         #expect(highlight?.reason == "Moved · the class rep")
     }
 }
+
+@Suite("Server-side tallies")
+struct TallyTests {
+
+    /// The device is handed a count and one boolean about itself, never a list of who.
+    @Test("A tally becomes a status without any reporter ids")
+    func tallyBecomesStatus() {
+        let statuses = CancellationRules.statuses(
+            from: [CancellationTally(eventKey: "A", reportCount: 4, reportedByMe: true)])
+        #expect(statuses["A"]?.reportCount == 4)
+        #expect(statuses["A"]?.reportedByMe == true)
+        #expect(statuses["A"]?.isFlagged == true)
+    }
+
+    @Test("A verdict with no tally row still shows")
+    func verdictWithoutTally() {
+        let statuses = CancellationRules.statuses(
+            from: [],
+            verdicts: [EventVerdict(eventKey: "QUIET", state: .cancelled)])
+        #expect(statuses["QUIET"]?.isFlagged == true)
+    }
+
+    /// Vouched by you and nobody else is still a standing: without this, a deadline you
+    /// just submitted would read "0 people confirmed" on your own device.
+    @Test("Your own vouch counts when the tally hasn't caught up")
+    func ownVouchCounts() {
+        let standings = DeadlineRules.standings(counts: [:], mine: ["d1"])
+        #expect(standings["d1"]?.confirmCount == 1)
+        #expect(standings["d1"]?.confirmedByMe == true)
+    }
+
+    @Test("Counts and own vouches merge")
+    func countsAndMineMerge() {
+        let standings = DeadlineRules.standings(counts: ["d1": 5, "d2": 2], mine: ["d1"])
+        #expect(standings["d1"]?.confirmedByMe == true)
+        #expect(standings["d1"]?.confirmCount == 5)
+        #expect(standings["d2"]?.confirmedByMe == false)
+    }
+}
+
+@Suite("Deadline ownership without an id")
+struct DeadlineOwnershipTests {
+
+    /// The server answers "is this yours" so the submitter's id never reaches the device.
+    @Test("is_mine from the server decides")
+    func serverAnswerWins() {
+        let mine = Deadline(moduleKey: "M", title: "T", due: Date(), submitterID: "", isMine: true)
+        let theirs = Deadline(moduleKey: "M", title: "T", due: Date(), submitterID: "", isMine: false)
+        #expect(mine.belongsTo("anyone"))
+        #expect(!theirs.belongsTo("anyone"))
+    }
+
+    /// The local fallback store still has real ids and no `is_mine`, so ownership falls
+    /// back to comparing them. A cached row from an older build decodes the same way —
+    /// synthesised `Decodable` ignores property defaults, which is why the field is
+    /// Optional rather than defaulted to false.
+    @Test("Falls back to comparing ids when the server didn't say")
+    func fallsBackToIDs() {
+        let local = Deadline(moduleKey: "M", title: "T", due: Date(), submitterID: "me")
+        #expect(local.isMine == nil)
+        #expect(local.belongsTo("me"))
+        #expect(!local.belongsTo("someone-else"))
+    }
+
+    @Test("A row cached before is_mine existed still decodes")
+    func oldCacheStillDecodes() throws {
+        let json = """
+        {"id":"d1","moduleKey":"M","title":"T","due":0,"kind":"assignment",
+         "submitterID":"me","submittedAt":0}
+        """
+        let decoded = try JSONDecoder().decode(Deadline.self, from: Data(json.utf8))
+        #expect(decoded.isMine == nil)
+        #expect(decoded.belongsTo("me"))
+    }
+}
