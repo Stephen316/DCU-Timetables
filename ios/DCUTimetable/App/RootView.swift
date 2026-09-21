@@ -26,6 +26,11 @@ struct RootView: View {
                 .receive(on: RunLoop.main)) { _ in
                     signedIn = nil
                 }
+            .onReceive(NotificationCenter.default
+                .publisher(for: .signOutRequested)
+                .receive(on: RunLoop.main)) { _ in
+                    signOut()
+                }
     }
 
     @ViewBuilder
@@ -68,6 +73,7 @@ struct RootView: View {
     private func signOut() {
         SignedInUser.signOut()
         ReporterID.reset()
+        CachedRole.reset()
         signedIn = nil
         profileData = Data()
         selectedProgrammeData = Data()

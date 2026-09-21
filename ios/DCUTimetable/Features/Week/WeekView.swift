@@ -14,6 +14,7 @@ struct WeekView: View {
     @AppStorage("weekShowsCalendar") private var showsCalendar = false
     @State private var showingGroups = false
     @State private var showingEngLabs = false
+    @State private var showingAccount = false
     /// Mon–Fri index for the day view (0 = Monday).
     @State private var dayIndex = 0
     /// The class whose page is open, pushed from a day row or a calendar block.
@@ -90,6 +91,9 @@ struct WeekView: View {
             .sheet(isPresented: $showingEngLabs) {
                 EngineeringLabsView()
             }
+            .sheet(isPresented: $showingAccount) {
+                AccountView()
+            }
     }
 
     /// Extracted from `body` for the type-checker's sake, same as `pages`.
@@ -138,6 +142,9 @@ struct WeekView: View {
                         Button("Engineering labs", systemImage: "wrench.and.screwdriver") {
                             showingEngLabs = true
                         }
+                    }
+                    Button("Account", systemImage: "person.crop.circle") {
+                        showingAccount = true
                     }
                     Button(resetLabel, systemImage: "arrow.left.arrow.right",
                            action: onReset)

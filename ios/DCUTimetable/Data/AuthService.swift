@@ -178,6 +178,12 @@ public extension Notification.Name {
     /// keeps showing them as signed in while every write is silently rejected, because
     /// `SignedInUser` lives in `UserDefaults` and the token lives in the Keychain.
     static let authSessionExpired = Notification.Name("ie.dcu.timetable.authSessionExpired")
+
+    /// Something deep in the app wants the student signed out and the device wiped — the
+    /// account screen after a deletion, for one. Only `RootView` owns that teardown (the
+    /// profile, the attendance marks and the voter id all go with the credentials), and a
+    /// sheet several layers down can't reach it.
+    static let signOutRequested = Notification.Name("ie.dcu.timetable.signOutRequested")
 }
 
 public enum AuthServiceFactory {
