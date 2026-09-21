@@ -146,3 +146,49 @@ struct VerdictWordingTests {
         #expect(decided.summary == "Confirmed off by an organiser")
     }
 }
+
+@Suite("Verdict in the week outline")
+struct VerdictHighlightTests {
+
+    private func event() -> TimetableEvent {
+        var comps = DateComponents(year: 2026, month: 9, day: 21, hour: 12)
+        comps.timeZone = TimeZone(secondsFromGMT: 0)
+        let start = Calendar(identifier: .gregorian).date(from: comps)!
+        return TimetableEvent(id: UUID().uuidString, start: start,
+                              end: start.addingTimeInterval(3600), type: .onCampus,
+                              locations: [], moduleName: "Materials Engineering", staff: [],
+                              activity: ActivityCode("EEG1006[1]SY/L1/01"), weekLabels: [])
+    }
+
+    /// The bug this pins was caught in the simulator, not by a unit test: a verdict with
+    /// no reports behind it rendered as "Reported not on · 0 people" — which reads as
+    /// *nobody* thinks it's off, the exact opposite of a confirmed cancellation.
+    @Test("A verdict never renders as a crowd count")
+    func verdictDoesNotRenderAsCrowdCount() {
+        let status = CancellationStatus(
+            reportCount: 0, reportedByMe: false,
+            verdict: EventVerdict(eventKey: "K", state: .cancelled))
+        let highlight = DeadlineRules.highlight(for: event(), deadlines: [], cancellation: status)
+
+        #expect(highlight?.reason == "Not on · confirmed by an organiser")
+        #expect(highlight?.reason.contains("0 people") == false)
+    }
+
+    @Test("Without a verdict the crowd wording is kept")
+    func crowdWordingKeptWithoutAVerdict() {
+        let status = CancellationStatus(reportCount: 3, reportedByMe: false)
+        let highlight = DeadlineRules.highlight(for: event(), deadlines: [], cancellation: status)
+        #expect(highlight?.reason == "Reported not on · 3 people")
+    }
+
+    /// A moved class is still on, so it never reaches the cancelled branch — without its
+    /// own case it would show no outline at all and a student would go to the old room.
+    @Test("A moved class is outlined in its own right")
+    func movedClassIsOutlined() {
+        let status = CancellationStatus(
+            reportCount: 0, reportedByMe: false,
+            verdict: EventVerdict(eventKey: "K", state: .moved, decidedByLabel: "the class rep"))
+        let highlight = DeadlineRules.highlight(for: event(), deadlines: [], cancellation: status)
+        #expect(highlight?.reason == "Moved · the class rep")
+    }
+}

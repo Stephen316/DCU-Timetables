@@ -111,13 +111,21 @@ public struct DeadlineStanding: Sendable, Equatable {
 /// Why a class is outlined in the timetable. Ordered by how much it matters: a class that
 /// isn't running outranks a quiz, which outranks something to hand in.
 public enum ClassHighlight: Sendable, Equatable {
-    case cancelled(reportCount: Int)
+    /// `decidedBy` is set when a trusted person stated it outright, in which case the
+    /// report count is context and must not lead. A verdict rendered as
+    /// "Reported not on · 0 people" reads as *nobody* thinks it's off, which is the
+    /// opposite of what it means — the one place the crowd wording actively misleads.
+    case cancelled(reportCount: Int, decidedBy: String? = nil)
+    case moved(source: String)
     case test(title: String)
     case assignment(title: String)
 
     public var reason: String {
         switch self {
-        case .cancelled(let count): return "Reported not on · \(count) people"
+        case .cancelled(let count, let decidedBy):
+            if let decidedBy { return "Not on · confirmed by \(decidedBy)" }
+            return "Reported not on · \(count) people"
+        case .moved(let source): return "Moved · \(source)"
         case .test(let title): return "\(title) today"
         case .assignment(let title): return "\(title) due today"
         }
@@ -185,7 +193,15 @@ public enum DeadlineRules {
                                  deadlines: [Deadline],
                                  cancellation: CancellationStatus,
                                  calendar: Calendar = .current) -> ClassHighlight? {
-        if cancellation.isFlagged { return .cancelled(reportCount: cancellation.reportCount) }
+        if cancellation.isFlagged {
+            return .cancelled(reportCount: cancellation.reportCount,
+                              decidedBy: cancellation.verdict?.source)
+        }
+        // A moved class is still on, so it never reaches the cancelled branch above — but
+        // turning up to the wrong room needs a warning of its own.
+        if let verdict = cancellation.verdict, verdict.state == .moved {
+            return .moved(source: verdict.source)
+        }
         let today = due(at: event, from: deadlines, calendar: calendar)
         if let test = today.first(where: { $0.kind.isSatInClass }) {
             return .test(title: test.title)
