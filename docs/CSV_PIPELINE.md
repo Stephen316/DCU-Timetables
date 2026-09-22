@@ -9,9 +9,8 @@ right; this fills in what it leaves open and sequences the build.
    server-side.
 2. **Match on given name + family name**, not surname alone.
 3. **Course is selected first**, so a match is only ever attempted within one course's roster.
-4. **Local first.** Qwen3-VL and PaddleOCR on the 32 GB desktop, no Claude API. A Gemini
-   adjudication step for disputed *structural* cells is designed in but **not committed** —
-   whether it's built at all depends on what the §6 step 2 harness measures.
+4. **Gemini extracts, PaddleOCR cross-checks.** Free tier, under the §4.5 EEA terms. Local
+   Qwen is out — see §4 for why that scaffolding was removed rather than kept.
 
 4 supersedes `ADMIN_CONSOLE.md` §7.3 entirely; 1–3 replace the §7.4 position that nothing
 personal is hosted.
@@ -223,77 +222,63 @@ in §2.1 isn't drawn yet, so `n50`/`n9` need a second input before that's built.
 
 ---
 
-## 4. The pipeline — local by default
+## 4. The pipeline — Gemini, with a local cross-check
 
-Everything runs locally on the **32 GB desktop**. No API key, no network, no per-document
-judgement call about which path a file goes down.
+**Inputs vary and will keep varying** — a spreadsheet one year, a PDF the next, a photo of a
+printout after that. That is the case for a model rather than a parser: a parser needs one
+implementation per format and breaks on each new one, where a model takes all of them
+through a single path.
 
-That last point is the strongest argument for the single path. A two-path design (hosted
-model for rotation PDFs, local for class lists) works right up until someone sends a
-name-bearing document down the hosted path by mistake. One local path makes that mistake
-impossible.
+**Extractor: the Gemini API, free tier.** The §4.5 EEA carve-out means paid-tier data terms
+apply to free quota, so Google does not train on what you send. That, plus option C already
+placing these names in Supabase, is what makes it consistent to send name-bearing documents
+there rather than a stricter standard applied unevenly.
 
-**Model: `qwen3-vl-32b-instruct` at 4-bit (~18 GB).** It fits in the desktop's unified
-memory budget (~21–24 GB of 32 GB) with room for KV cache, which matters because a page
-image is thousands of tokens before the model writes anything.
+**Two document types, one extractor, different destinations:**
 
-Do **not** run this on the 16 GB laptop. There the ceiling is 8B, and 8B is materially
-worse on merged cells and grid alignment — the two things these documents are made of.
-macOS swaps rather than refusing to allocate, so an over-budget model doesn't error, it
-just becomes unusably slow.
+| Document | Contains names? | Lands in |
+|---|---|---|
+| Lab rotation (week x group x module x room) | No | `lab_rotations`, public read |
+| Class allocation list | Yes, or student IDs | `roster_members` + `course_allocations`, via the §2.0 HMAC |
 
-**The honest residual:** 32B narrows the gap to a frontier model on hard table layouts but
-doesn't close it. That's what §4.2's validators and §4.3's staging gate are for, and why
-the ground-truth measurement in §6 step 2 comes before anything is built on top.
+**What this replaced, and why it's recorded:** earlier drafts ran `qwen3-vl-32b` locally on
+a 32 GB desktop, to keep names off third-party infrastructure entirely. Qwen is out. That
+design existed to satisfy a constraint that option C had already relaxed, and it cost a
+model install, a quantisation quality penalty, and a laptop/desktop split that would have
+made the pipeline annoying enough to abandon. None of that scaffolding is needed once the
+constraint is lifted deliberately rather than inherited.
 
-**Workflow:** the repo is on the laptop, the model is on the desktop. Decide up front that
-the desktop runs the whole ingestion step — model, validators, CSV output — so the only
-thing crossing machines is a finished, validated CSV. Shuttling intermediate files both
-ways is what gets a pipeline abandoned after two uses.
+### 4.0 The front door
 
-Nothing is installed yet — no ollama, no MLX, no PaddleOCR.
+PDFs and images go to Gemini directly. Anything else is normalised first:
 
-### 4.1 Extraction
+- `.xlsx` / `.ods` → CSV (a zip of XML; the model cannot read the file itself)
+- `.docx` → text
+- `.csv` / pasted text → straight through
 
-**Feed the image straight to the model.** Pre-OCRing for a VLM throws away the spatial
-layout it needs to make sense of a merged-cell table.
+Keep this step dumb and deterministic. It is the one part of the pipeline that should never
+need a model, and giving it an obvious front door stops "any format" becoming a surprise
+later.
 
-**PaddleOCR and Qwen run in parallel on every page**, and their outputs are diffed. This is
-a deliberate choice of accuracy over throughput, and the right one at this volume — a few
-documents a year, run attended. (An earlier draft proposed PP-Structure as a triage stage
-so clean pages would skip the VLM. That saves real time at scale and buys nothing here,
-where the scarce resource is your attention on the review screen, not compute.)
+### 4.1 Extraction and cross-check
 
-The diff is the detector that matters: digit confusion (`SG23`/`SG24`/`SG25`,
-`SB38`/`SB39`) is the dominant error mode, it produces a perfectly well-formed value that
-no schema check can see, and two independent systems rarely make the same one.
+**PaddleOCR PP-Structure runs locally alongside Gemini on every document**, and the two
+outputs are diffed. It is free, local, and it catches the error that matters: digit
+confusion (`SG23`/`SG24`/`SG25`, `SB38`/`SB39`) produces a perfectly well-formed value that
+no schema check can see, and two unrelated systems rarely make the same one.
 
-**Disputed cells go to adjudication.** A cell is disputed when the two extractions disagree
-or a validator fails.
+Keeping it is cheap insurance, not a hedge against Gemini being bad. Drop it only if the §6
+harness shows it never disagrees usefully.
 
-**The default resolution is you.** Disputed cells land on the review screen and you decide.
-At this volume that may be the whole answer — if the harness shows the local pair agreeing
-on 99% of cells, a handful of disputes per document is a minute's work, and a third model
-is machinery you don't need.
+**Disputed cells are flagged, not routed elsewhere.** A cell is disputed when the two
+extractions disagree or a validator fails. It still goes to `import_staging` — it is just
+surfaced first on the review screen. Earlier drafts had a separate adjudication path that
+sent disputed *structural* cells to a second model while keeping names local; that whole
+mechanism existed to protect names from a hosted model and is obsolete now that extraction
+is hosted anyway.
 
-**A Gemini adjudication step is drawn in `csv_pipeline.mmd` (subgraph `s3`) but is TBD.**
-Build it only if the measured dispute rate makes manual adjudication tedious. The decision
-belongs after §6 step 2, not before it.
-
-If it is built, the fork inside it is the privacy boundary and is not optional:
-
-- **Disputed cell is a name** → never leaves the machine; straight to the review screen.
-- **Disputed cell is structural** (room, day, time, group letter) → crop it, strip names,
-  send only the crop, merge the result and re-validate.
-
-That fork is what makes a hosted model usable here at all. Redaction is impossible
-*upstream* of OCR, because the names are in the pixels — but trivial *downstream*, once
-local extraction has located the cells. And per §4.5, EEA terms mean even the crop isn't
-trained on.
-
-**Cut output tokens, not input tokens.** `day`, `workshop` and `drawing` are a function of
-`subgroup`, so have the model emit only `name, subgroup` and derive the rest locally.
-Roughly 3× less decode. Emit CSV, not JSON.
+**The adjudicator is you.** At a few documents a year, disputed cells are a minute's work on
+the review screen, and a third model is machinery that earns nothing.
 
 ### 4.2 Validation before anything is stored
 
@@ -314,9 +299,8 @@ Anything failing goes to a review pile, not the CSV.
 `ADMIN_CONSOLE.md` §7.2 applies unchanged: extraction → `import_staging` → **review screen
 with per-row accept/edit/reject** → commit to live tables plus an `admin_actions` row.
 `csv_pipeline.mmd` draws this correctly (`n33` → `n34` → `n36`). With a local model on
-messy inputs, this gate matters more here than anywhere else in the console — and if the
-Gemini step in §4.1 is never built, it is the *only* thing standing between a misread cell
-and 200 students in the wrong room.
+messy inputs, this gate matters more here than anywhere else in the console — it is the
+only thing standing between a misread cell and 200 students in the wrong room.
 
 ### 4.4 Note on the allocation itself
 
@@ -325,7 +309,7 @@ Engineering Year 1's allocation is **not alphabetical** — sorting by name give
 rule cannot replace this roster. Other courses may well be alphabetical; check before
 building a roster for them, because a rule needs no personal data at all.
 
-### 4.5 If the Gemini step is built — the EEA carve-out
+### 4.5 The EEA carve-out — why the free tier is usable here
 
 Google's free-tier terms say submitted content is used to improve their products, and warn
 against sending sensitive data. But the same terms carry an exception, quoted from
@@ -337,12 +321,20 @@ against sending sensitive data. But the same terms carry an exception, quoted fr
 
 And the paid terms: Google "doesn't use your prompts ... or responses to improve our
 products." As an EEA user you get paid-tier data handling on free quota. That's what makes
-a free-tier hosted adjudicator defensible at all — it does **not** remove the §4.1 crop
-rule, which stands regardless.
+a free-tier hosted extractor defensible at all. Verify it still holds before relying on
+it — terms change, and this one is load-bearing for the whole §4 design.
 
-Two caveats: free tier is reportedly Flash-only since March 2026, with Pro behind a
-subscription; and use the API with structured output rather than Gemini CLI, which is an
-interactive agent and a poor fit for a reproducible batch step.
+Three caveats:
+
+- **Free tier is reportedly Flash-only** since March 2026, with Pro behind a subscription.
+  So the open question is accuracy on your messiest layout, not quota — token limits will
+  not be the binding constraint at a few documents a year.
+- **Use the API with structured output**, not Gemini CLI. The CLI is an interactive agent
+  and a poor fit for a reproducible batch step. It is worth using once, by hand, to see
+  whether a given document reads at all.
+- **This is a deliberate relaxation.** Names go to Google under processor terms. That is
+  consistent with option C hosting them in Supabase, but it is a choice with a legal
+  footing, not an absence of one — §2's retention and deletion obligations cover it too.
 
 ---
 
@@ -353,6 +345,13 @@ interactive agent and a poor fit for a reproducible batch step.
   cheap version check at launch to trigger it.
 - **The HMAC secret.** Where it lives, how it rotates, and who can read it — §2.0 sets the
   requirements but not the mechanism.
+- **Rotation delivery — an app change, needs a decision.** `LabRotation.bundled()` reads
+  `EngineeringLabRotation.json` from the app bundle and nowhere else, so a mid-semester
+  amendment from the School currently needs an App Store release to reach anyone. Faster
+  extraction does not help if delivery still takes a week. Proposal: the app reads
+  `lab_rotations` from Supabase and falls back to the bundled JSON when offline or on first
+  launch. No privacy cost — there are no names in it. The diagram draws this as a dotted
+  overlay onto the general timetable.
 - **Deletion.** A student asks for their row to be removed — needs a path that isn't editing
   the database by hand.
 - **Retention.** How long a roster lives after the module ends.
@@ -367,16 +366,16 @@ interactive agent and a poor fit for a reproducible batch step.
 1. **Delete `ios/DCUTimetable/Resources/eng_groups.local.json`.** Independent of everything
    below — the manual picker already handles its absence (`ENGINEERING_LABS.md`). *(iOS —
    needs your go-ahead.)*
-2. **Ground-truth harness first.** `EngineeringLabRotation.json` is a verified extraction of
-   a PDF you still have: 67 sessions, and every validator in §4.2 passes on it. Run
-   `qwen3-vl-32b` against that same PDF and diff. This gives a measured accuracy figure for
-   this document class on this hardware **before** anything is built on top of it.
-3. **Local extraction script** (`tools/`): image → Qwen3-VL + PaddleOCR in parallel → diff →
-   §4.2 validators → CSV. Standalone, testable against one real page before any of it
-   touches the console.
-4. **Decide on Gemini.** With 2 and 3 measured you'll know the dispute rate. Low enough that
-   the review screen absorbs it → don't build `s3` at all. High enough to be tedious → build
-   it with the §4.1 crop rule.
+2. **Ground-truth harness first, on the rotation document.** `EngineeringLabRotation.json`
+   is a verified extraction of a PDF you still hold: 67 sessions, and every validator in
+   §4.2 passes on it. Run Gemini against that same PDF and diff. It is the right first
+   target because the answer is known, there are no names in it, and the extractor is the
+   same one the class lists will use — mistakes here are cheap and measurable.
+3. **Extraction script** (`tools/`): normalise → Gemini + PaddleOCR → diff → §4.2 validators
+   → CSV. Standalone, testable against one real document before any of it touches the
+   console.
+4. **Decide whether PaddleOCR stays.** With 2 and 3 measured you will know whether it ever
+   disagrees usefully. If it doesn't, drop it and simplify.
 5. **Schema for §2** — `roster_members`, `course_allocations`, `resolve_allocation`, and the HMAC secret.
 6. **Console upload + staging + review screen** (`ADMIN_CONSOLE.md` §7.2).
 7. **App reader**: call the RPC, cache the allocation key, drop the local matcher. *(iOS — needs your

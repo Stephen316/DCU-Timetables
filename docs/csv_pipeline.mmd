@@ -3,21 +3,18 @@ title: CSV conversion pipeline + allocation resolution
 ---
 flowchart TB
 
- subgraph s1["Extraction — local, on the 32GB desktop"]
-        n40["PaddleOCR PP-Structure"]
-        n27["Qwen3-VL-32B (4-bit, local)"]
+ subgraph s1["Extraction"]
+        n60["Normalise input<br>xlsx / docx to CSV — PDF and images pass through"]
+        n61["Gemini — structured extraction<br>free tier, EEA paid-tier data terms"]
+        n40["PaddleOCR PP-Structure<br>local, independent second opinion"]
         n42["Cross-check: diff both extractions"]
         n43["Validators: closed vocab, group counts,<br>date vs day, subgroup implies room,<br>ID format + cohort prefix"]
         n44{"Cell disputed?<br>diff mismatch OR validator fail"}
-        n45{"Is the disputed cell<br>a name or a student ID?"}
-        n47["Adjudicated value merged"]
-  end
-
- subgraph s3["Gemini API — structural cells only (TBD)"]
-        n46["Gemini adjudicates cropped cell<br>room / day / time / group letter"]
+        n59["Flagged for attention"]
   end
 
  subgraph s2["Supabase"]
+        n63[("lab_rotations — public read<br>week, date, day, times, module, groups — no personal data")]
         n2[("course_allocations — anon-readable in full<br>allocation_key, group, subgroup — NO names, NO IDs")]
         n35[("roster_members<br>name_key AND/OR student_id to allocation_key<br>admin RLS only")]
         n11[("profiles<br>student_id — never exposed, never sent to a device")]
@@ -25,18 +22,19 @@ flowchart TB
 
     %% ---------- Admin ingestion ----------
     n4["Course selected by admin on admin web"] --> n3["Files uploaded onto admin web"]
-    n3 --> n40 & n27
+    n3 --> n60
+    n60 --> n61 & n40
+    n61 --> n42
     n40 --> n42
-    n27 --> n42
     n42 --> n43 --> n44
     n44 -- No --> n33
-    n44 -- Yes --> n45
-    n45 -- "Yes: never leaves the machine" --> n34
-    n45 -- "No: crop, strip names + IDs" --> n46
-    n46 --> n47 --> n43
+    n44 -- Yes --> n59 --> n33
 
-    n33[("import_staging — nothing is live yet")] --> n34["REVIEW SCREEN<br>per-row accept / edit / reject"]
-    n34 --> n36["Derive allocation_key — stored as bytea<br>HMAC(secret, course_key + name_key + disambiguator)<br>per-course, so keys cannot be linked across courses"]
+    n33[("import_staging — nothing is live yet")] --> n34["REVIEW SCREEN<br>per-row accept / edit / reject<br>disputed cells surfaced first"]
+    n34 --> n62{"Document type?"}
+
+    n62 -- "Rotation — no names" --> n63
+    n62 -- "Class list — names or IDs" --> n36["Derive allocation_key — stored as bytea<br>HMAC(secret, course_key + name_key + disambiguator)<br>per-course, so keys cannot be linked across courses"]
     n36 --> n2 & n35
     n36 -.->|"triggers re-resolve"| n9
 
@@ -59,6 +57,7 @@ flowchart TB
     n29 -- No --> n31{"Cached snapshot?"}
     n31 -- Yes --> n19
     n31 -- No --> n30["Notify user of server error"]
+    n63 -.->|"rotation overlay, bundled JSON as fallback"| n19
 
     %% ---------- Which key does this roster use ----------
     n37 -- No --> n52(("JOIN"))
@@ -85,16 +84,16 @@ flowchart TB
     n19 --> n52
     n52 --> n6["Timetable calculated<br>and cached on device"] --> n10["User can view and edit course"]
 
+    classDef ext     fill:#E1BEE7,stroke:#6A1B9A,color:#000
     classDef local   fill:#FFCDD2,stroke:#C62828,color:#000
     classDef gate    fill:#FFE0B2,stroke:#EF6C00,color:#000
     classDef store   fill:#C8E6C9,stroke:#2E7D32,color:#000
     classDef compute fill:#BBDEFB,stroke:#1565C0,color:#000
     classDef user    fill:#000000,color:#fff
-    classDef ext     fill:#E1BEE7,stroke:#6A1B9A,color:#000
 
-    class n40,n27,n42 local
-    class n43,n33,n34,n44,n45,n54,n56,n58 gate
-    class n2,n35,n11,n55 store
-    class n36,n47,n50,n51,n57,n18,n19,n20,n6,n9,n39,n16 compute
+    class n61 ext
+    class n40,n42 local
+    class n43,n33,n34,n44,n59,n54,n56,n58,n62 gate
+    class n2,n35,n11,n55,n63 store
+    class n36,n60,n50,n51,n57,n18,n19,n20,n6,n9,n39,n16 compute
     class n1,n8,n10,n38,n30,n53 user
-    class n46 ext
