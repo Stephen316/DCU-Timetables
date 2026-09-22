@@ -60,10 +60,13 @@ p  { margin: 0 0 12px; color: var(--muted); }
   color: var(--muted);
   transition: background 120ms ease, color 120ms ease;
 }
-.nav a:hover { background: var(--raised); color: var(--text); }
+/* Hover sits one step below the current page, so pointing at a second link never
+   leaves two of them looking selected. */
+.nav a:hover { background: var(--surface); color: var(--text); }
 .nav a[aria-current="page"] { background: var(--raised); color: var(--text); }
+/* Dimmer at rest because the screen behind it is a placeholder, but it is a real
+   link to a real page, so it hovers and highlights like the rest of them. */
 .nav .soon { color: var(--dim); }
-.nav .soon:hover { background: none; color: var(--dim); cursor: default; }
 
 .main { flex: 1; min-width: 0; padding: 24px 28px; max-width: 1200px; }
 .head { margin-bottom: 20px; }
