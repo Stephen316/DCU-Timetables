@@ -52,28 +52,26 @@ struct LectureDetailView: View {
                 Task { await model.addDeadline(title: title, kind: kind, due: due) }
             }
         }
-        .confirmationDialog(confirmTitle,
-                            isPresented: Binding(get: { pendingReport != nil },
-                                                 set: { if !$0 { pendingReport = nil } }),
-                            titleVisibility: .visible) {
-            if let stance = pendingReport {
-                Button(confirmVerb(for: stance)) {
-                    pendingReport = nil
-                    Task { await model.report(stance) }
-                }
-                Button("Cancel", role: .cancel) { pendingReport = nil }
+        .sheet(item: $pendingReport) { stance in
+            ConfirmSheet(title: confirmTitle(for: stance),
+                         message: "Everyone taking this module sees the count. "
+                                + "You can undo it afterwards.",
+                         confirmTitle: confirmVerb(for: stance),
+                         symbol: stance == .cancelled
+                                 ? "exclamationmark.bubble.fill" : "checkmark.bubble.fill",
+                         // The same orange the banner and the timetable outline use, so
+                         // the question looks like it came from this app rather than iOS.
+                         tint: stance == .cancelled ? TimetableTint.off : .accentColor,
+                         fill: stance == .cancelled ? TimetableTint.offFill : nil) {
+                Task { await model.report(stance) }
             }
-        } message: {
-            Text("Everyone taking this module sees the count. You can undo it afterwards.")
         }
     }
 
-    private var confirmTitle: String {
-        switch pendingReport {
-        case .cancelled: return "Report this lecture as cancelled?"
-        case .on:        return "Report that this lecture went ahead?"
-        case nil:        return ""
-        }
+    private func confirmTitle(for stance: ReportStance) -> String {
+        stance == .cancelled
+            ? "Report this lecture as cancelled?"
+            : "Report that this lecture went ahead?"
     }
 
     /// The confirm button repeats the action rather than saying "OK", so the sheet can be

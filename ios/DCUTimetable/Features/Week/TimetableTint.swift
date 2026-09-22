@@ -17,6 +17,15 @@ enum TimetableTint {
     /// Enough people have vouched for a deadline.
     static let confirmed = dynamic(light: 0x047857, dark: 0x34D399)
 
+    /// `off` as a **fill** behind white text, in either theme.
+    ///
+    /// The tints above flip lighter in dark mode so they stay legible as *foreground* on a
+    /// dark background. A filled button inverts that relationship: the colour becomes the
+    /// background, and white on the light shade lands near 2:1. A filled control is its own
+    /// surface rather than part of the page, so it keeps the dark shade throughout, where
+    /// white sits at about 4.9:1.
+    static let offFill = Color(uiColor: UIColor(rgb: 0xC2410C))
+
     /// Module colours for the calendar blocks: full-strength hues, one per module.
     ///
     /// These are decoration, not meaning — which module is which, at a glance, on a grid

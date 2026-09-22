@@ -5,7 +5,12 @@ import Foundation
 /// Disagreement is a first-class answer, not the absence of a report. Before this existed
 /// the only way to push back on three mistaken "cancelled" reports was to find a class rep
 /// with a verdict button; now anyone who walked into a running lecture can say so.
-public enum ReportStance: String, Codable, Sendable, CaseIterable {
+/// `Identifiable` so a stance can drive `.sheet(item:)` directly: the sheet's presence and
+/// which side is being reported are one fact, and splitting them into a bool plus an
+/// optional is how they end up disagreeing.
+public enum ReportStance: String, Codable, Sendable, CaseIterable, Identifiable {
+    public var id: String { rawValue }
+
     /// The class was cancelled.
     case cancelled
     /// The class went ahead — posted against someone else's cancellation report.
