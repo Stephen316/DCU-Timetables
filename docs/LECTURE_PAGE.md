@@ -133,7 +133,7 @@ week calendar. `DeadlineRules.highlight` decides, and the order matters:
 
 | Border | Means | Beats |
 | --- | --- | --- |
-| **Orange** | reported not on by 3+ people | everything — turning up for a quiz that isn't running is the worst outcome |
+| **Orange** | reported cancelled by 3+ people | everything — turning up for a quiz that isn't running is the worst outcome |
 | **Blue** | a quiz or exam sat in that class | an assignment the same day |
 | **Yellow** | an assignment, lab report or presentation due | — |
 

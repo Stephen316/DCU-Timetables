@@ -1,4 +1,4 @@
-# Crowd-sourced "lecture not on" reports
+# Crowd-sourced "lecture cancelled" reports
 
 Students report that a class isn't running. Once **3 independent devices** report the same
 occurrence, it's flagged with an orange box and a `!` in both the day view and the calendar.
