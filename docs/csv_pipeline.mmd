@@ -1,0 +1,86 @@
+---
+title: CSV conversion pipeline + allocation resolution
+---
+flowchart TB
+
+ subgraph s1["Extraction — local, on the 32GB desktop"]
+        n40["PaddleOCR PP-Structure"]
+        n27["Qwen3-VL-32B (4-bit, local)"]
+        n42["Cross-check: diff both extractions"]
+        n43["Validators: closed vocab, group counts,<br>date vs day, subgroup implies room"]
+        n44{"Cell disputed?<br>diff mismatch OR validator fail"}
+        n45{"Is the disputed cell a name?"}
+        n47["Adjudicated value merged"]
+  end
+
+ subgraph s3["Gemini API — structural cells only"]
+        n46["Gemini adjudicates cropped cell<br>room / day / time / group letter"]
+  end
+
+ subgraph s2["Supabase"]
+        n2[("course_allocations<br>allocation_key, group, subgroup — NO names")]
+        n35[("roster_members<br>name_key to allocation_key — admin RLS only")]
+  end
+
+    %% ---------- Admin ingestion ----------
+    n4["Course selected by admin on admin web"] --> n3["Files uploaded onto admin web"]
+    n3 --> n40 & n27
+    n40 --> n42
+    n27 --> n42
+    n42 --> n43 --> n44
+    n44 -- No --> n33
+    n44 -- Yes --> n45
+    n45 -- "Yes: never leaves the machine" --> n34
+    n45 -- "No: crop, strip names" --> n46
+    n46 --> n47 --> n43
+
+    n33[("import_staging — nothing is live yet")] --> n34["REVIEW SCREEN<br>per-row accept / edit / reject"]
+    n34 --> n36["Derive stable allocation_key<br>HMAC(secret, name_key) — survives re-import"]
+    n36 --> n2 & n35
+    n36 -.->|"triggers re-resolve"| n9
+
+    %% ---------- User sign in ----------
+    n1["User signs in with email"] --> n15{"College email?"}
+    n15 -- No --> n16["Retry college email attempt"] --> n1
+    n15 -- Yes --> n8["User selects course"]
+    n8 --> n11[("Account information stored in supabase")]
+
+    %% ---------- Two independent paths ----------
+    n8 --> n18["General course timetable requested"]
+    n8 --> n50["DCUEmail: givenName + familyName<br>from verified address"]
+
+    n18 --> n29{"Reachable?"}
+    n29 -- Yes --> n19["General course timetable"]
+    n29 -- No --> n31{"Cached snapshot?"}
+    n31 -- Yes --> n19
+    n31 -- No --> n30["Notify user of server error"]
+
+    n50 --> n37{"Roster for this course?"}
+    n37 -- No --> n52(("JOIN"))
+    n37 -- Yes --> n9["resolve_allocation(course_key)<br>security definer — matches server-side"]
+    n35 -.-> n9
+
+    n9 --> n17{"Match?"}
+    n17 -- None --> n52
+    n17 -- Several --> n38["Ask user which subgroup<br>never show other names"] --> n39
+    n17 -- One --> n39["allocation_key returned"]
+    n39 --> n20["course_allocations downloaded<br>inert: no names"]
+    n2 -.-> n20
+    n20 --> n52
+
+    n19 --> n52
+    n52 --> n6["Timetable calculated<br>and cached on device"] --> n10["User can view and edit course"]
+
+    classDef local   fill:#FFCDD2,stroke:#C62828,color:#000
+    classDef gate    fill:#FFE0B2,stroke:#EF6C00,color:#000
+    classDef store   fill:#C8E6C9,stroke:#2E7D32,color:#000
+    classDef compute fill:#BBDEFB,stroke:#1565C0,color:#000
+    classDef user    fill:#000000,color:#fff
+    classDef ext     fill:#E1BEE7,stroke:#6A1B9A,color:#000
+
+    class n40,n27,n42 local
+    class n43,n33,n34,n44,n45 gate
+    class n2,n35,n11 store
+    class n36,n47,n50,n18,n19,n20,n6,n9,n39,n16 compute
+    class n1,n8,n10,n38,n30 user
+    class n46 ext
