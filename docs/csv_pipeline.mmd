@@ -7,19 +7,20 @@ flowchart TB
         n40["PaddleOCR PP-Structure"]
         n27["Qwen3-VL-32B (4-bit, local)"]
         n42["Cross-check: diff both extractions"]
-        n43["Validators: closed vocab, group counts,<br>date vs day, subgroup implies room"]
+        n43["Validators: closed vocab, group counts,<br>date vs day, subgroup implies room,<br>ID format + cohort prefix"]
         n44{"Cell disputed?<br>diff mismatch OR validator fail"}
-        n45{"Is the disputed cell a name?"}
+        n45{"Is the disputed cell<br>a name or a student ID?"}
         n47["Adjudicated value merged"]
   end
 
- subgraph s3["Gemini API — structural cells only"]
+ subgraph s3["Gemini API — structural cells only (TBD)"]
         n46["Gemini adjudicates cropped cell<br>room / day / time / group letter"]
   end
 
  subgraph s2["Supabase"]
-        n2[("course_allocations<br>allocation_key, group, subgroup — NO names")]
-        n35[("roster_members<br>name_key to allocation_key — admin RLS only")]
+        n2[("course_allocations<br>allocation_key, group, subgroup — NO names, NO IDs")]
+        n35[("roster_members<br>name_key AND/OR student_id to allocation_key<br>admin RLS only")]
+        n11[("profiles<br>student_id — never exposed, never sent to a device")]
   end
 
     %% ---------- Admin ingestion ----------
@@ -31,23 +32,27 @@ flowchart TB
     n44 -- No --> n33
     n44 -- Yes --> n45
     n45 -- "Yes: never leaves the machine" --> n34
-    n45 -- "No: crop, strip names" --> n46
+    n45 -- "No: crop, strip names + IDs" --> n46
     n46 --> n47 --> n43
 
     n33[("import_staging — nothing is live yet")] --> n34["REVIEW SCREEN<br>per-row accept / edit / reject"]
-    n34 --> n36["Derive stable allocation_key<br>HMAC(secret, name_key) — survives re-import"]
+    n34 --> n36["Derive stable allocation_key<br>HMAC(secret, name_key + disambiguator)<br>survives re-import"]
     n36 --> n2 & n35
     n36 -.->|"triggers re-resolve"| n9
 
-    %% ---------- User sign in ----------
+    %% ---------- Account creation ----------
     n1["User signs in with email"] --> n15{"College email?"}
     n15 -- No --> n16["Retry college email attempt"] --> n1
-    n15 -- Yes --> n8["User selects course"]
-    n8 --> n11[("Account information stored in supabase")]
+    n15 -- Yes --> n53["Enter student ID — A00000000"]
+    n53 --> n54{"Valid format?"}
+    n54 -- No --> n53
+    n54 -- Yes --> n55["Written to profiles.student_id<br>SET ONCE — admin-only to change<br>so it cannot be used to enumerate"]
+    n55 --> n11
+    n55 --> n8["User selects course"]
 
     %% ---------- Two independent paths ----------
     n8 --> n18["General course timetable requested"]
-    n8 --> n50["DCUEmail: givenName + familyName<br>from verified address"]
+    n8 --> n37{"Roster for this course?"}
 
     n18 --> n29{"Reachable?"}
     n29 -- Yes --> n19["General course timetable"]
@@ -55,16 +60,25 @@ flowchart TB
     n31 -- Yes --> n19
     n31 -- No --> n30["Notify user of server error"]
 
-    n50 --> n37{"Roster for this course?"}
+    %% ---------- Which key does this roster use ----------
     n37 -- No --> n52(("JOIN"))
-    n37 -- Yes --> n9["resolve_allocation(course_key)<br>security definer — matches server-side"]
+    n37 -- Yes --> n56{"Which key does<br>this roster carry?"}
+
+    n56 -- "Names" --> n50["DCUEmail: givenName + familyName<br>VERIFIED — they control the address"]
+    n56 -- "Student IDs" --> n51["profiles.student_id<br>SELF-ASSERTED — they typed it"]
+    n56 -- "Both" --> n57["Match on name,<br>require the ID to agree"]
+
+    n50 --> n9["resolve_allocation(course_key)<br>security definer — matches server-side"]
+    n51 --> n9
+    n57 --> n9
     n35 -.-> n9
 
     n9 --> n17{"Match?"}
     n17 -- None --> n52
+    n17 -- "Conflict: name and ID disagree" --> n58["Flag for admin review<br>fall back to general timetable"] --> n52
     n17 -- Several --> n38["Ask user which subgroup<br>never show other names"] --> n39
     n17 -- One --> n39["allocation_key returned"]
-    n39 --> n20["course_allocations downloaded<br>inert: no names"]
+    n39 --> n20["course_allocations downloaded<br>inert: no names, no IDs"]
     n2 -.-> n20
     n20 --> n52
 
@@ -79,8 +93,8 @@ flowchart TB
     classDef ext     fill:#E1BEE7,stroke:#6A1B9A,color:#000
 
     class n40,n27,n42 local
-    class n43,n33,n34,n44,n45 gate
-    class n2,n35,n11 store
-    class n36,n47,n50,n18,n19,n20,n6,n9,n39,n16 compute
-    class n1,n8,n10,n38,n30 user
+    class n43,n33,n34,n44,n45,n54,n56,n58 gate
+    class n2,n35,n11,n55 store
+    class n36,n47,n50,n51,n57,n18,n19,n20,n6,n9,n39,n16 compute
+    class n1,n8,n10,n38,n30,n53 user
     class n46 ext
