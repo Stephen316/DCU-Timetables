@@ -52,14 +52,14 @@ profiles                (server only)
 roster_members          (server only, RLS: admin read)
   course_key            text
   version               int
-  allocation_key        text        -- HMAC(secret, name_key) — see below
+  allocation_key        bytea       -- HMAC(secret, course_key||name_key||disambig)
   name_key              text        -- normalised "given family"   (nullable)
   student_id            text        -- normalised "A00000000"      (nullable)
   → at least one of name_key / student_id must be present
 
-course_allocations      (public read — no names in it)
+course_allocations      (anon-readable IN FULL — see §2.0)
   course_key, version
-  allocation_key, group, subgroup
+  allocation_key, group, subgroup      -- no names, no IDs
 ```
 
 At first sign-in, after the user picks their course:
@@ -74,8 +74,9 @@ At first sign-in, after the user picks their course:
 
 ### 2.0 Why `allocation_key` is an HMAC, not a random PI
 
-Earlier drafts used a random PI. `HMAC(secret, name_key)`, computed server-side at import,
-is better, and for a reason the random version couldn't address:
+Earlier drafts used a random PI. `HMAC(secret, course_key || name_key || disambiguator)`,
+computed server-side at import, is better, and for a reason the random version couldn't
+address:
 
 - **It survives re-import.** A corrected roster re-imported next week produces the *same*
   key for the same person, so every device's cached allocation stays valid. Random PIs
@@ -91,13 +92,37 @@ is better, and for a reason the random version couldn't address:
    rotatable. If it leaks, every `allocation_key` becomes reversible immediately, because
    the name space behind it is tiny. Rotating it invalidates every cached allocation — the
    same cost the random scheme would have paid on every import.
-2. **The HMAC input needs a disambiguator.** `HMAC(secret, name_key)` alone maps two
+2. **The course must be in the input.** `course_allocations` is readable by anyone holding
+   the anon key — which ships in every app install. The client asks for one course; the
+   *database* will serve all of them, and the client's filter is a request, not a
+   restriction (the same point as `ADMIN_CONSOLE.md` §3: the app is not the boundary, the
+   policy is).
+
+   That full dump is near-harmless on its own — cohort sizes and group structure, no names.
+   The danger is **linkage**. Without `course_key` in the input, one student has the *same*
+   key in every course they take, so the full dump lets you follow `7d40be…` across
+   EEG1001, EEG1002 and EEG1004. Anyone who knows a real classmate's timetable can then
+   find the only key matching that combination and read off everything else it holds. A
+   thin pseudonymous record is hard to attach to a person; a rich one is not.
+
+   With `course_key` mixed in, the same person gets an unrelated key in every course and
+   cross-course linkage is impossible even with the whole table. It costs nothing:
+   `resolve_allocation(course_key)` already takes the course, the row count is already
+   per-course, and HMAC output is a fixed 32 bytes whatever you feed it.
+
+3. **The HMAC input needs a disambiguator.** `HMAC(secret, name_key)` alone maps two
    students with the same normalised name to the *same* key, which silently merges them
    into one allocation. That is worse than the ambiguity it replaces: §1's "Several" branch
    can at least ask. Feed the roster row's `student_id`, or a per-row sequence number, into
    the HMAC alongside the name so identical names get distinct keys. Engineering Year 1 has
    zero full-name collisions, so this is insurance rather than a live bug — but it is the
    kind that appears silently in a future cohort.
+
+**Store the key as `bytea`, not hex text.** 32 bytes against 68, which is ~45% off that
+column and compounds through every index. Irrelevant at 207 rows, awkward to change once
+keys exist. Base64url it on the way out if the console needs it readable. For scale: all of
+DCU (20k students x 6 modules) is ~9 MB for `course_allocations` and ~13 MB for
+`roster_members`; a student downloads ~12 KB for a 207-person course.
 
 One simplification worth noting: this **removes** the client-side matcher in
 `ProfileCreatorView.swift:86-104`. Matching happens in exactly one place, server-side, so

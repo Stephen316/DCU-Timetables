@@ -18,7 +18,7 @@ flowchart TB
   end
 
  subgraph s2["Supabase"]
-        n2[("course_allocations<br>allocation_key, group, subgroup — NO names, NO IDs")]
+        n2[("course_allocations — anon-readable in full<br>allocation_key, group, subgroup — NO names, NO IDs")]
         n35[("roster_members<br>name_key AND/OR student_id to allocation_key<br>admin RLS only")]
         n11[("profiles<br>student_id — never exposed, never sent to a device")]
   end
@@ -36,7 +36,7 @@ flowchart TB
     n46 --> n47 --> n43
 
     n33[("import_staging — nothing is live yet")] --> n34["REVIEW SCREEN<br>per-row accept / edit / reject"]
-    n34 --> n36["Derive stable allocation_key<br>HMAC(secret, name_key + disambiguator)<br>survives re-import"]
+    n34 --> n36["Derive allocation_key — stored as bytea<br>HMAC(secret, course_key + name_key + disambiguator)<br>per-course, so keys cannot be linked across courses"]
     n36 --> n2 & n35
     n36 -.->|"triggers re-resolve"| n9
 
