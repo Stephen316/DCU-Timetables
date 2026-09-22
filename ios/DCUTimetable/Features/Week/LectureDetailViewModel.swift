@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 final class LectureDetailViewModel: ObservableObject {
-    @Published private(set) var status = CancellationStatus(reportCount: 0, reportedByMe: false)
+    @Published private(set) var status = CancellationStatus(reportCount: 0)
     @Published private(set) var deadlines: [Deadline] = []
     @Published private(set) var standings: [String: DeadlineStanding] = [:]
     @Published private(set) var isLoading = false
@@ -60,11 +60,17 @@ final class LectureDetailViewModel: ObservableObject {
         let verdict = (try? await verdicts.verdicts(forKeys: [eventKey]))?.first
         if let tally = (try? await cancellations.tallies(forKeys: [eventKey]))?.first {
             status = CancellationStatus(reportCount: tally.reportCount,
-                                        reportedByMe: tally.reportedByMe, verdict: verdict)
-        } else if let verdict {
+                                        onCount: tally.onCount,
+                                        myStance: tally.myStance,
+                                        verdict: verdict)
+        } else {
+            // No tally row means nobody has voted on this class — including this student,
+            // whose own report would have created one. Resetting rather than leaving the
+            // old value is what makes "Undo my report" disappear after a withdrawal.
+            //
             // A verdict must still show when the report fetch failed. Losing the tally is
             // a degraded view; losing "this lecture is cancelled" is a wasted journey.
-            status = CancellationStatus(reportCount: 0, reportedByMe: false, verdict: verdict)
+            status = CancellationStatus(reportCount: 0, verdict: verdict)
         }
         if let profile = try? await profiles.myProfile() {
             CachedRole.save(profile.role)
@@ -115,18 +121,38 @@ final class LectureDetailViewModel: ObservableObject {
         }
     }
 
-    func toggleReport() async {
+    /// Record this student's view of whether the class ran.
+    ///
+    /// Switching sides deletes the old row before writing the new one: the insert is
+    /// `ON CONFLICT DO NOTHING`, so posting `on` over your own `cancelled` row would
+    /// otherwise return 201 and change nothing — a button that reports success and does
+    /// nothing is worse than one that fails.
+    func report(_ stance: ReportStance) async {
         isBusy = true
         defer { isBusy = false }
         do {
-            if status.reportedByMe {
+            if status.myStance != nil {
                 try await cancellations.withdraw(eventKey: eventKey, reporterID: reporterID)
-            } else {
-                try await cancellations.submit(CancellationReport(eventKey: eventKey, reporterID: reporterID))
             }
+            try await cancellations.submit(CancellationReport(eventKey: eventKey,
+                                                              reporterID: reporterID,
+                                                              stance: stance))
             await load()
         } catch {
             errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't send that report."
+        }
+    }
+
+    /// Take back whichever way this student voted.
+    func withdrawReport() async {
+        guard status.myStance != nil else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            try await cancellations.withdraw(eventKey: eventKey, reporterID: reporterID)
+            await load()
+        } catch {
+            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't undo that report."
         }
     }
 

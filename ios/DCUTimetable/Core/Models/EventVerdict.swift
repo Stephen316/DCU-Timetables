@@ -2,7 +2,7 @@ import Foundation
 
 /// What a trusted person has stated about one occurrence of a class.
 public enum VerdictState: String, Codable, Sendable, CaseIterable {
-    /// It isn't on.
+    /// It's cancelled.
     case cancelled
     /// It *is* on — the override for a false crowd flag. Without this, three mistaken
     /// reports could only be cleared by finding and deleting the reports themselves.
@@ -14,9 +14,9 @@ public enum VerdictState: String, Codable, Sendable, CaseIterable {
 /// One definitive statement about a class, outranking any number of student reports.
 ///
 /// This is a different kind of claim from a tally, not a louder one, and the UI must keep
-/// them apart: "3 people say this isn't on" is a guess with weight behind it, "confirmed
-/// off" is a fact with someone's name behind it. Showing them identically would waste the
-/// trust signal and make one person's mistake look like a consensus.
+/// them apart: "3 people say this is cancelled" is a guess with weight behind it,
+/// "confirmed cancelled" is a fact with someone's name behind it. Showing them identically
+/// would waste the trust signal and make one person's mistake look like a consensus.
 public struct EventVerdict: Codable, Sendable, Equatable {
     /// Must equal `CancellationRules.eventKey(for:)` exactly — see docs/ADMIN_CONSOLE.md §6.
     public let eventKey: String
@@ -55,7 +55,7 @@ public struct EventVerdict: Codable, Sendable, Equatable {
 
     public var headline: String {
         switch state {
-        case .cancelled: return "Confirmed off by \(source)"
+        case .cancelled: return "Confirmed cancelled by \(source)"
         case .running:   return "Confirmed on by \(source)"
         case .moved:     return "Moved by \(source)"
         }

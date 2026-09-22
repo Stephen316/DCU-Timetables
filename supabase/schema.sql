@@ -4,7 +4,7 @@
 -- once: every statement either creates something missing or replaces it in place.
 --
 -- Two things are shared between students, and nothing else ever leaves the device:
---   cancellation_reports  — "this class isn't on"
+--   cancellation_reports  — "this class was cancelled" (or "it went ahead")
 --   module_deadlines      — assignments, quizzes and exams, with confirmations
 
 -- ---------------------------------------------------------------------------
@@ -17,6 +17,16 @@ create table if not exists cancellation_reports (
   reported_at timestamptz not null default now(),
   primary key (event_key, reporter_id)      -- one vote per person, enforced by the DB
 );
+
+-- Which way the vote went. Added in phase4_stances.sql, which also rebuilds
+-- cancellation_tallies to count the two sides separately — run that file too.
+alter table cancellation_reports
+  add column if not exists stance text not null default 'cancelled';
+alter table cancellation_reports
+  drop constraint if exists cancellation_reports_stance_check;
+alter table cancellation_reports
+  add constraint cancellation_reports_stance_check
+  check (stance in ('cancelled', 'on'));
 
 alter table cancellation_reports enable row level security;
 

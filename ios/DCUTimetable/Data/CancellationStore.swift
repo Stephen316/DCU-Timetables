@@ -2,10 +2,13 @@ import Foundation
 
 /// Where cancellation reports are shared between students.
 public protocol CancellationStore: Sendable {
-    /// Counts from the server, plus whether this person is one of them. Replaces reading
-    /// raw report rows: the device is no longer allowed to see who reported what, and no
-    /// longer needs to (see `supabase/phase3_anonymity.sql`).
+    /// Counts from the server, plus how this person voted. Replaces reading raw report
+    /// rows: the device is no longer allowed to see who reported what, and no longer needs
+    /// to (see `supabase/phase3_anonymity.sql`).
     func tallies(forKeys keys: [String]) async throws -> [CancellationTally]
+    /// Insert only. Changing your mind is a `withdraw` then a `submit`, because the write
+    /// path is `ON CONFLICT DO NOTHING` and there is deliberately no UPDATE policy on the
+    /// table — see `submit(_:)` below.
     func submit(_ report: CancellationReport) async throws
     func withdraw(eventKey: String, reporterID: String) async throws
 }
@@ -69,27 +72,24 @@ public struct SupabaseCancellationStore: CancellationStore {
         self.session = session
     }
 
-    private struct Row: Codable {
-        let event_key: String
-        let reporter_id: String
-        let reported_at: Date?
-    }
-
     private struct TallyRow: Decodable {
         let event_key: String
         let report_count: Int
-        /// Null when the view has no row for this key — `bool_or` over nothing.
-        let mine: Bool?
+        /// Absent on a server that hasn't run the stance migration yet.
+        let on_count: Int?
+        /// Null when this caller hasn't voted on the class.
+        let my_stance: String?
     }
 
     /// One request. The view counts every row (it runs with its owner's rights, so RLS
-    /// does not hide the other reporters from it) and answers `mine` from `auth.uid()`,
-    /// which still resolves to this caller. No reporter id is returned either way.
+    /// does not hide the other reporters from it) and answers `my_stance` from
+    /// `auth.uid()`, which still resolves to this caller. No reporter id is returned
+    /// either way.
     public func tallies(forKeys keys: [String]) async throws -> [CancellationTally] {
         guard !keys.isEmpty else { return [] }
         var components = URLComponents(string: "\(config.url)/rest/v1/cancellation_tallies")!
         components.queryItems = [
-            URLQueryItem(name: "select", value: "event_key,report_count,mine"),
+            URLQueryItem(name: "select", value: "event_key,report_count,on_count,my_stance"),
             URLQueryItem(name: "event_key", value: PostgREST.inList(keys)),
         ]
         var request = URLRequest(url: components.url!)
@@ -98,8 +98,10 @@ public struct SupabaseCancellationStore: CancellationStore {
         try check(response)
         let rows = (try? JSONDecoder().decode([TallyRow].self, from: data)) ?? []
         return rows.map {
-            CancellationTally(eventKey: $0.event_key, reportCount: $0.report_count,
-                              reportedByMe: $0.mine ?? false)
+            CancellationTally(eventKey: $0.event_key,
+                              reportCount: $0.report_count,
+                              onCount: $0.on_count ?? 0,
+                              myStance: $0.my_stance.flatMap(ReportStance.init(rawValue:)))
         }
     }
 
@@ -111,9 +113,17 @@ public struct SupabaseCancellationStore: CancellationStore {
         // A repeat report is genuinely a no-op, so this is `ON CONFLICT DO NOTHING`.
         // `merge-duplicates` would be `DO UPDATE`, which RLS refuses without an UPDATE
         // policy — and granting one would let a row's owner be rewritten for no gain.
+        //
+        // The consequence is that posting `on` over your own existing `cancelled` row does
+        // nothing at all. Switching sides therefore has to delete first; the view model
+        // does exactly that, and this is why.
         request.setValue("resolution=ignore-duplicates", forHTTPHeaderField: "Prefer")
         request.httpBody = try JSONEncoder().encode([
-            ["event_key": report.eventKey, "reporter_id": report.reporterID]
+            [
+                "event_key": report.eventKey,
+                "reporter_id": report.reporterID,
+                "stance": report.stance.rawValue,
+            ]
         ])
         let (_, response) = try await session.data(for: request)
         try check(response)
@@ -170,14 +180,20 @@ public actor LocalCancellationStore: CancellationStore {
         try? data.write(to: fileURL, options: .atomic)
     }
 
+    /// Every row here was written by the one person using this device, so the stance on
+    /// file *is* their stance — there is no crowd to separate them from.
     public func tallies(forKeys keys: [String]) async throws -> [CancellationTally] {
         let wanted = Set(keys)
         let mine = load().filter { wanted.contains($0.eventKey) }
         return Dictionary(grouping: mine, by: \.eventKey).map { key, rows in
-            CancellationTally(eventKey: key, reportCount: rows.count, reportedByMe: true)
+            CancellationTally(eventKey: key,
+                              reportCount: rows.filter { $0.stance == .cancelled }.count,
+                              onCount: rows.filter { $0.stance == .on }.count,
+                              myStance: rows.last?.stance)
         }
     }
 
+    /// Matches the server: one row per person per class, and a repeat is a no-op.
     public func submit(_ report: CancellationReport) async throws {
         var all = load()
         guard !all.contains(where: { $0.eventKey == report.eventKey && $0.reporterID == report.reporterID })

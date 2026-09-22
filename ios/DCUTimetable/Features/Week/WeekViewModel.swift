@@ -17,7 +17,7 @@ final class WeekViewModel: ObservableObject {
     @Published private(set) var eventsByWeekNumber: [Int: [TimetableEvent]] = [:]
 
     private(set) var weeks: [TeachingWeek] = []
-    /// Crowd-sourced "not on" tallies for the visible week, keyed by event key.
+    /// Crowd-sourced cancellation tallies for the visible week, keyed by event key.
     @Published private(set) var cancellations: [String: CancellationStatus] = [:]
     /// Deadlines for every module on screen, so a class can be outlined on the day one falls.
     @Published private(set) var deadlines: [Deadline] = []
@@ -57,7 +57,7 @@ final class WeekViewModel: ObservableObject {
 
     func status(for event: TimetableEvent) -> CancellationStatus {
         cancellations[CancellationRules.eventKey(for: event)]
-            ?? CancellationStatus(reportCount: 0, reportedByMe: false)
+            ?? CancellationStatus(reportCount: 0)
     }
 
     /// Non-fatal: a reporting outage must never stop the timetable itself showing.

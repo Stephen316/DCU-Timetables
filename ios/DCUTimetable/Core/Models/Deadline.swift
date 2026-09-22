@@ -120,13 +120,13 @@ public struct DeadlineStanding: Sendable, Equatable {
     }
 }
 
-/// Why a class is outlined in the timetable. Ordered by how much it matters: a class that
-/// isn't running outranks a quiz, which outranks something to hand in.
+/// Why a class is outlined in the timetable. Ordered by how much it matters: a cancelled
+/// class outranks a quiz, which outranks something to hand in.
 public enum ClassHighlight: Sendable, Equatable {
     /// `decidedBy` is set when a trusted person stated it outright, in which case the
     /// report count is context and must not lead. A verdict rendered as
-    /// "Reported not on · 0 people" reads as *nobody* thinks it's off, which is the
-    /// opposite of what it means — the one place the crowd wording actively misleads.
+    /// "Reported cancelled · 0 people" reads as *nobody* thinks it's cancelled, which is
+    /// the opposite of what it means — the one place the crowd wording actively misleads.
     case cancelled(reportCount: Int, decidedBy: String? = nil)
     case moved(source: String)
     case test(title: String)
@@ -135,8 +135,8 @@ public enum ClassHighlight: Sendable, Equatable {
     public var reason: String {
         switch self {
         case .cancelled(let count, let decidedBy):
-            if let decidedBy { return "Not on · confirmed by \(decidedBy)" }
-            return "Reported not on · \(count) people"
+            if let decidedBy { return "Cancelled · confirmed by \(decidedBy)" }
+            return "Reported cancelled · \(count) people"
         case .moved(let source): return "Moved · \(source)"
         case .test(let title): return "\(title) today"
         case .assignment(let title): return "\(title) due today"

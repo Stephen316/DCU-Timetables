@@ -58,7 +58,7 @@ struct VerdictPrecedenceTests {
         let status = CancellationRules.status(forKey: "K", reports: reports(4),
                                               reporterID: "me", verdict: verdict)
         #expect(status.reportCount == 4)
-        #expect(status.crowdSummary == "4 people had reported this as off")
+        #expect(status.crowdSummary == "4 people had reported this as cancelled")
     }
 
     @Test("No crowd line when nobody reported")
@@ -131,19 +131,19 @@ struct VerdictWordingTests {
     func labelIsUsed() {
         let verdict = EventVerdict(eventKey: "K", state: .cancelled,
                                    decidedByLabel: "the class rep")
-        #expect(verdict.headline == "Confirmed off by the class rep")
+        #expect(verdict.headline == "Confirmed cancelled by the class rep")
     }
 
     /// The summary must change shape when a verdict lands, not just its number — a student
-    /// reading "3 people say this isn't on" under a confirmed cancellation would weigh it
+    /// reading "3 people say this is cancelled" under a confirmed cancellation would weigh it
     /// as a guess.
     @Test("A verdict replaces the tally in the summary")
     func verdictReplacesTally() {
-        let plain = CancellationStatus(reportCount: 3, reportedByMe: false)
-        let decided = CancellationStatus(reportCount: 3, reportedByMe: false,
+        let plain = CancellationStatus(reportCount: 3)
+        let decided = CancellationStatus(reportCount: 3,
                                          verdict: EventVerdict(eventKey: "K", state: .cancelled))
-        #expect(plain.summary == "3 people say this isn't on")
-        #expect(decided.summary == "Confirmed off by an organiser")
+        #expect(plain.summary == "3 people say this is cancelled")
+        #expect(decided.summary == "Confirmed cancelled by an organiser")
     }
 }
 
@@ -161,24 +161,24 @@ struct VerdictHighlightTests {
     }
 
     /// The bug this pins was caught in the simulator, not by a unit test: a verdict with
-    /// no reports behind it rendered as "Reported not on · 0 people" — which reads as
+    /// no reports behind it rendered as "Reported cancelled · 0 people" — which reads as
     /// *nobody* thinks it's off, the exact opposite of a confirmed cancellation.
     @Test("A verdict never renders as a crowd count")
     func verdictDoesNotRenderAsCrowdCount() {
         let status = CancellationStatus(
-            reportCount: 0, reportedByMe: false,
+            reportCount: 0,
             verdict: EventVerdict(eventKey: "K", state: .cancelled))
         let highlight = DeadlineRules.highlight(for: event(), deadlines: [], cancellation: status)
 
-        #expect(highlight?.reason == "Not on · confirmed by an organiser")
+        #expect(highlight?.reason == "Cancelled · confirmed by an organiser")
         #expect(highlight?.reason.contains("0 people") == false)
     }
 
     @Test("Without a verdict the crowd wording is kept")
     func crowdWordingKeptWithoutAVerdict() {
-        let status = CancellationStatus(reportCount: 3, reportedByMe: false)
+        let status = CancellationStatus(reportCount: 3)
         let highlight = DeadlineRules.highlight(for: event(), deadlines: [], cancellation: status)
-        #expect(highlight?.reason == "Reported not on · 3 people")
+        #expect(highlight?.reason == "Reported cancelled · 3 people")
     }
 
     /// A moved class is still on, so it never reaches the cancelled branch — without its
@@ -186,7 +186,7 @@ struct VerdictHighlightTests {
     @Test("A moved class is outlined in its own right")
     func movedClassIsOutlined() {
         let status = CancellationStatus(
-            reportCount: 0, reportedByMe: false,
+            reportCount: 0,
             verdict: EventVerdict(eventKey: "K", state: .moved, decidedByLabel: "the class rep"))
         let highlight = DeadlineRules.highlight(for: event(), deadlines: [], cancellation: status)
         #expect(highlight?.reason == "Moved · the class rep")
@@ -200,7 +200,7 @@ struct TallyTests {
     @Test("A tally becomes a status without any reporter ids")
     func tallyBecomesStatus() {
         let statuses = CancellationRules.statuses(
-            from: [CancellationTally(eventKey: "A", reportCount: 4, reportedByMe: true)])
+            from: [CancellationTally(eventKey: "A", reportCount: 4, myStance: .cancelled)])
         #expect(statuses["A"]?.reportCount == 4)
         #expect(statuses["A"]?.reportedByMe == true)
         #expect(statuses["A"]?.isFlagged == true)

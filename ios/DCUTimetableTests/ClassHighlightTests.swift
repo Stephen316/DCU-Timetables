@@ -31,7 +31,7 @@ struct ClassHighlightTests {
                  due: date(day: day, hour: 17), kind: kind, submitterID: "someone")
     }
 
-    private let quiet = CancellationStatus(reportCount: 0, reportedByMe: false)
+    private let quiet = CancellationStatus(reportCount: 0)
 
     private func highlight(_ event: TimetableEvent, _ deadlines: [Deadline],
                            _ status: CancellationStatus? = nil) -> ClassHighlight? {
@@ -65,11 +65,11 @@ struct ClassHighlightTests {
     /// A class that isn't running outranks everything — turning up for a quiz that isn't on
     /// is the worst outcome of the three.
     @Test func aReportedCancellationOutranksBoth() {
-        let flagged = CancellationStatus(reportCount: 4, reportedByMe: false)
+        let flagged = CancellationStatus(reportCount: 4)
         let result = highlight(practical, [deadline("Quiz 3", kind: .quiz, day: 17)], flagged)
         #expect(result == .cancelled(reportCount: 4))
         // Below the threshold it isn't a cancellation at all.
-        let two = CancellationStatus(reportCount: 2, reportedByMe: false)
+        let two = CancellationStatus(reportCount: 2)
         #expect(highlight(practical, [deadline("Quiz 3", kind: .quiz, day: 17)], two)
                 == .test(title: "Quiz 3"))
     }

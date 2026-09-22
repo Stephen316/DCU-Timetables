@@ -12,7 +12,7 @@ enum TimetableTint {
     static let due = dynamic(light: 0xB45309, dark: 0xFBBF24)
     /// A quiz or exam sat in that class.
     static let test = dynamic(light: 0x1D4ED8, dark: 0x60A5FA)
-    /// Reported not on.
+    /// Reported cancelled.
     static let off = dynamic(light: 0xC2410C, dark: 0xFB923C)
     /// Enough people have vouched for a deadline.
     static let confirmed = dynamic(light: 0x047857, dark: 0x34D399)

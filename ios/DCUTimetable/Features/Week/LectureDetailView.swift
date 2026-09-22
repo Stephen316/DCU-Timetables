@@ -13,6 +13,8 @@ struct LectureDetailView: View {
     @StateObject private var model: LectureDetailViewModel
     @AppStorage(Attendance.storageKey) private var skippedData = Data()
     @State private var showingDeadlineForm = false
+    /// Non-nil while the "are you sure?" sheet is up, holding the side being reported.
+    @State private var pendingReport: ReportStance?
 
     init(event: TimetableEvent,
          isClashing: Bool,
@@ -32,6 +34,7 @@ struct LectureDetailView: View {
 
     var body: some View {
         List {
+            reportBanner
             dueToday
             header
             details
@@ -49,9 +52,73 @@ struct LectureDetailView: View {
                 Task { await model.addDeadline(title: title, kind: kind, due: due) }
             }
         }
+        .confirmationDialog(confirmTitle,
+                            isPresented: Binding(get: { pendingReport != nil },
+                                                 set: { if !$0 { pendingReport = nil } }),
+                            titleVisibility: .visible) {
+            if let stance = pendingReport {
+                Button(confirmVerb(for: stance)) {
+                    pendingReport = nil
+                    Task { await model.report(stance) }
+                }
+                Button("Cancel", role: .cancel) { pendingReport = nil }
+            }
+        } message: {
+            Text("Everyone taking this module sees the count. You can undo it afterwards.")
+        }
+    }
+
+    private var confirmTitle: String {
+        switch pendingReport {
+        case .cancelled: return "Report this lecture as cancelled?"
+        case .on:        return "Report that this lecture went ahead?"
+        case nil:        return ""
+        }
+    }
+
+    /// The confirm button repeats the action rather than saying "OK", so the sheet can be
+    /// read on its own — which is the only bit of it a thumb-first tap actually sees.
+    private func confirmVerb(for stance: ReportStance) -> String {
+        stance == .cancelled ? "Report cancelled" : "Report it was on"
     }
 
     // MARK: - Sections
+
+    /// What has been reported about this class, in orange, before anything else on the
+    /// page.
+    ///
+    /// It repeats what the section further down already says, on purpose: a student opening
+    /// this page ten minutes before a 9am has one question, and making them scroll past the
+    /// room and the lecturer list to find the answer is the wrong order. Their own report
+    /// leads, because "did I already do this?" is the other half of that question.
+    @ViewBuilder
+    private var reportBanner: some View {
+        if !model.status.isDecided,
+           model.status.myReportLine != nil || model.status.othersLine != nil {
+            Section {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "exclamationmark.bubble.fill")
+                        .font(.caption)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let mine = model.status.myReportLine {
+                            Text(mine).font(.caption.weight(.semibold))
+                        }
+                        if let others = model.status.othersLine {
+                            Text(others).font(.caption)
+                        }
+                        if let disputed = model.status.disputedLine {
+                            Text(disputed).font(.caption)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(TimetableTint.off)
+                .padding(.vertical, 2)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+        }
+    }
 
     /// The very top of the page: what's due at this exact class today, and nothing else.
     @ViewBuilder
@@ -150,15 +217,16 @@ struct LectureDetailView: View {
             if model.canDecide {
                 decideButtons
             } else {
-                // No destructive role: reporting a class as off isn't a delete, and red read
-                // as one.
-                Button {
-                    Task { await model.toggleReport() }
-                } label: {
-                    Label(model.status.reportedByMe ? "Undo my report" : "Report: lecture not on",
-                          systemImage: model.status.reportedByMe ? "arrow.uturn.backward" : "exclamationmark.bubble")
-                }
-                .disabled(model.isBusy)
+                reportButtons
+            }
+
+            // Every write on this page used to fail in silence: the view model recorded the
+            // error and nothing ever read it, so a refused report looked exactly like a
+            // working one.
+            if let errorText = model.errorText {
+                Label(errorText, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(TimetableTint.off)
             }
         } header: {
             Text("Is it on?")
@@ -167,7 +235,45 @@ struct LectureDetailView: View {
                 Text("Your decision replaces the count for everyone straight away. "
                      + "Say it's on to clear a wrong report.")
             } else {
-                Text("Reports are anonymous. A class is flagged with an orange ! once \(CancellationRules.threshold) people report it.")
+                Text("Reports are anonymous. A class is flagged with an orange ! once "
+                     + "\(CancellationRules.threshold) people report it and they stay "
+                     + "\(CancellationRules.netThreshold) ahead of anyone saying it went ahead.")
+            }
+        }
+    }
+
+    /// One row when this student hasn't voted, two once someone else has claimed the class
+    /// is cancelled, and an undo once they have voted themselves.
+    ///
+    /// The "it was on" button only appears when there is a cancellation to contradict.
+    /// Offering it on every class would invite a vote on the hundreds of lectures that ran
+    /// exactly as timetabled, which is noise: silence already means that.
+    @ViewBuilder
+    private var reportButtons: some View {
+        if model.status.myStance != nil {
+            // No destructive role: taking back your own report isn't a delete, and red
+            // read as one.
+            Button {
+                Task { await model.withdrawReport() }
+            } label: {
+                Label("Undo my report", systemImage: "arrow.uturn.backward")
+            }
+            .disabled(model.isBusy)
+        } else {
+            Button {
+                pendingReport = .cancelled
+            } label: {
+                Label("Report: lecture cancelled", systemImage: "exclamationmark.bubble")
+            }
+            .disabled(model.isBusy)
+
+            if model.status.reportCount > 0 {
+                Button {
+                    pendingReport = .on
+                } label: {
+                    Label("Report: lecture is on", systemImage: "checkmark.bubble")
+                }
+                .disabled(model.isBusy)
             }
         }
     }
@@ -213,7 +319,7 @@ struct LectureDetailView: View {
 
     private func title(for state: VerdictState) -> String {
         switch state {
-        case .cancelled: return "Mark as off"
+        case .cancelled: return "Mark as cancelled"
         case .running:   return "Mark as on"
         case .moved:     return "Mark as moved"
         }
