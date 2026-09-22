@@ -88,10 +88,10 @@ struct SignInView: View {
 
                 if mode == .createAccount {
                     SecureField("Confirm password", text: $confirmPassword)
-                    if let passwordProblem {
-                        Text(passwordProblem.message)
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                    // The rules are stated before they type, not sprung on them after: the
+                    // line is always there and the current problem takes its place.
+                    Text(passwordProblem?.message ?? PasswordValidation.requirements)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
 
