@@ -43,13 +43,26 @@ sessions[] = { week, date, day, start, end, module, groups:[letters] }
 ```
 
 ### 2. Surname → group (LOCAL ONLY — never committed, never shipped)
-The class-allocation list contains ~100 real students' names, so it must not go into the
-repo or the App Store binary. It is:
+The class-allocation list holds 207 real students' names with their group, subgroup, day
+and rooms, so it must not go into the repo or the App Store binary. It is:
 
 - **git-ignored** — `local-data/` and `*.local.json` (see `.gitignore`), verified not
-  visible to git.
+  visible to git in any commit.
 - **loaded at runtime** from the app's `Documents/eng_groups.json`, which the user imports
-  themselves. If absent (any normal install), the app just offers the manual A–E picker.
+  themselves. If absent (any normal install), the app offers the manual A–E picker.
+
+⚠️ **This was not true until 22 Sep 2026.** `EngGroupDirectory` had a second source — a
+bundled `Resources/eng_groups.local.json`, git-ignored but swept into the target by
+XcodeGen, so every build shipped the whole roster. It carried a comment saying to delete it
+before release; a comment is not a mechanism, and it survived for months.
+
+The file is gone and so is the code that looked for it. `fileURL()` now reads Documents or
+returns nil, which makes a bundled roster impossible rather than discouraged — putting the
+file back into `Resources/` has no effect, because nothing reads from there.
+
+The 207 rows describe only 16 distinct allocations (`subgroup` determines day, workshop and
+drawing), so the manual picker loses almost nothing: one tap instead of a name lookup. See
+`CSV_PIPELINE.md` for the server-side replacement.
 
 Format the app expects in `Documents/eng_groups.json`:
 ```json

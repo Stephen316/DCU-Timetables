@@ -82,23 +82,21 @@ public enum EngGroupDirectory {
             .appendingPathComponent("eng_groups.json")
     }
 
-    /// Development fallback bundled with the app as `eng_groups.local.json` (git-ignored).
+    /// The directory in use: a copy the student imported themselves, or nothing.
     ///
-    /// ⚠️ It contains real student names, so it **ships inside the app binary**. It exists
-    /// only so the app works on a fresh install while developing — delete
-    /// `ios/DCUTimetable/Resources/eng_groups.local.json` before any public release, and
-    /// replace it with the planned email-verified sign-in.
-    private static func bundledFileURL() -> URL? {
-        Bundle.main.url(forResource: "eng_groups.local", withExtension: "json")
-    }
-
-    /// The directory in use: an imported copy in Documents if present, else the bundled
-    /// development fallback.
+    /// There is deliberately no bundled fallback. One used to exist — `eng_groups.local.json`
+    /// in `Resources/`, git-ignored but swept into the target by XcodeGen, so every install
+    /// carried 207 real classmates' names and their lab allocations. A comment said to delete
+    /// it before release, which is not a mechanism.
+    ///
+    /// Reading only from Documents makes that impossible rather than discouraged: dropping the
+    /// file back into `Resources/` now has no effect, because nothing looks there. When no
+    /// directory is present the app offers the manual group picker, which is the normal case
+    /// for every install.
     public static func fileURL() -> URL? {
-        if let url = documentsFileURL(), FileManager.default.fileExists(atPath: url.path) {
-            return url
-        }
-        return bundledFileURL()
+        guard let url = documentsFileURL(),
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
     }
 
     public static var isAvailable: Bool { fileURL() != nil }
