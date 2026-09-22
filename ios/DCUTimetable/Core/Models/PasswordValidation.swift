@@ -9,20 +9,22 @@ public enum PasswordValidation {
 
     /// The rules in one line, for the form to show before anything has been typed.
     public static let requirements =
-        "At least \(minimumLength) characters, with a capital letter and a number or symbol"
+        "At least \(minimumLength) characters, with a capital, a lower-case letter and a number"
 
     public enum Problem: Equatable {
         case tooShort
         case needsCapital
-        case needsNumberOrSymbol
+        case needsLowercase
+        case needsNumber
         case mismatch
 
         public var message: String {
             switch self {
-            case .tooShort:            return "Use at least \(PasswordValidation.minimumLength) characters"
-            case .needsCapital:        return "Add a capital letter"
-            case .needsNumberOrSymbol: return "Add a number or a symbol"
-            case .mismatch:            return "Passwords don't match"
+            case .tooShort:       return "Use at least \(PasswordValidation.minimumLength) characters"
+            case .needsCapital:   return "Add a capital letter"
+            case .needsLowercase: return "Add a lower-case letter"
+            case .needsNumber:    return "Add a number"
+            case .mismatch:       return "Passwords don't match"
             }
         }
     }
@@ -45,16 +47,19 @@ public enum PasswordValidation {
 
     /// The rules that look at the password on its own, ignoring the confirmation box.
     ///
-    /// A symbol counts as anything that isn't a letter or a digit — punctuation, currency,
-    /// emoji. Spaces are deliberately excluded: a trailing space is invisible, and letting one
-    /// satisfy the rule would hand out an account with a password the student can't retype.
+    /// Three required classes, one of each. Symbols are still allowed anywhere — they just
+    /// no longer stand in for a digit, which is what the old rule let them do.
+    ///
+    /// `isNumber` is deliberately the lenient test here, and it accepts "٣" and "Ⅳ" as
+    /// numbers. `PublicIdentifier` insists on ASCII digits because that string is read
+    /// aloud and retyped by someone else; a password is typed by the person who chose it,
+    /// on their own keyboard, so refusing the digits their keyboard produces would be a
+    /// rule with nothing behind it.
     private static func compositionProblem(in password: String) -> Problem? {
         if password.count < minimumLength { return .tooShort }
         if !password.contains(where: \.isUppercase) { return .needsCapital }
-        let hasNumberOrSymbol = password.contains { character in
-            character.isNumber || (!character.isLetter && !character.isWhitespace)
-        }
-        if !hasNumberOrSymbol { return .needsNumberOrSymbol }
+        if !password.contains(where: \.isLowercase) { return .needsLowercase }
+        if !password.contains(where: \.isNumber) { return .needsNumber }
         return nil
     }
 }
