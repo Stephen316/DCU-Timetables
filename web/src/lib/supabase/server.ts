@@ -27,20 +27,55 @@ export async function supabaseServer() {
 
 export type Role = "student" | "trusted" | "admin";
 
-/// The signed-in profile, or null. Every page calls this; the layout turns null into a
-/// redirect. Note the role is read from the database on each request rather than trusted
-/// from a cookie — a demotion takes effect on the next page load, not the next hour.
+/// The signed-in profile, or null when there is genuinely no session.
+///
+/// The role is read from the database on each request rather than trusted from a cookie —
+/// a demotion takes effect on the next page load, not the next hour.
+///
+/// The important distinction here is between "not signed in" and "could not tell". Both
+/// used to return null, and the layout turns null into a redirect to /login — so a slow
+/// response or a blip from Supabase silently threw away a perfectly good session and asked
+/// for the password again. A failure now throws, which the console's error boundary offers
+/// to retry. Retrying a check is cheap; retyping a password because a network call wobbled
+/// is not.
 export async function currentProfile() {
+  const store = await cookies();
+  const hasSessionCookie = store
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
+
   const supabase = await supabaseServer();
-  const { data: auth } = await supabase.auth.getUser();
+  const { data: auth, error } = await supabase.auth.getUser();
+
+  // No cookie at all is the honest signed-out case: there is nothing to verify, and any
+  // error alongside it is just supabase-js saying the same thing.
+  if (!hasSessionCookie) return null;
+
+  // A cookie exists but the check failed. Two very different reasons for that:
+  //
+  //   Supabase rejected the credentials — an expired or already-rotated refresh token,
+  //   a missing session. That IS being signed out, and /login is the right answer.
+  //
+  //   Anything else — a timeout, a 5xx, DNS, a dropped connection. That is the console
+  //   failing to ask the question, and answering it with "you are logged out" is what
+  //   made a good session cost a password.
+  if (error) {
+    const status = (error as { status?: number }).status ?? 0;
+    const rejected = status === 400 || status === 401 || status === 403;
+    if (rejected) return null;
+    throw new Error(`Could not verify the session: ${error.message}`);
+  }
   if (!auth.user) return null;
 
-  const { data } = await supabase
+  const { data, error: profileError } = await supabase
     .from("profiles")
     .select("id, role, pi, display_name, banned_until")
     .eq("id", auth.user.id)
     .maybeSingle();
 
+  // Likewise: a failed profile read is not the same as having no profile. Only the latter
+  // should send anyone back to the login page.
+  if (profileError) throw new Error(`Could not read your profile: ${profileError.message}`);
   if (!data) return null;
   return { ...data, email: auth.user.email ?? "", role: data.role as Role };
 }

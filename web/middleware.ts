@@ -28,6 +28,12 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+/// Every path this matches costs a round-trip to Supabase's auth server, because
+/// `getUser()` revalidates the token rather than trusting it. Fonts and images do not need
+/// a session, and in development each reload was spending three of these where one would
+/// do — two of them on woff2 files.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|__nextjs_font|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)",
+  ],
 };
