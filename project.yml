@@ -38,6 +38,9 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        # Opts out of iPad Split View and Slide Over. A portrait-only app that allows
+        # multitasking is rejected at upload, which requires every orientation.
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
         INFOPLIST_KEY_CFBundleDisplayName: "DCU Timetable"
         ENABLE_TESTABILITY: YES
         CODE_SIGN_ENTITLEMENTS: ios/DCUTimetable.entitlements
