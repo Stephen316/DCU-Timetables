@@ -6,14 +6,27 @@ import type { Proposal } from "@/lib/proposals/types";
 import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
 import { Combobox } from "../combobox";
 import { csvField, ROSTER_HEADER } from "@/lib/roster/parse";
+import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/upload";
+
+/// What the transcript shows. The attachment is display only — the history sent back to
+/// the model is the words, as before.
+type Shown = Turn & { attachment?: { name: string; size: number } };
+
+const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx,.csv,.tsv,.txt,.md";
 
 export function Ask() {
   const [programme, setProgramme] = useState(PROGRAMMES[0]?.key ?? "");
   const [moduleKey, setModuleKey] = useState("");
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [turns, setTurns] = useState<Shown[]>([]);
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // What is being waited on, and since when — drives the progress line in the transcript.
+  const [pending, setPending] = useState<{ label: string; since: number } | null>(null);
+  const [now, setNow] = useState(0);
   const [last, setLast] = useState<AskResult | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -22,32 +35,81 @@ export function Ask() {
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns, busy]);
 
+  // A one-second tick while something is pending, so the wait shows as time passing rather
+  // than as a page that might have stopped.
+  useEffect(() => {
+    if (!pending) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [pending]);
+
+  /// Checked the moment a file is picked or dropped, not after it has been sent: an
+  /// oversized file used to fail inside the request, and the only sign was a Send button
+  /// that seemed to do nothing.
+  function choose(next: File | null) {
+    setFileError(null);
+    if (fileInput.current) fileInput.current.value = "";
+    if (!next) { setFile(null); return; }
+    if (next.size > MAX_UPLOAD_BYTES) {
+      setFile(null);
+      setFileError(`${next.name} is ${formatBytes(next.size)} — the limit is ${formatBytes(MAX_UPLOAD_BYTES)}. ` +
+        `Export a smaller PDF, or photograph one page at a time.`);
+      return;
+    }
+    const ext = next.name.toLowerCase().match(/\.[a-z0-9]+$/)?.[0] ?? "";
+    if (!ACCEPT.split(",").includes(ext)) {
+      setFile(null);
+      setFileError(`${next.name} can't be read. PDF, photo, .xlsx, .docx, CSV or text.`);
+      return;
+    }
+    setFile(next);
+  }
+
   async function send() {
     if ((!draft.trim() && !file) || busy) return;
+    const text = draft.trim();
+    const sending = file;
     setBusy(true);
     setSaved(null);
+    setLast(null);
+    setPending({ label: sending ? `Reading ${sending.name}` : "Thinking", since: Date.now() });
 
-    const shown = draft.trim() || `Attached ${file!.name}`;
-    const historyBefore = turns;
-    setTurns((t) => [...t, { role: "user", text: shown }]);
+    const historyBefore: Turn[] = turns.map(({ role, text }) => ({ role, text }));
+    setTurns((t) => [...t, {
+      role: "user",
+      text: text || `Attached ${sending!.name}`,
+      attachment: sending ? { name: sending.name, size: sending.size } : undefined,
+    }]);
 
     const form = new FormData();
-    form.set("message", draft.trim());
+    form.set("message", text);
     form.set("programme", programme);
     form.set("module", moduleKey);
     form.set("history", JSON.stringify(historyBefore));
-    if (file) form.set("file", file);
+    if (sending) form.set("file", sending);
     setDraft("");
-    setFile(null);
-    if (fileInput.current) fileInput.current.value = "";
+    choose(null);
 
     try {
       const result = await ask(form);
       setLast(result);
       if (result.reply) setTurns((t) => [...t, { role: "model", text: result.reply! }]);
       if (result.proposal) setProposal(result.proposal);
+    } catch (e) {
+      // The request itself failed — the connection, or the platform refusing it. Put the
+      // message and the file back, so trying again is one click rather than starting over.
+      setTurns((t) => t.slice(0, -1));
+      setDraft(text);
+      if (sending) setFile(sending);
+      setLast({
+        ok: false,
+        retryable: true,
+        error: `Couldn't send${e instanceof Error && e.message ? ` (${e.message})` : ""}.`,
+      });
     } finally {
       setBusy(false);
+      setPending(null);
     }
   }
 
@@ -64,13 +126,13 @@ export function Ask() {
     setLast(null);
     setSaved(null);
     setDraft("");
-    setFile(null);
-    if (fileInput.current) fileInput.current.value = "";
+    choose(null);
   }
 
   async function onAccept() {
     if (!proposal) return;
     setBusy(true);
+    setSaving(true);
     try {
       const result = await accept(proposal);
       if (result.ok) {
@@ -83,8 +145,11 @@ export function Ask() {
       } else {
         setLast({ ok: false, error: result.error });
       }
+    } catch (e) {
+      setLast({ ok: false, retryable: true, error: `Couldn't save${e instanceof Error && e.message ? ` (${e.message})` : ""}.` });
     } finally {
       setBusy(false);
+      setSaving(false);
     }
   }
 
@@ -141,9 +206,23 @@ export function Ask() {
             </p>
           )}
           {turns.map((t, i) => (
-            <div key={i} className={t.role === "user" ? "turn mine" : "turn"}>{t.text}</div>
+            <div key={i} className={t.role === "user" ? "turn mine" : "turn"}>
+              {t.attachment && (
+                <div className="turn-file">
+                  <span className="mono">{t.attachment.name}</span>
+                  <span className="dim"> · {formatBytes(t.attachment.size)}</span>
+                </div>
+              )}
+              {!(t.attachment && t.text === `Attached ${t.attachment.name}`) && t.text}
+            </div>
           ))}
-          {busy && <div className="turn dim">Thinking…</div>}
+          {pending && (
+            <div className="turn pending" role="status" aria-live="polite">
+              <Spinner />
+              <span>{pending.label}…</span>
+              <span className="dim mono">{Math.max(0, Math.floor((now - pending.since) / 1000))}s</span>
+            </div>
+          )}
           <div ref={endRef} />
         </div>
 
@@ -154,29 +233,63 @@ export function Ask() {
         )}
         {saved && <p className="tag ok">{saved}</p>}
 
-        <form action={send} style={{ marginTop: 12 }}>
+        {/* onSubmit, not `action={send}`. A form action runs inside a React transition, and
+            React holds a transition's state updates until the whole async action finishes —
+            so the sent message, the busy state and the progress line all stayed invisible
+            until the model replied, and Send looked dead for the length of the request. */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); void send(); }}
+          className={dragging ? "composer dragging" : "composer"}
+          onDragOver={(e) => { e.preventDefault(); if (!busy) setDragging(true); }}
+          onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            if (!busy) choose(e.dataTransfer.files?.[0] ?? null);
+          }}
+        >
+          {(file || fileError) && (
+            <div className={fileError ? "attach-chip bad" : "attach-chip"}>
+              {file ? (
+                <>
+                  <span className="mono">{file.name}</span>
+                  <span className="dim">{formatBytes(file.size)} · ready to send</span>
+                  <button type="button" className="link" onClick={() => choose(null)} disabled={busy}
+                    aria-label={`Remove ${file.name}`}>Remove</button>
+                </>
+              ) : (
+                <span>{fileError}</span>
+              )}
+            </div>
+          )}
           <div className="row">
             <div className="field" style={{ flex: 1, marginBottom: 0 }}>
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Describe a change, or answer its question…"
+                placeholder={file ? "Add a note, or just send the file…" : "Describe a change, or answer its question…"}
                 disabled={busy}
               />
             </div>
-            <button type="submit" className="primary" disabled={busy || (!draft.trim() && !file)}>
-              Send
+            <button type="submit" className="primary send" disabled={busy || (!draft.trim() && !file)}>
+              {busy && pending ? <><Spinner /> Sending</> : "Send"}
             </button>
           </div>
           <div className="row" style={{ marginTop: 8, alignItems: "center" }}>
             <input
               ref={fileInput}
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx,.csv,.tsv,.txt,.md"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              accept={ACCEPT}
+              onChange={(e) => choose(e.target.files?.[0] ?? null)}
               disabled={busy}
-              style={{ flex: 1 }}
+              hidden
             />
+            <button type="button" onClick={() => fileInput.current?.click()} disabled={busy}>
+              {file ? "Change file" : "Attach file"}
+            </button>
+            <span className="dim" style={{ fontSize: 12, flex: 1 }}>
+              or drop one here · PDF, photo, .xlsx, .docx, CSV · up to {formatBytes(MAX_UPLOAD_BYTES)}
+            </span>
             <button
               type="button"
               onClick={reset}
@@ -206,7 +319,7 @@ export function Ask() {
               : <RotationPanel p={proposal} />}
             <div className="row" style={{ marginTop: 16 }}>
               <button className="primary" onClick={onAccept} disabled={busy || blocked}>
-                Accept and save
+                {saving ? <><Spinner /> Saving</> : "Accept and save"}
               </button>
               <button onClick={() => setProposal(null)} disabled={busy}>Discard</button>
             </div>
@@ -283,6 +396,10 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
       </div>
     </>
   );
+}
+
+function Spinner() {
+  return <span className="spinner" aria-hidden="true" />;
 }
 
 /// Names are shown here, to the administrator, and nowhere else: what is saved is each name

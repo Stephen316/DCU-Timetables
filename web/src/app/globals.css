@@ -222,3 +222,44 @@ label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px
 .combo-label { min-width: 0; }
 .combo-hint { grid-column: 2; color: var(--dim); font-size: 12px; }
 .combo-empty { padding: 6px 8px; color: var(--dim); font-size: 13px; }
+
+/* Ask — feedback while working. The wait for a document is several seconds; the page must
+   say it is waiting, and for how long, or it reads as broken. */
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+  vertical-align: -2px;
+  flex: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+
+.turn.pending { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.turn-file { font-size: 12px; margin-bottom: 2px; }
+.turn.mine .turn-file:only-child { margin-bottom: 0; }
+
+.composer { margin-top: 12px; border: 1px dashed transparent; border-radius: 8px; padding: 4px;
+            margin-left: -5px; margin-right: -5px; transition: border-color 120ms ease, background 120ms ease; }
+.composer.dragging { border-color: var(--muted); background: var(--surface); }
+
+.attach-chip { display: flex; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 8px;
+               padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.attach-chip .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.attach-chip .dim { white-space: nowrap; }
+.attach-chip button { margin-left: auto; }
+.attach-chip.bad { border-color: var(--off); color: var(--off); }
+
+button.link { background: none; border: none; padding: 0; color: var(--muted); text-decoration: underline; }
+button.link:hover { background: none; color: var(--text); }
+
+/* A press registers the instant it happens, before any request returns. */
+button:not(:disabled):active { background: #3a3a41; }
+button.primary:not(:disabled):active { background: #d4d4d8; }
+button:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+button.send { display: inline-flex; align-items: center; gap: 6px; min-width: 84px; justify-content: center; }
+.ask-panel button.primary { display: inline-flex; align-items: center; gap: 6px; }

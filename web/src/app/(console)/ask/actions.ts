@@ -13,6 +13,7 @@ import type { Proposal } from "@/lib/proposals/types";
 import { validateRotation } from "@/lib/extraction/rotation";
 import { nameKey, parseRoster, type RosterRow } from "@/lib/roster/parse";
 import { validateRoster } from "@/lib/roster/validate";
+import { MAX_UPLOAD_BYTES } from "@/lib/upload";
 
 export type Turn = { role: "user" | "model"; text: string };
 
@@ -25,7 +26,6 @@ export type AskResult = {
   meta?: { ms: number; inputTokens?: number; outputTokens?: number };
 };
 
-const MAX_BYTES = 15 * 1024 * 1024;
 
 export async function ask(form: FormData): Promise<AskResult> {
   // The layout redirects non-admins, but a Server Action is its own entry point — reachable
@@ -44,8 +44,8 @@ export async function ask(form: FormData): Promise<AskResult> {
 
   if (!message && !hasFile) return { ok: false, error: "Type something, or attach a document." };
 
-  if (hasFile && file.size > MAX_BYTES) {
-    return { ok: false, error: `${(file.size / 1e6).toFixed(1)} MB is over the 15 MB limit.` };
+  if (hasFile && file.size > MAX_UPLOAD_BYTES) {
+    return { ok: false, error: `${(file.size / 1e6).toFixed(1)} MB is over the 4 MB limit.` };
   }
 
   const started = Date.now();
