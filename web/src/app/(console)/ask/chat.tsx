@@ -7,10 +7,40 @@ import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
 import { Combobox } from "../combobox";
 import { csvField, ROSTER_HEADER } from "@/lib/roster/parse";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/upload";
+import { Spinner } from "../spinner";
+import { SavedPanel } from "./saved-panel";
 
-/// What the transcript shows. The attachment is display only — the history sent back to
-/// the model is the words, as before.
-type Shown = Turn & { attachment?: { name: string; size: number } };
+/// What the transcript shows. The attachment and proposal number are display only — the
+/// history sent back to the model is the words, as before.
+type Shown = Turn & { attachment?: { name: string; size: number }; proposalNo?: number };
+
+/// Every proposal made in this conversation, kept until it is saved or thrown away. A
+/// follow-up question used to replace the proposal on the panel, so answering one lost the
+/// last — now each stays, numbered, and can be accepted on its own.
+type Item = {
+  no: number;
+  proposal: Proposal;
+  status: "open" | "saving" | "saved";
+  message?: string;
+  error?: string;
+};
+
+/// What saving a proposal overwrites. Two proposals with the same target replace each
+/// other, so whichever is accepted last is what is kept.
+function target(p: Proposal): string {
+  if (p.kind === "split") return `split ${p.rule.moduleKey} ${p.rule.activity}`;
+  return `${p.kind} ${p.courseKey}`;
+}
+
+function describe(p: Proposal): string {
+  if (p.kind === "split") return `${p.rule.moduleKey || "?"} ${p.rule.activity} split`;
+  if (p.kind === "roster") return `${p.courseKey || "?"} class list · ${p.rows.length} students`;
+  return `${p.courseKey || "?"} rotation · ${p.sessions.filter((s) => s.groups?.length).length} sessions`;
+}
+
+function blocking(p: Proposal): boolean {
+  return (p.kind === "split" ? p.problems : p.findings).some((f) => f.level === "error");
+}
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx,.csv,.tsv,.txt,.md";
 
@@ -23,13 +53,16 @@ export function Ask() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [saving, setSaving] = useState(false);
   // What is being waited on, and since when — drives the progress line in the transcript.
   const [pending, setPending] = useState<{ label: string; since: number } | null>(null);
   const [now, setNow] = useState(0);
   const [last, setLast] = useState<AskResult | null>(null);
-  const [proposal, setProposal] = useState<Proposal | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  // Bumped after every save, so the Saved list under the chat reads the database again.
+  const [refresh, setRefresh] = useState(0);
+  // Proposal numbers only go up. Derived from the list, a discarded #3 would hand its number
+  // to the next proposal, and "Proposal 3" in the transcript would point at the wrong one.
+  const counter = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -71,7 +104,6 @@ export function Ask() {
     const text = draft.trim();
     const sending = file;
     setBusy(true);
-    setSaved(null);
     setLast(null);
     setPending({ label: sending ? `Reading ${sending.name}` : "Thinking", since: Date.now() });
 
@@ -94,8 +126,11 @@ export function Ask() {
     try {
       const result = await ask(form);
       setLast(result);
-      if (result.reply) setTurns((t) => [...t, { role: "model", text: result.reply! }]);
-      if (result.proposal) setProposal(result.proposal);
+      const no = result.proposal ? ++counter.current : undefined;
+      if (result.proposal) setItems((all) => [...all, { no: no!, proposal: result.proposal!, status: "open" }]);
+      if (result.reply || no) {
+        setTurns((t) => [...t, { role: "model", text: result.reply ?? "", proposalNo: no }]);
+      }
     } catch (e) {
       // The request itself failed — the connection, or the platform refusing it. Put the
       // message and the file back, so trying again is one click rather than starting over.
@@ -117,45 +152,51 @@ export function Ask() {
   /// trims cost slightly — but the real reason is that turns about one module are still in
   /// front of the model when you start asking about another.
   ///
-  /// An unsaved proposal is the one thing worth guarding. A rotation on the panel cost a
-  /// request from a daily budget of twenty, and a stray click should not throw it away.
+  /// Unsaved proposals are the one thing worth guarding: each cost a model request, and a
+  /// stray click should not throw them away.
   function reset() {
-    if (proposal && !window.confirm("Discard the proposal on the panel? It has not been saved.")) return;
+    const open = items.filter((i) => i.status !== "saved").length;
+    if (open && !window.confirm(`Discard ${open} unsaved proposal${open === 1 ? "" : "s"}? They have not been saved.`)) return;
     setTurns([]);
-    setProposal(null);
+    setItems([]);
+    counter.current = 0;
     setLast(null);
-    setSaved(null);
     setDraft("");
     choose(null);
   }
 
-  async function onAccept() {
-    if (!proposal) return;
-    setBusy(true);
-    setSaving(true);
+  function update(no: number, change: Partial<Item>) {
+    setItems((all) => all.map((i) => (i.no === no ? { ...i, ...change } : i)));
+  }
+
+  function discard(no: number) {
+    setItems((all) => all.filter((i) => i.no !== no));
+  }
+
+  async function onAccept(item: Item) {
+    const proposal = item.proposal;
+    update(item.no, { status: "saving", error: undefined });
     try {
       const result = await accept(proposal);
       if (result.ok) {
-        setSaved(proposal.kind === "split"
-          ? `${proposal.rule.moduleKey} ${proposal.rule.activity} saved.`
-          : proposal.kind === "roster"
-            ? `${proposal.courseKey} class list saved — ${proposal.rows.length} students. Phones re-check on their next launch.`
-            : `${proposal.courseKey} rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`);
-        setProposal(null);
+        update(item.no, {
+          status: "saved",
+          message: proposal.kind === "split"
+            ? `${proposal.rule.moduleKey} ${proposal.rule.activity} saved.`
+            : proposal.kind === "roster"
+              ? `Class list saved — ${proposal.rows.length} students. Phones re-check on their next launch.`
+              : `Rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`,
+        });
+        setRefresh((r) => r + 1);
       } else {
-        setLast({ ok: false, error: result.error });
+        update(item.no, { status: "open", error: result.error });
       }
     } catch (e) {
-      setLast({ ok: false, retryable: true, error: `Couldn't save${e instanceof Error && e.message ? ` (${e.message})` : ""}.` });
-    } finally {
-      setBusy(false);
-      setSaving(false);
+      update(item.no, { status: "open", error: `Couldn't save${e instanceof Error && e.message ? ` (${e.message})` : ""}. Try again.` });
     }
   }
 
-  const blocked = proposal
-    ? (proposal.kind === "split" ? proposal.problems : proposal.findings).some((f) => f.level === "error")
-    : false;
+  const unsaved = items.filter((i) => i.status !== "saved").length;
 
   return (
     <div className="ask">
@@ -214,6 +255,7 @@ export function Ask() {
                 </div>
               )}
               {!(t.attachment && t.text === `Attached ${t.attachment.name}`) && t.text}
+              {t.proposalNo && <div className="turn-ref">Proposal {t.proposalNo} is on the panel →</div>}
             </div>
           ))}
           {pending && (
@@ -231,7 +273,6 @@ export function Ask() {
             {last.error}{last.retryable && " Send it again."}
           </p>
         )}
-        {saved && <p className="tag ok">{saved}</p>}
 
         {/* onSubmit, not `action={send}`. A form action runs inside a React transition, and
             React holds a transition's state updates until the whole async action finishes —
@@ -293,7 +334,7 @@ export function Ask() {
             <button
               type="button"
               onClick={reset}
-              disabled={busy || (turns.length === 0 && !proposal && !last)}
+              disabled={busy || (turns.length === 0 && items.length === 0 && !last)}
             >
               New conversation
             </button>
@@ -307,30 +348,93 @@ export function Ask() {
               ` · ${last.meta.inputTokens} in / ${last.meta.outputTokens} out`}
           </p>
         )}
+
+        <SavedPanel programme={programme} module={moduleKey} refresh={refresh} />
       </div>
 
       <div className="ask-panel">
-        {!proposal ? (
+        {items.length === 0 ? (
           <p className="dim">Nothing proposed yet. Anything it suggests appears here first.</p>
         ) : (
           <>
-            {proposal.kind === "split" ? <SplitPanel p={proposal} />
-              : proposal.kind === "roster" ? <RosterPanel p={proposal} />
-              : <RotationPanel p={proposal} />}
-            <div className="row" style={{ marginTop: 16 }}>
-              <button className="primary" onClick={onAccept} disabled={busy || blocked}>
-                {saving ? <><Spinner /> Saving</> : "Accept and save"}
-              </button>
-              <button onClick={() => setProposal(null)} disabled={busy}>Discard</button>
+            <div className="panel-head">
+              <h2>Proposals</h2>
+              <span className="dim">{unsaved ? `${unsaved} unsaved` : "all saved"}</span>
             </div>
-            {blocked && (
-              <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>
-                Tell it what&rsquo;s wrong and it will propose again.
-              </p>
-            )}
+            {[...items].reverse().map((item) => (
+              <ProposalCard
+                key={item.no}
+                item={item}
+                others={items.filter((o) => o.no !== item.no && target(o.proposal) === target(item.proposal))}
+                onAccept={() => onAccept(item)}
+                onDiscard={() => discard(item.no)}
+                disabled={busy}
+              />
+            ))}
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/// One proposal. Open ones start expanded; a saved one folds away but stays, so the
+/// conversation keeps its record of what was accepted.
+function ProposalCard({ item, others, onAccept, onDiscard, disabled }: {
+  item: Item; others: Item[]; onAccept: () => void; onDiscard: () => void; disabled: boolean;
+}) {
+  const [open, setOpen] = useState(item.status !== "saved");
+  useEffect(() => { if (item.status === "saved") setOpen(false); }, [item.status]);
+  const p = item.proposal;
+  const blocked = blocking(p);
+  const savedTwin = others.find((o) => o.status === "saved");
+  const openTwins = others.filter((o) => o.status !== "saved");
+
+  return (
+    <div className={`proposal-card ${item.status}`}>
+      <button type="button" className="saved-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span className={open ? "chev open" : "chev"} aria-hidden="true" />
+        <span className="saved-title">Proposal {item.no}</span>
+        <span className="dim">{describe(p)}</span>
+        <span className={item.status === "saved" ? "tag ok" : blocked ? "tag off" : "tag warn"} style={{ marginLeft: "auto" }}>
+          {item.status === "saved" ? "saved" : item.status === "saving" ? "saving…" : blocked ? "needs fixing" : "unsaved"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="saved-body">
+          {p.kind === "split" ? <SplitPanel p={p} /> : p.kind === "roster" ? <RosterPanel p={p} /> : <RotationPanel p={p} />}
+
+          {item.status !== "saved" && savedTwin && (
+            <p className="tag warn">Proposal {savedTwin.no} saved the same thing. Accepting this replaces it.</p>
+          )}
+          {item.status !== "saved" && !savedTwin && openTwins.length > 0 && (
+            <p className="tag warn">
+              Proposal{openTwins.length > 1 ? "s" : ""} {openTwins.map((o) => o.no).join(", ")} {openTwins.length > 1 ? "are" : "is"} for
+              the same thing. Whichever you accept last is what&rsquo;s kept.
+            </p>
+          )}
+          {item.error && <p className="err">{item.error}</p>}
+
+          {item.status === "saved" ? (
+            <p className="tag ok">{item.message}</p>
+          ) : (
+            <>
+              <div className="row" style={{ marginTop: 12 }}>
+                <button className="primary" onClick={onAccept} disabled={disabled || blocked || item.status === "saving"}>
+                  {item.status === "saving" ? <><Spinner /> Saving</> : "Accept and save"}
+                </button>
+                <button onClick={onDiscard} disabled={item.status === "saving"}>Discard</button>
+              </div>
+              {blocked && (
+                <p className="dim" style={{ fontSize: 12, marginTop: 8 }}>
+                  Tell it what&rsquo;s wrong and it will propose again.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -378,7 +482,7 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
           {f.row ? `Row ${f.row}: ` : ""}{f.message}
         </p>
       ))}
-      <div style={{ maxHeight: 380, overflowY: "auto", marginTop: 12 }}>
+      <div style={{ maxHeight: 380, overflow: "auto", marginTop: 12 }}>
         <table>
           <thead>
             <tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Module</th><th>Activity</th><th>Groups</th></tr>
@@ -396,10 +500,6 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
       </div>
     </>
   );
-}
-
-function Spinner() {
-  return <span className="spinner" aria-hidden="true" />;
 }
 
 /// Names are shown here, to the administrator, and nowhere else: what is saved is each name
@@ -420,7 +520,7 @@ function RosterPanel({ p }: { p: Extract<Proposal, { kind: "roster" }> }) {
           {f.row ? `Row ${f.row}: ` : ""}{f.message}
         </p>
       ))}
-      <div style={{ maxHeight: 380, overflowY: "auto", marginTop: 12 }}>
+      <div style={{ maxHeight: 380, overflow: "auto", marginTop: 12 }}>
         <table>
           <thead>
             <tr>

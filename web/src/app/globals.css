@@ -263,3 +263,30 @@ button.primary:not(:disabled):active { background: #d4d4d8; }
 button:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
 button.send { display: inline-flex; align-items: center; gap: 6px; min-width: 84px; justify-content: center; }
 .ask-panel button.primary { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Ask — proposals kept per conversation, and what is already saved. Both use the same
+   row: a button that opens to the detail, so a long rotation costs one line until wanted. */
+.panel-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.panel-head h2 { margin: 0; }
+.proposal-card, .saved-entry { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+.proposal-card.saved { opacity: .8; }
+.saved-toggle { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+                background: none; border: none; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+.saved-toggle:hover { background: var(--raised); }
+.saved-toggle .dim { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.saved-toggle .tag { flex: none; }
+/* Drawn, not a glyph: ▸ renders as a dot at this size in the system font. */
+.chev { width: 6px; height: 6px; margin: 0 4px 0 2px; flex: none; border-right: 1.5px solid var(--muted);
+        border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); }
+.chev.open { transform: rotate(45deg) translate(-1px, -1px); }
+.saved-title { font-weight: 500; white-space: nowrap; }
+.saved-body { padding: 4px 12px 12px; border-top: 1px solid var(--border); }
+.saved-body h2 { font-size: 14px; margin: 10px 0; }
+.saved-scroll { max-height: 320px; overflow: auto; }
+.saved-body td, .saved-body th { white-space: nowrap; }
+.turn-ref { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+.saved { margin-top: 20px; }
+.saved-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.saved-head h2 { margin: 0; }
+.saved-head .dim { font-size: 13px; }
