@@ -102,6 +102,24 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
             .sorted { $0.start < $1.start }
     }
 
+    /// The day the timetable widget should be showing at `now`, and its classes.
+    ///
+    /// Today, while any of today's classes has yet to finish. Once the last one has (or on
+    /// a day with none at all), the next day in the snapshot that has classes, so the
+    /// widget spends a Friday evening showing Monday rather than an empty "nothing left".
+    /// When the snapshot has nothing further ahead it stays on today, and the widget
+    /// says so rather than guessing.
+    public func displayDay(at now: Date, calendar: Calendar = .current)
+        -> (day: Date, classes: [WidgetClass]) {
+        let today = calendar.startOfDay(for: now)
+        let todays = classes(on: now, calendar: calendar)
+        guard !todays.contains(where: { $0.end > now }),
+              let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+              let next = classes.filter({ $0.start >= tomorrow }).min(by: { $0.start < $1.start })
+        else { return (today, todays) }
+        return (calendar.startOfDay(for: next.start), classes(on: next.start, calendar: calendar))
+    }
+
     /// Deadlines still ahead, soonest first. Matches `DeadlineRules.upcoming`: "past" means
     /// before today, not before this instant, so something due at 11am is still listed at
     /// 11:01 rather than vanishing off the widget while the student is writing it.

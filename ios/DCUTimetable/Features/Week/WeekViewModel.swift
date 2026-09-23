@@ -19,6 +19,9 @@ final class WeekViewModel: ObservableObject {
     private(set) var weeks: [TeachingWeek] = []
     /// Crowd-sourced cancellation tallies for the visible week, keyed by event key.
     @Published private(set) var cancellations: [String: CancellationStatus] = [:]
+    /// Every status fetched this session, whichever week it was for. The widget shows the
+    /// coming days whatever week is on screen, so it can't rely on `cancellations` alone.
+    private var knownStatuses: [String: CancellationStatus] = [:]
     /// Deadlines for every module on screen, so a class can be outlined on the day one falls.
     @Published private(set) var deadlines: [Deadline] = []
     /// `moduleKeys` as of the last load, published so the deadlines tab can watch it.
@@ -76,6 +79,10 @@ final class WeekViewModel: ObservableObject {
         guard tallies != nil || verdicts != nil else { return }
         cancellations = CancellationRules.statuses(from: tallies ?? [],
                                                    verdicts: verdicts ?? [])
+        // Keys with no reports are absent from the result, so clear this week's first or a
+        // withdrawn report would stay flagged on the widget.
+        for key in keys { knownStatuses[key] = nil }
+        knownStatuses.merge(cancellations) { _, new in new }
     }
 
     /// What (if anything) to outline a class with: not running, a quiz today, or something
@@ -200,9 +207,13 @@ final class WeekViewModel: ObservableObject {
         await refreshDeadlines()
         publishWidgetSnapshot()
 
+        var loadedNeighbour = false
         for neighbour in neighbours(of: weekIndex) where rawByWeekNumber[neighbour.number] == nil {
             await load(neighbour, isCurrent: false)
+            loadedNeighbour = true
         }
+        // Next week's Monday is what a Friday evening widget shows, and it arrives here.
+        if loadedNeighbour { publishWidgetSnapshot() }
     }
 
     /// Hand the home-screen widgets what is on screen.
@@ -210,11 +221,26 @@ final class WeekViewModel: ObservableObject {
     /// This model is the only writer. It is the one place that has the filtered week, the
     /// cancellation tallies and the deadlines at the same time, and a second writer holding
     /// a subset of any of the three would overwrite a fuller snapshot with a thinner one.
+    ///
+    /// Sends the next week of classes from every loaded week, not the week on screen:
+    /// the widget is about today and the days after it, and browsing ahead in the app
+    /// must not leave it with nothing for today.
     private func publishWidgetSnapshot() {
-        WidgetSnapshotPublisher.publish(events: events,
+        let cal = Foundation.Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let horizon = cal.date(byAdding: .day, value: Self.widgetDays, to: today) else { return }
+        let upcoming = eventsByWeekNumber.values.flatMap { $0 }
+            .filter { $0.start >= today && $0.start < horizon }
+        WidgetSnapshotPublisher.publish(events: upcoming,
                                         deadlines: deadlines,
-                                        status: status(for:))
+                                        status: { [knownStatuses] in
+                                            knownStatuses[CancellationRules.eventKey(for: $0)]
+                                                ?? CancellationStatus(reportCount: 0)
+                                        })
     }
+
+    /// A week and a day, so the next class day is in the file even across a long weekend.
+    private static let widgetDays = 8
 
     private func neighbours(of index: Int) -> [TeachingWeek] {
         guard !weeks.isEmpty else { return [] }

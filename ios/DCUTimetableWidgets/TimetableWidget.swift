@@ -1,16 +1,30 @@
 import SwiftUI
 import WidgetKit
 
-/// One rendering of the day. `classes` is already narrowed to `date`'s calendar day, and
+/// One rendering of the day. `classes` is already narrowed to `day`, and
 /// `highlightedID` already resolved, because a timeline entry is a picture — working
 /// either of them out inside `body` would mean recomputing them on every redraw against a
 /// `Date()` that is not the entry's date.
 struct TimetableEntry: TimelineEntry {
     let date: Date
+    /// Start of the day on show: today, or the next day with classes once today is done.
+    let day: Date
     let classes: [WidgetClass]
     let highlightedID: WidgetClass.ID?
     /// False when the app has never written a snapshot the widget could read.
     let hasData: Bool
+
+    var isToday: Bool { Calendar.current.isDate(day, inSameDayAs: date) }
+
+    /// "Today", "Tomorrow", or the weekday once the next class day is further out.
+    var dayTitle: String {
+        if isToday { return "Today" }
+        // Measured from the entry's date, not the clock: entries are drawn ahead of time.
+        let calendar = Calendar.current
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)),
+           calendar.isDate(day, inSameDayAs: tomorrow) { return "Tomorrow" }
+        return day.formatted(.dateTime.weekday(.wide))
+    }
 
     var highlighted: WidgetClass? {
         classes.first { $0.id == highlightedID }
@@ -27,7 +41,7 @@ struct TimetableProvider: TimelineProvider {
     private let store = WidgetSnapshotStore()
 
     func placeholder(in context: Context) -> TimetableEntry {
-        TimetableEntry(date: .now, classes: Self.sample, highlightedID: Self.sample.first?.id,
+        TimetableEntry(date: .now, day: Calendar.current.startOfDay(for: .now), classes: Self.sample, highlightedID: Self.sample.first?.id,
                        hasData: true)
     }
 
@@ -59,10 +73,11 @@ struct TimetableProvider: TimelineProvider {
     private static let maxEntries = 48
 
     private func entry(from snapshot: WidgetSnapshot, at date: Date) -> TimetableEntry {
-        let day = snapshot.classes(on: date)
+        let shown = snapshot.displayDay(at: date)
         return TimetableEntry(date: date,
-                              classes: day,
-                              highlightedID: NextClassWindow.highlighted(in: day, at: date)?.id,
+                              day: shown.day,
+                              classes: shown.classes,
+                              highlightedID: NextClassWindow.highlighted(in: shown.classes, at: date)?.id,
                               hasData: snapshot.updatedAt != .distantPast)
     }
 
@@ -155,7 +170,8 @@ struct TimetableSmallView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            WidgetHeader(title: "Today", detail: entry.date.formatted(.dateTime.weekday(.abbreviated)))
+            WidgetHeader(title: entry.dayTitle,
+                         detail: entry.isToday ? entry.day.formatted(.dateTime.weekday(.abbreviated)) : nil)
             if let focus {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(focus.start.widgetTime) – \(focus.end.widgetTime)")
@@ -173,7 +189,8 @@ struct TimetableSmallView: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                WidgetOverflowInline(count: entry.remaining.count - 1)
+                WidgetOverflowInline(count: entry.remaining.count - 1,
+                                     suffix: entry.isToday ? "today" : nil)
             } else {
                 WidgetEmptyState(symbol: emptySymbol, message: emptyMessage)
             }
@@ -192,10 +209,11 @@ struct TimetableSmallView: View {
 /// "+2 more" on its own line, without the list's leading gutter.
 private struct WidgetOverflowInline: View {
     let count: Int
+    let suffix: String?
 
     var body: some View {
         if count > 0 {
-            Text("+\(count) more today")
+            Text(["+\(count) more", suffix].compactMap { $0 }.joined(separator: " "))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -224,8 +242,12 @@ struct TimetableListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            WidgetHeader(title: "Today",
-                         detail: entry.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
+            // The date stays in the detail even when the title is a weekday name, so a
+            // Monday shown on a Friday can't be mistaken for today.
+            WidgetHeader(title: entry.dayTitle,
+                         detail: entry.day.formatted(entry.isToday
+                             ? .dateTime.weekday(.wide).day().month(.abbreviated)
+                             : .dateTime.day().month(.abbreviated)))
             if visible.isEmpty {
                 WidgetEmptyState(symbol: entry.hasData ? "checkmark.circle" : "arrow.down.app",
                                  message: entry.hasData
@@ -266,7 +288,7 @@ struct TimetableWidget: Widget {
             TimetableWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Today's classes")
-        .description("The rest of today, with the class you're due at next picked out.")
+        .description("The rest of today, then the next day once today's classes are done, with the class you're due at next picked out.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
