@@ -34,15 +34,19 @@ struct LectureDetailView: View {
 
     var body: some View {
         List {
-            reportBanner
-            dueToday
-            header
-            details
-            attendance
-            cancellation
-            deadlines
+            Group {
+                reportBanner
+                dueToday
+                header
+                details
+                attendance
+                cancellation
+                deadlines
+            }
+            .themedRows()
         }
         .listStyle(.grouped)
+        .themedList()
         .navigationTitle(event.moduleCode ?? "Class")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
@@ -99,7 +103,7 @@ struct LectureDetailView: View {
                         .font(.caption)
                     VStack(alignment: .leading, spacing: 2) {
                         if let mine = model.status.myReportLine {
-                            Text(mine).font(.caption.weight(.semibold))
+                            Text(mine).font(.status)
                         }
                         if let others = model.status.othersLine {
                             Text(others).font(.caption)
@@ -112,8 +116,7 @@ struct LectureDetailView: View {
                 }
                 .foregroundStyle(TimetableTint.off)
                 .padding(.vertical, 2)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+                .bareRow()
             }
         }
     }
@@ -132,11 +135,11 @@ struct LectureDetailView: View {
                             Text(deadline.kind.isSatInClass
                                  ? "\(deadline.kind.label) in this class"
                                  : "\(deadline.kind.label) due at this class")
-                                .font(.caption.weight(.semibold))
+                                .font(.status)
                                 .foregroundStyle(tint(for: deadline))
                             Text(deadline.title).font(.headline)
                             Text(deadline.due.formatted(date: .complete, time: .shortened))
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(Theme.inkSecondary)
                         }
                     }
                     .padding(.vertical, 4)
@@ -153,11 +156,11 @@ struct LectureDetailView: View {
     private var header: some View {
         Section {
             VStack(alignment: .leading, spacing: 4) {
-                Text(event.title).font(.title3.weight(.semibold))
-                Text(event.groupLabel).font(.subheadline).foregroundStyle(.secondary)
+                Text(event.title).font(.pageTitle).foregroundStyle(Theme.ink)
+                Text(event.groupLabel).font(.subheadline).foregroundStyle(Theme.inkSecondary)
                 if isSkipping {
                     Label("You're not attending this", systemImage: "person.slash")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(Theme.inkSecondary)
                 }
             }
             .padding(.vertical, 2)
@@ -180,13 +183,13 @@ struct LectureDetailView: View {
             }
             if isClashing {
                 Label("Overlaps another class", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(TimetableTint.off)
             }
         }
 
         Section("Taught by") {
             if model.lecturers.isEmpty {
-                Text("No staff listed for this class").foregroundStyle(.secondary)
+                Text("No staff listed for this class").foregroundStyle(Theme.inkSecondary)
             } else {
                 ForEach(model.lecturers) { lecturer in
                     LecturerRow(lecturer: lecturer)
@@ -287,19 +290,19 @@ struct LectureDetailView: View {
                     .foregroundStyle(verdict.state == .running ? Color.primary : TimetableTint.off)
                     .font(.body.weight(.semibold))
                 if let note = verdict.note, !note.isEmpty {
-                    Text(note).font(.callout).foregroundStyle(.secondary)
+                    Text(note).font(.callout).foregroundStyle(Theme.inkSecondary)
                 }
                 // The crowd is shown underneath rather than replaced: students disagreeing
                 // with an organiser is worth seeing.
                 if let crowd = model.status.crowdSummary {
-                    Text(crowd).font(.caption).foregroundStyle(.secondary)
+                    Text(crowd).font(.caption).foregroundStyle(Theme.inkSecondary)
                 }
             }
         } else if model.status.isFlagged {
             Label(model.status.summary, systemImage: "exclamationmark.circle.fill")
                 .foregroundStyle(TimetableTint.off)
         } else {
-            Text(model.status.summary).foregroundStyle(.secondary)
+            Text(model.status.summary).foregroundStyle(Theme.inkSecondary)
         }
     }
 
@@ -337,7 +340,7 @@ struct LectureDetailView: View {
                 ProgressView()
             } else if model.deadlines.isEmpty {
                 Text("No deadlines shared for \(DeadlineRules.moduleKey(for: event)) yet")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.inkSecondary)
             } else {
                 ForEach(model.deadlines) { deadline in
                     DeadlineRow(deadline: deadline,
@@ -371,7 +374,7 @@ private struct LecturerRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(lecturer.displayName)
                 if let role = lecturer.role {
-                    Text(role).font(.caption).foregroundStyle(.secondary)
+                    Text(role).font(.caption).foregroundStyle(Theme.inkSecondary)
                 }
             }
         }
@@ -413,38 +416,38 @@ private struct DeadlineRow: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            AdaptiveStack(spacing: Theme.Space.m) {
                 Image(systemName: deadline.kind.symbol)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.inkSecondary)
                     .frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(deadline.title)
-                    Text("\(deadline.kind.label) · due \(deadline.due.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text("\(deadline.kind.label), due \(deadline.due.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption).foregroundStyle(Theme.inkSecondary)
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 Text(DeadlineRules.countdown(to: deadline.due))
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.inkSecondary)
             }
 
             // One unverified person's date is worth less than three people's, and the row
             // says which it is rather than presenting both the same way.
-            HStack(spacing: 8) {
+            AdaptiveStack {
                 Label(standing.summary,
                       systemImage: standing.isConfirmed ? "checkmark.seal.fill" : "questionmark.circle")
                     .font(.caption2)
-                    .foregroundStyle(standing.isConfirmed ? TimetableTint.confirmed : .secondary)
+                    .foregroundStyle(standing.isConfirmed ? TimetableTint.confirmed : Theme.inkSecondary)
                 Spacer(minLength: 0)
                 if !isMine {
                     Button(standing.confirmedByMe ? "Confirmed" : "This is right") { onConfirm() }
-                        .font(.caption2)
-                        .buttonStyle(.bordered)
-                        .tint(standing.confirmedByMe ? TimetableTint.confirmed : .accentColor)
+                        .buttonStyle(.inlineAction(tint: standing.confirmedByMe
+                                                   ? TimetableTint.confirmed : Theme.accent))
                 }
             }
-            .padding(.leading, 34)
+            .modifier(HangingIndent())
         }
         .swipeActions {
             if isMine {
@@ -477,8 +480,10 @@ private struct DeadlineFormView: View {
                 } footer: {
                     Text("Everyone taking this module will see this.")
                 }
+                .themedRows()
             }
             .listStyle(.grouped)
+            .themedList()
             .navigationTitle("Add a deadline")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -496,3 +501,12 @@ private struct DeadlineFormView: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Light") { PreviewScreen.lecture.view.previewVariant(.light) }
+#Preview("Dark") { PreviewScreen.lecture.view.previewVariant(.dark) }
+#Preview("Largest text") { PreviewScreen.lecture.view.previewVariant(.largestText) }
+#Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 667)) {
+    PreviewScreen.lecture.view
+}
+#endif

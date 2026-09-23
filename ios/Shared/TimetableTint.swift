@@ -10,14 +10,15 @@ import UIKit
 /// SwiftUI's `.yellow` and `.orange` are tuned for dark backgrounds — on a white `List` row
 /// yellow text and a yellow border are close to invisible, and the border here is carrying
 /// information, not decoration. Each tint is therefore a darker shade in light mode and a
-/// lighter one in dark mode, so contrast holds either way.
+/// lighter one in dark mode, so contrast holds either way. Every light shade clears
+/// 4.5:1 on the app's grey canvas (`Theme.canvas`), not just on white.
 public enum TimetableTint {
     /// Something to hand in today.
-    public static let due = dynamic(light: 0xB45309, dark: 0xFBBF24)
+    public static let due = dynamic(light: 0xA04A06, dark: 0xFBBF24)
     /// A quiz or exam sat in that class.
     public static let test = dynamic(light: 0x1D4ED8, dark: 0x60A5FA)
     /// Reported cancelled.
-    public static let off = dynamic(light: 0xC2410C, dark: 0xFB923C)
+    public static let off = dynamic(light: 0xB43C0A, dark: 0xFB923C)
     /// Enough people have vouched for a deadline.
     public static let confirmed = dynamic(light: 0x047857, dark: 0x34D399)
 

@@ -30,9 +30,11 @@ struct GroupSelectionView: View {
                                            description: Text("This programme has no scheduled classes yet."))
                 } else {
                     List {
+                        Group {
                         Section {
-                            Text("Turn off the lab/tutorial streams you're not in. What's left is your personal timetable — clash detection uses only these.")
-                                .font(.footnote).foregroundStyle(.secondary)
+                            Text("Turn off the lab and tutorial groups you're not in. What's left is your own timetable, and only those classes are checked for clashes.")
+                                .font(.subheadline).foregroundStyle(Theme.inkSecondary)
+                                .bareRow()
                         }
                         ForEach(modules) { module in
                             Section(header: Text("\(module.moduleCode) · \(module.moduleName)")) {
@@ -43,10 +45,13 @@ struct GroupSelectionView: View {
                                 }
                             }
                         }
+                        }
+                        .themedRows()
                     }
                 }
             }
             .listStyle(.grouped)
+            .themedList()
             .navigationTitle("Your groups")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -87,3 +92,12 @@ struct GroupSelectionView: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Light") { PreviewScreen.groups.view.previewVariant(.light) }
+#Preview("Dark") { PreviewScreen.groups.view.previewVariant(.dark) }
+#Preview("Largest text") { PreviewScreen.groups.view.previewVariant(.largestText) }
+#Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 667)) {
+    PreviewScreen.groups.view
+}
+#endif

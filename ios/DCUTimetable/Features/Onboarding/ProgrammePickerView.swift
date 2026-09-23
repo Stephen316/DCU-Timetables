@@ -15,19 +15,20 @@ struct ProgrammePickerView: View {
     var body: some View {
         NavigationStack {
             List {
+                Group {
                 if let errorText {
                     Label(errorText, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.inkSecondary)
                 }
                 ForEach(results) { category in
                     Button {
                         onSelect(category)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(category.code).font(.headline)
+                            Text(category.code).font(.headline).foregroundStyle(Theme.ink)
                             Text(category.descriptiveName)
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.inkSecondary)
                         }
                     }
                 }
@@ -39,11 +40,16 @@ struct ProgrammePickerView: View {
                             ? "Search for your course, e.g. \"Computer\" or a code like \"CASE\"."
                             : "Try a different search.")
                     )
+                    .bareRow()
                 }
+                }
+                .themedRows()
             }
             .listStyle(.grouped)
+            .themedList()
             .navigationTitle("Your programme")
-            .searchable(text: $query, prompt: "Programme name or code")
+            .adaptiveLargeTitle()
+            .searchable(text: $query, prompt: "Name or code")
             .overlay { if isLoading { ProgressView() } }
             .task(id: query) { await search() }
         }
@@ -73,3 +79,12 @@ struct ProgrammePickerView: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Light") { PreviewScreen.programme.view.previewVariant(.light) }
+#Preview("Dark") { PreviewScreen.programme.view.previewVariant(.dark) }
+#Preview("Largest text") { PreviewScreen.programme.view.previewVariant(.largestText) }
+#Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 667)) {
+    PreviewScreen.programme.view
+}
+#endif

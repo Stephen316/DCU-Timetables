@@ -11,6 +11,7 @@ struct AccountView: View {
     @State private var confirmingDelete = false
     @State private var deleting = false
     @State private var deleteError: String?
+    @AppStorage(AppearanceSetting.storageKey) private var appearance: AppearanceSetting = .system
 
     private let user = SignedInUser.current
 
@@ -21,11 +22,16 @@ struct AccountView: View {
     var body: some View {
         NavigationStack {
             List {
-                signedInSection
-                identifierSection
-                dangerSection
+                Group {
+                    signedInSection
+                    appearanceSection
+                    identifierSection
+                    dangerSection
+                }
+                .themedRows()
             }
             .listStyle(.grouped)
+            .themedList()
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -62,6 +68,24 @@ struct AccountView: View {
         }
     }
 
+    /// Three rows with a checkmark rather than a segmented control: the rows wrap at the
+    /// largest text sizes, and a segmented control's labels don't grow at all.
+    private var appearanceSection: some View {
+        Section {
+            Picker("Appearance", selection: $appearance) {
+                ForEach(AppearanceSetting.allCases) { setting in
+                    Text(setting.label).tag(setting)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } header: {
+            Text("Appearance")
+        } footer: {
+            Text("Match iPhone follows the Light or Dark setting in your iPhone's Display & Brightness settings.")
+        }
+    }
+
     @ViewBuilder
     private var identifierSection: some View {
         Section {
@@ -78,15 +102,18 @@ struct AccountView: View {
                 } label: {
                     HStack {
                         Text(pi)
+                            .foregroundStyle(Theme.ink)
                             .font(.system(.title3, design: .monospaced))
                             .textSelection(.enabled)
                         Spacer()
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .foregroundStyle(copied ? .green : .accentColor)
+                            .foregroundStyle(copied ? TimetableTint.confirmed : Theme.accent)
                     }
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(copied ? "Copied" : "Your ID, \(pi)")
+                .accessibilityHint("Copies it")
             } else if loadFailed {
                 LabeledContent("Your ID", value: "--")
             } else {
@@ -155,3 +182,12 @@ struct AccountView: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Light") { PreviewScreen.account.view.previewVariant(.light) }
+#Preview("Dark") { PreviewScreen.account.view.previewVariant(.dark) }
+#Preview("Largest text") { PreviewScreen.account.view.previewVariant(.largestText) }
+#Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 667)) {
+    PreviewScreen.account.view
+}
+#endif

@@ -36,18 +36,26 @@ struct SignInView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Text("Sign in with your DCU email address")
-                }
+                Group {
+                    Section {
+                        Text("Use your DCU email address. Your name and lab group come from it, so there's nothing else to fill in.")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.inkSecondary)
+                            .bareRow()
+                    }
 
-                if let pending = awaitingConfirmation {
-                    confirmation(for: pending)
-                } else {
-                    credentials
+                    if let pending = awaitingConfirmation {
+                        confirmation(for: pending)
+                    } else {
+                        credentials
+                    }
                 }
+                .themedRows()
             }
             .listStyle(.grouped)
-            .navigationTitle("Welcome")
+            .themedList()
+            .navigationTitle("DCU Timetable")
+            .adaptiveLargeTitle()
         }
     }
 
@@ -55,15 +63,17 @@ struct SignInView: View {
     private var credentials: some View {
         Group {
             Section {
-                Picker("", selection: $mode) {
+                Picker("Sign in or create an account", selection: $mode) {
                     Text("Sign in").tag(Mode.signIn)
                     Text("Create account").tag(Mode.createAccount)
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .onChange(of: mode) { _, _ in
                     confirmPassword = ""
                     note = nil
                 }
+                .bareRow()
             }
 
             Section {
@@ -74,10 +84,10 @@ struct SignInView: View {
                     .autocorrectionDisabled()
                 if addressLooksWrong {
                     Text("\(address.trimmingCharacters(in: .whitespaces)) is not a valid email address")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(Theme.inkSecondary)
                 } else if let email {
                     Text("Signing in as \(email.displayName)")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(Theme.inkSecondary)
                 }
 
                 // `.password`, never `.newPassword`: the latter opts the field into iOS's
@@ -91,25 +101,25 @@ struct SignInView: View {
                     // The rules are stated before they type, not sprung on them after: the
                     // line is always there and the current problem takes its place.
                     Text(passwordProblem?.message ?? PasswordValidation.requirements)
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(Theme.inkSecondary)
                 }
             }
 
             if let note {
-                Section { Text(note).font(.callout).foregroundStyle(.secondary) }
+                Section { Text(note).font(.callout).foregroundStyle(Theme.inkSecondary) }
             }
 
             Section {
                 Button(action: submit) {
-                    HStack {
-                        if isBusy { ProgressView().controlSize(.small) }
+                    HStack(spacing: Theme.Space.s) {
+                        if isBusy { ProgressView().controlSize(.small).tint(Theme.onAccent) }
                         Text(mode == .signIn ? "Sign in" : "Create account")
                     }
-                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.roundedRectangle(radius: 6))
+                .buttonStyle(.primary)
                 .disabled(!canSubmit)
+                .bareRow()
+                .listRowInsets(Theme.standaloneRowInsets)
             }
 
             if mode == .signIn {
@@ -131,26 +141,26 @@ struct SignInView: View {
     @ViewBuilder
     private func confirmation(for pending: DCUEmail) -> some View {
         Section {
-            Text("Check your email").font(.headline)
+            Text("Check your email").font(.headline).foregroundStyle(Theme.ink)
             Text("We've sent a confirmation link to \(pending.address). Tap it, then come back here.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.inkSecondary)
         }
 
         if let note {
-            Section { Text(note).font(.callout).foregroundStyle(.secondary) }
+            Section { Text(note).font(.callout).foregroundStyle(Theme.inkSecondary) }
         }
 
         Section {
             Button(action: { checkConfirmed(pending) }) {
-                HStack {
-                    if isBusy { ProgressView().controlSize(.small) }
+                HStack(spacing: Theme.Space.s) {
+                    if isBusy { ProgressView().controlSize(.small).tint(Theme.onAccent) }
                     Text("Continue")
                 }
-                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.roundedRectangle(radius: 6))
+            .buttonStyle(.primary)
             .disabled(isBusy)
+            .bareRow()
+            .listRowInsets(Theme.standaloneRowInsets)
         }
 
         Section {
@@ -233,3 +243,12 @@ struct SignInView: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Light") { PreviewScreen.signIn.view.previewVariant(.light) }
+#Preview("Dark") { PreviewScreen.signIn.view.previewVariant(.dark) }
+#Preview("Largest text") { PreviewScreen.signIn.view.previewVariant(.largestText) }
+#Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 667)) {
+    PreviewScreen.signIn.view
+}
+#endif

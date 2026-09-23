@@ -14,8 +14,9 @@ struct WeekCalendarView: View {
     /// See `PagerDragState`: a block must not open when the finger was swiping past it.
     @Environment(\.pagerDrag) private var pagerDrag
 
-    private let hourHeight: CGFloat = 58
-    private let gutterWidth: CGFloat = 40
+    /// Scaled with the block text, so a taller label gets a taller hour to sit in.
+    @ScaledMetric(relativeTo: .caption2) private var hourHeight: CGFloat = 58
+    @ScaledMetric(relativeTo: .caption2) private var gutterWidth: CGFloat = 40
 
     private var calendar: Calendar {
         var cal = Calendar.current
@@ -74,6 +75,11 @@ struct WeekCalendarView: View {
                 }
             }
         }
+        .background(Theme.canvas)
+        // Five columns of blocks can't reflow the way a list can: past xxxLarge a block
+        // holds a letter or two. The day list is the view that grows with the text, and
+        // it's one tap away in the toolbar.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // MARK: - Pieces
@@ -84,12 +90,15 @@ struct WeekCalendarView: View {
             ForEach(displayDays, id: \.self) { day in
                 VStack(spacing: 1) {
                     Text(day.formatted(.dateTime.weekday(.abbreviated)))
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(.caption2).foregroundStyle(Theme.inkSecondary)
                     Text(day.formatted(.dateTime.day()))
                         .font(.footnote.weight(isToday(day) ? .bold : .regular))
-                        .foregroundStyle(isToday(day) ? Color.accentColor : .primary)
+                        .foregroundStyle(isToday(day) ? Theme.accent : Theme.ink)
                 }
                 .frame(width: dayWidth)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                .accessibilityAddTraits(isToday(day) ? [.isHeader, .isSelected] : .isHeader)
             }
         }
         .padding(.vertical, 6)
@@ -100,13 +109,14 @@ struct WeekCalendarView: View {
             ForEach(hours, id: \.self) { hour in
                 Text(hourLabel(hour))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.inkSecondary)
                     .frame(width: gutterWidth, height: hourHeight, alignment: .topTrailing)
                     .padding(.trailing, 4)
                     .offset(y: -5)
             }
         }
         .frame(width: gutterWidth, height: gridHeight, alignment: .top)
+        .accessibilityHidden(true)
     }
 
     private func dayColumn(_ day: Date, width: CGFloat) -> some View {
@@ -119,7 +129,7 @@ struct WeekCalendarView: View {
                 ForEach(hours, id: \.self) { _ in
                     ZStack(alignment: .top) {
                         Color.clear.frame(height: hourHeight)
-                        Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 0.5)
+                        Rectangle().fill(Theme.separator).frame(height: 0.5)
                     }
                 }
             }
@@ -130,7 +140,7 @@ struct WeekCalendarView: View {
         }
         .frame(width: width, height: gridHeight, alignment: .topLeading)
         .overlay(alignment: .leading) {
-            Rectangle().fill(Color.secondary.opacity(0.15)).frame(width: 0.5)
+            Rectangle().fill(Theme.separator).frame(width: 0.5)
                 .allowsHitTesting(false)
         }
     }
@@ -148,26 +158,27 @@ struct WeekCalendarView: View {
         } label: {
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.event.moduleCode ?? item.event.title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Theme.ink)
                     .lineLimit(1)
                 if height > 44, let room = roomLabel(item.event) {
                     Text(room)
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.inkSecondary)
                         .lineLimit(1)
                 }
             }
             .padding(.horizontal, 3)
             .padding(.vertical, 2)
             .frame(width: max(width - 2, 10), height: height - 2, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 3).fill(tint.opacity(0.18)))
+            .background(RoundedRectangle(cornerRadius: Theme.Radius.block).fill(tint.opacity(0.18)))
             .overlay(alignment: .leading) {
                 Rectangle().fill(tint).frame(width: 2.5)
             }
             .overlay {
                 // A highlight outranks a clash outline: not running, or a deadline today,
                 // matters more than an overlap the student has already seen.
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: Theme.Radius.block)
                     .strokeBorder(highlight?.tint
                                   ?? (isClashing ? TimetableTint.off.opacity(0.55) : Color.clear),
                                   lineWidth: highlight == nil ? 1.5 : 2)
@@ -175,7 +186,8 @@ struct WeekCalendarView: View {
             .overlay(alignment: .topTrailing) {
                 if let highlight {
                     Image(systemName: highlight.symbol)
-                        .font(.system(size: 9))
+                        .font(.caption2)
+                        .imageScale(.small)
                         .foregroundStyle(highlight.tint)
                         .padding(1)
                 }
@@ -183,7 +195,20 @@ struct WeekCalendarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // The block shows two words; the spoken version carries the whole class.
+        .accessibilityLabel(spokenSummary(item.event, highlight: highlight, isClashing: isClashing))
         .offset(x: CGFloat(item.column) * width, y: offsetY(for: item.event.start))
+    }
+
+    private func spokenSummary(_ event: TimetableEvent, highlight: ClassHighlight?,
+                               isClashing: Bool) -> String {
+        var parts: [String] = []
+        if let highlight { parts.append(highlight.reason) }
+        parts.append(event.title)
+        parts.append("\(event.start.formatted(date: .omitted, time: .shortened)) to \(event.end.formatted(date: .omitted, time: .shortened))")
+        if !event.locationDisplay.isEmpty { parts.append(event.locationDisplay) }
+        if isClashing { parts.append("Overlaps another class") }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Geometry helpers
@@ -220,3 +245,12 @@ struct WeekCalendarView: View {
         return TimetableTint.modules[((hash % count) + count) % count]
     }
 }
+
+#if DEBUG
+#Preview("Light") { PreviewScreen.week.view.previewVariant(.light) }
+#Preview("Dark") { PreviewScreen.week.view.previewVariant(.dark) }
+#Preview("Largest text") { PreviewScreen.week.view.previewVariant(.largestText) }
+#Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 667)) {
+    PreviewScreen.week.view
+}
+#endif
