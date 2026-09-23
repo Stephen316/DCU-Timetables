@@ -4,6 +4,7 @@ import { currentProfile, supabaseServer } from "@/lib/supabase/server";
 import { gemini, EXTRACTION_MODEL } from "@/lib/gemini/client";
 import { withRetry, classify } from "@/lib/gemini/retry";
 import { checkRule, type SplitRule } from "@/lib/proposals/rules";
+import { checkScope, programmeFor, type Scope } from "@/lib/proposals/courses";
 import { SPLIT_TOOL, ROTATION_TOOL, SYSTEM } from "@/lib/proposals/prompt";
 import type { Proposal } from "@/lib/proposals/types";
 import { validateRotation, type RotationSession } from "@/lib/extraction/rotation";
@@ -28,6 +29,10 @@ export async function ask(form: FormData): Promise<AskResult> {
   const profile = await currentProfile();
   if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
 
+  const scope: Scope = {
+    programme: String(form.get("programme") ?? "").trim(),
+    module: String(form.get("module") ?? "").trim(),
+  };
   const message = String(form.get("message") ?? "").trim();
   const history: Turn[] = JSON.parse(String(form.get("history") ?? "[]"));
   const file = form.get("file");
@@ -61,6 +66,18 @@ export async function ask(form: FormData): Promise<AskResult> {
           mimeType: file.type,
           data: Buffer.from(await file.arrayBuffer()).toString("base64"),
         },
+      });
+    }
+    // Stating the selection removes the clarifying round-trip — the model's first reply to
+    // a well-formed split used to be "which module is this for?". On a free tier metered in
+    // requests per day, a turn spent asking something already on screen is expensive.
+    const programme = programmeFor(scope.programme);
+    if (programme && scope.module) {
+      parts.push({
+        text:
+          `The administrator has selected ${programme.name} (${programme.key}), module ` +
+          `${scope.module}. This request is for that module. Do not ask which module or ` +
+          `course it is for. If the request plainly describes a different module, say so.`,
       });
     }
     parts.push({ text: message || "Transcribe this document." });
@@ -98,7 +115,9 @@ export async function ask(form: FormData): Promise<AskResult> {
     if (split) {
       const a = split.args as unknown as SplitRule;
       const rule: SplitRule = {
-        moduleKey: a.moduleKey ?? "",
+        // The selection wins. What the model read is not discarded — it is compared against
+        // this in checkScope, and a disagreement is an error that blocks saving.
+        moduleKey: scope.module,
         activity: a.activity ?? "",
         // Normalised rather than trusted: the schema asks for single letters and the model
         // generally obliges, but "Mc" or "a" arriving instead would sort wrongly against
@@ -111,7 +130,13 @@ export async function ask(form: FormData): Promise<AskResult> {
           label: r.label || null,
         })),
       };
-      return { ok: true, reply, meta, proposal: { kind: "split", rule, problems: checkRule(rule) } };
+      return {
+        ok: true, reply, meta,
+        proposal: {
+          kind: "split", scope, rule,
+          problems: [...checkScope(scope, { module: a.moduleKey }), ...checkRule(rule)],
+        },
+      };
     }
 
     const rotation = response.functionCalls?.find((c) => c.name === "proposeRotation");
@@ -123,11 +148,14 @@ export async function ask(form: FormData): Promise<AskResult> {
       return {
         ok: true, reply, meta,
         proposal: {
-          kind: "rotation",
-          courseKey: a.courseKey ?? "",
+          kind: "rotation", scope,
+          courseKey: scope.programme,
           title: a.title ?? null,
           sessions,
-          findings: validateRotation(sessions),
+          findings: [
+            ...checkScope(scope, { programme: a.courseKey }),
+            ...validateRotation(sessions),
+          ],
         },
       };
     }
@@ -148,7 +176,7 @@ export async function accept(proposal: Proposal) {
   const db = await supabaseServer();
 
   if (proposal.kind === "split") {
-    const problems = checkRule(proposal.rule);
+    const problems = [...checkScope(proposal.scope), ...checkRule(proposal.rule)];
     const blocker = problems.find((p) => p.level === "error");
     if (blocker) return { ok: false, error: blocker.message };
 
@@ -161,7 +189,8 @@ export async function accept(proposal: Proposal) {
     return error ? { ok: false, error: error.message } : { ok: true };
   }
 
-  const blocker = validateRotation(proposal.sessions).find((f) => f.level === "error");
+  const blocker = [...checkScope(proposal.scope), ...validateRotation(proposal.sessions)]
+    .find((f) => f.level === "error");
   if (blocker) return { ok: false, error: blocker.message };
   if (!proposal.courseKey) return { ok: false, error: "No course — ask it which course this is for." };
 

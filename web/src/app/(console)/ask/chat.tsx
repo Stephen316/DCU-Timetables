@@ -3,8 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 import { ask, accept, type Turn, type AskResult } from "./actions";
 import type { Proposal } from "@/lib/proposals/types";
+import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
 
 export function Ask() {
+  const [programme, setProgramme] = useState(PROGRAMMES[0]?.key ?? "");
+  const [moduleKey, setModuleKey] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -28,6 +31,8 @@ export function Ask() {
 
     const form = new FormData();
     form.set("message", draft.trim());
+    form.set("programme", programme);
+    form.set("module", moduleKey);
     form.set("history", JSON.stringify(historyBefore));
     if (file) form.set("file", file);
     setDraft("");
@@ -71,6 +76,41 @@ export function Ask() {
   return (
     <div className="ask">
       <div className="ask-chat">
+        <div className="row" style={{ marginBottom: 12 }}>
+          <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+            <label htmlFor="programme">Programme</label>
+            <select
+              id="programme"
+              value={programme}
+              disabled={busy}
+              onChange={(e) => {
+                setProgramme(e.target.value);
+                // A module from the old programme is not a module of the new one. Clearing
+                // beats carrying a selection that the scope check would reject later.
+                if (!modulesFor(e.target.value).includes(moduleKey)) setModuleKey("");
+              }}
+            >
+              {PROGRAMMES.map((p) => (
+                <option key={p.key} value={p.key}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+            <label htmlFor="module">Module</label>
+            <select
+              id="module"
+              value={moduleKey}
+              disabled={busy}
+              onChange={(e) => setModuleKey(e.target.value)}
+            >
+              <option value="">Choose a module…</option>
+              {modulesFor(programme).map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <div className="chat">
           {turns.length === 0 && (
             <p className="dim">
