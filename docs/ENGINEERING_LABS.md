@@ -13,15 +13,17 @@ so the app carries it as bundled data.
 
 - Menu → **Engineering labs** (shown only when the student's timetable contains
   EEG1001/EEG1002/EEG1004).
-- Student picks their **group letter (A–E)**, or types their **surname** to auto-detect it.
+- Opens on the group the student's profile was matched to; they can pick another letter.
 - Shows their personal lab schedule for the semester: module, day/date, time, per week.
 
 ## Profile-first onboarding
 
-On first launch the app shows a **profile creator** (`ProfileCreatorView`): the student
-types their name, it's matched against the imported class list, and — if found — a
-`StudentProfile` (name + lab group + rooms) is created. That profile drives a personal
-**Year-1 Engineering timetable** with no programme picking:
+On first launch the app shows a **profile creator** (`ProfileCreatorView`). The student
+picks their course from the class lists an admin has uploaded, and the server matches their
+verified DCU address against that list (`resolve_allocation`). If it finds them, a
+`StudentProfile` (name from the address + lab group + rooms) is created. Two students with
+the same name are asked which subgroup they're in, and never shown each other's names. That
+profile drives a personal **Year-1 Engineering timetable** with no programme picking:
 
 - `ProfileTimetableSource` fetches the shared module set (`EngineeringYear1.json` →
   EEG1000/1001/1002/1004/1006/1007/1017) via the Module API and combines them.
@@ -30,6 +32,8 @@ types their name, it's matched against the imported class list, and — if found
   in the correct rooms.
 - Anyone not in the class list can tap **"Choose a programme instead"** to fall back to the
   normal programme search.
+- When an admin uploads a corrected list, its version moves, and the app resolves the
+  profile again at its next launch (`AllocationRefresh`).
 
 **Timezone note:** the rotation PDF's times are Irish local clock times, so rotation
 events are built in `Europe/Dublin` (the API's own events are true UTC and converted for
@@ -68,33 +72,24 @@ but the cohort is four groups of ~52 — there are no E students. The file keeps
 is a transcription of the PDF, and the extraction harness has to be able to compare against
 it; for A–D students `ABE` simply means A and B attend.
 
-### 2. Surname → group (LOCAL ONLY — never committed, never shipped)
-The class-allocation list holds 207 real students' names with their group, subgroup, day
-and rooms, so it must not go into the repo or the App Store binary. It is:
+### 2. Class list → group (on the server only — never on a phone, never in the repo)
+The class-allocation list holds real students' names with their group, subgroup, day and
+rooms. The source file stays git-ignored in `local-data/`. It reaches the app only through
+the console: **Ask → pick the programme → attach the list in any format (PDF, photo,
+.xlsx, .docx, CSV) → check the panel → Accept**. The console turns it into CSV — directly
+if it is already a headed table, through Mistral if not — and saves each name reduced to a
+key. Email addresses are account information only — Supabase Auth keeps them to sign
+people in. When an account is created, the student's name is taken from their address once
+and stored on their profile (`given_name`, `family_name`); that stored name is what is
+matched against the class list, and only an admin can change it. Phones download only opaque keys
+against groups and rooms. See `CSV_PIPELINE.md` §2 and
+`supabase/phase13_roster_allocations.sql`.
 
-- **git-ignored** — `local-data/` and `*.local.json` (see `.gitignore`), verified not
-  visible to git in any commit.
-- **loaded at runtime** from the app's `Documents/eng_groups.json`, which the user imports
-  themselves. If absent (any normal install), the app offers the manual A–E picker.
-
-⚠️ **This was not true until 22 Sep 2026.** `EngGroupDirectory` had a second source — a
-bundled `Resources/eng_groups.local.json`, git-ignored but swept into the target by
-XcodeGen, so every build shipped the whole roster. It carried a comment saying to delete it
-before release; a comment is not a mechanism, and it survived for months.
-
-The file is gone and so is the code that looked for it. `fileURL()` now reads Documents or
-returns nil, which makes a bundled roster impossible rather than discouraged — putting the
-file back into `Resources/` has no effect, because nothing reads from there.
-
-The 207 rows describe only 16 distinct allocations (`subgroup` determines day, workshop and
-drawing), so the manual picker loses almost nothing: one tap instead of a name lookup. See
-`CSV_PIPELINE.md` for the server-side replacement.
-
-Format the app expects in `Documents/eng_groups.json`:
-```json
-{ "bySurname": { "anand": [ { "name":"Anand Amrit","group":"B","subgroup":"B.1",
-                              "day":"Tue","workshop":"SG23","drawing":"SB39" } ] } }
-```
+⚠️ **History.** Until 22 Sep 2026 every build shipped the whole roster: a bundled
+`Resources/eng_groups.local.json`, git-ignored but swept into the target by XcodeGen. Until
+23 Sep 2026 the app could still import the list onto the phone (`EngGroupDirectory`) and
+match surnames locally. Both are gone. There is no code on the device that reads a class
+list, so a list cannot reach a phone by being dropped into the project.
 
 ## Limitations / maintenance
 

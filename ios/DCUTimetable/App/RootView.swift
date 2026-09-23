@@ -19,6 +19,10 @@ struct RootView: View {
 
     var body: some View {
         flow
+            // A corrected class list re-uploaded in the console bumps its version; a profile
+            // made from the old one is resolved again rather than trusted. Once per launch
+            // and sign-in — the list changes a few times a year, not by the minute.
+            .task(id: signedIn?.id) { await refreshAllocation() }
             // The session can die while the app is open; when it does the student is no
             // longer signed in, whatever the last launch recorded.
             .onReceive(NotificationCenter.default
@@ -64,6 +68,19 @@ struct RootView: View {
                 onChooseProgramme: { useProgrammePicker = true },
                 onSignOut: { signOut() }
             )
+        }
+    }
+
+    private func refreshAllocation() async {
+        guard let profile, let store = AllocationStoreFactory.make() else { return }
+        switch await AllocationRefresh.check(profile, store: store) {
+        case .unchanged:
+            break
+        case .updated(let refreshed):
+            profileData = (try? JSONEncoder().encode(refreshed)) ?? profileData
+        case .dropped:
+            profileData = Data()
+            hiddenGroupsData = Data()
         }
     }
 

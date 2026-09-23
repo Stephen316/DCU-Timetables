@@ -393,7 +393,54 @@ Three caveats:
    console.
 4. **Decide whether PaddleOCR stays.** With 2 and 3 measured you will know whether it ever
    disagrees usefully. If it doesn't, drop it and simplify.
-5. **Schema for §2** — `roster_members`, `course_allocations`, `resolve_allocation`, and the HMAC secret.
-6. **Console upload + staging + review screen** (`ADMIN_CONSOLE.md` §7.2).
-7. **App reader**: call the RPC, cache the allocation key, drop the local matcher. *(iOS — needs your
-   go-ahead.)*
+5. **Schema for §2** — *built 23 Sep 2026*, `supabase/phase13_roster_allocations.sql`.
+   `roster_members`, `course_allocations`, `rosters` (title + version), `allocation_flags`,
+   `save_roster`, `resolve_allocation`, `set_student_id`. The HMAC secret is generated inside
+   the database into Vault and never leaves it; `private.rotate_roster_key()` rotates it and
+   re-derives every key. Each row stores the disambiguator it was keyed with, so a rotation
+   reproduces the keys an import would. Tested against the live database with synthetic
+   accounts in a rolled-back transaction: one match, two same-named students separated by
+   subgroup, not listed, ID-only match, both conflict paths flagged once each, the ID set
+   once and refused twice, a student refused `save_roster` and `roster_members`, and a
+   re-import keeping the same key.
+
+   **Student ID is open on the server, not in the app.** `profiles.student_id` and
+   `set_student_id` exist and `resolve_allocation` uses the ID when present, but the app
+   does not ask for one yet — every roster so far is keyed by name. A caller with no ID
+   matches a name-and-ID row on the name alone: the name is the verified key (§2.1).
+6. **Console upload** — *built*, following the diagram's ingestion path. Any file goes into
+   the Ask tab:
+   - **Normalise (n60)**, `web/src/lib/extraction/normalise.ts`: `.xlsx` to CSV per sheet,
+     `.docx` to text with tables as Markdown, text as it is, PDFs and images to Mistral OCR.
+     No dependency: both Office formats are zips of XML, read with Node's zlib.
+   - **Document type (n62)**: a headed table that already parses as a class list is taken
+     as it stands, and the names go to no model. Anything else, the model classifies as
+     class list, rotation or neither (`web/src/lib/mistral/roster.ts`).
+   - **Class list (n61)**: the model writes it out as CSV with a fixed header; that CSV goes
+     through the same parser and validators as an uploaded one.
+   - **Rotation**: the transcription the harness measured, on the text already read.
+   - **Review (n34)**: the proposal panel, with the CSV downloadable. Accept saves; each name
+     is sent as its `name_key`, never as written. Nothing reaches Supabase without Accept.
+
+   Measured 23 Sep 2026, synthetic names only: a messy 24-student list with one "Surname,
+   Given" column read 24/24 exact as text and 24/24 through OCR as a PDF; the School's
+   rotation PDF classified as a rotation (81 rows, 0 check errors); unrelated prose as
+   neither. The real Engineering list parses directly: 207 students, 207 distinct keys,
+   groups 52/52/52/51.
+
+   ⚠️ **Names now go to Mistral** for any class list that is not already a headed table.
+   §4.5's reasoning was about Gemini's terms; Mistral's have not been checked here. Confirm
+   the account does not allow training on API inputs before uploading a real list that way.
+
+   **Emails are account information only.** The name is taken from the verified address
+   once, when the account is created, and stored on `profiles` (`given_name`,
+   `family_name`, admin-only to change); `resolve_allocation` matches on that and never
+   reads the address. Tested by changing a test account's address after sign-up: it still
+   matched on the stored name. Because a single name column leaves the model to decide
+   which part is the surname, the match accepts the stored name in either order. Not built: PaddleOCR
+   cross-check (§4.1), per-row edit, and a screen for `allocation_flags`.
+7. **App reader** — *built*: the profile screen offers the uploaded class lists the app can
+   build a timetable for, resolves on the server, asks the subgroup when names collide, and
+   re-resolves when an upload bumps the version. `EngGroupDirectory` — the on-phone matcher
+   and its class-list import — is deleted. Profiles made before this keep working and never
+   refresh. *(Approved and built 23 Sep 2026.)*

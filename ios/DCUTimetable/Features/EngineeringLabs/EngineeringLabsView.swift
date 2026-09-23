@@ -1,18 +1,15 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Year-1 Engineering lab rotation. The public timetable only shows generic lab slots;
-/// this uses the School's published rotation to show a student their exact labs once they
-/// pick their group (A–E) — or auto-detects the group from an imported class list by surname.
+/// this uses the School's published rotation to show a student their exact labs for their
+/// group — the one their profile was matched to, or one they pick.
+///
+/// There is no name lookup here any more. It used to search a class list imported onto the
+/// phone; matching now happens on the server, once, when the profile is made.
 struct EngineeringLabsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("engLabGroup") private var group = ""
-
-    @State private var surname = ""
-    @State private var lookupMessage: String?
-    @State private var directoryAvailable = EngGroupDirectory.isAvailable
-    @State private var showImporter = false
-    @State private var importMessage: String?
+    @AppStorage("studentProfile") private var profileData = Data()
 
     private let rotation = LabRotationLoader.bundled()
 
@@ -26,6 +23,7 @@ struct EngineeringLabsView: View {
                 }
             }
             .listStyle(.grouped)
+            .themedList()
             .navigationTitle("Engineering labs")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -33,83 +31,38 @@ struct EngineeringLabsView: View {
                     Button("Done") { dismiss() }.fontWeight(.semibold)
                 }
             }
-            .fileImporter(
-                isPresented: $showImporter,
-                allowedContentTypes: [.json, .commaSeparatedText, .plainText, .text, .data],
-                allowsMultipleSelection: false
-            ) { result in
-                handleImport(result)
+            .onAppear {
+                // The profile's group is the matched one; start there unless the student has
+                // already picked something else on this screen.
+                if group.isEmpty,
+                   let profile = try? JSONDecoder().decode(StudentProfile.self, from: profileData) {
+                    group = profile.group
+                }
             }
-        }
-    }
-
-    private func handleImport(_ result: Result<[URL], Error>) {
-        lookupMessage = nil
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            do {
-                let count = try EngGroupDirectory.importFile(at: url)
-                directoryAvailable = true
-                importMessage = "Imported \(count) students. Type your surname above to find your group."
-            } catch {
-                importMessage = error.localizedDescription
-            }
-        case .failure(let error):
-            importMessage = error.localizedDescription
         }
     }
 
     @ViewBuilder
     private func content(_ rotation: LabRotation) -> some View {
         List {
+            Group {
             Section("Your group") {
                 Picker("Group", selection: $group) {
                     Text("—").tag("")
                     ForEach(rotation.groupLetters, id: \.self) { Text($0).tag($0) }
                 }
                 .pickerStyle(.segmented)
-
-                if directoryAvailable {
-                    HStack {
-                        TextField("Find by surname", text: $surname)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.words)
-                            .onSubmit(findBySurname)
-                        Button("Find", action: findBySurname)
-                            .buttonStyle(.borderedProminent)
-                            .buttonBorderShape(.roundedRectangle(radius: 6))
-                            .controlSize(.small)
-                    }
-                }
-                if let lookupMessage {
-                    Text(lookupMessage).font(.caption).foregroundStyle(.secondary)
-                }
-
-                Button {
-                    showImporter = true
-                } label: {
-                    Label(directoryAvailable ? "Replace class list…" : "Import class list…",
-                          systemImage: "square.and.arrow.down")
-                }
-                if !directoryAvailable {
-                    Text("Import your class list (a Markdown/CSV table with Surname, Group, … columns) to auto-fill your group by name.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let importMessage {
-                    Text(importMessage).font(.caption).foregroundStyle(.secondary)
-                }
             }
 
             if group.isEmpty {
                 Section {
                     Text("Pick your group to see your personal lab schedule for the semester.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.inkSecondary)
                 }
             } else {
                 let byWeek = Dictionary(grouping: rotation.sessions(forGroup: group), by: \.week)
                 if byWeek.isEmpty {
-                    Section { Text("No labs scheduled for Group \(group).").foregroundStyle(.secondary) }
+                    Section { Text("No labs scheduled for Group \(group).").foregroundStyle(Theme.inkSecondary) }
                 }
                 ForEach(byWeek.keys.sorted(), id: \.self) { week in
                     Section("Week \(week)") {
@@ -119,6 +72,8 @@ struct EngineeringLabsView: View {
                     }
                 }
             }
+            }
+            .themedRows()
         }
     }
 
@@ -126,30 +81,18 @@ struct EngineeringLabsView: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(shortTime(session.start)).font(.subheadline).monospacedDigit()
-                Text(shortTime(session.end)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                Text(shortTime(session.end)).font(.caption).foregroundStyle(Theme.inkSecondary).monospacedDigit()
             }
             .frame(width: 56, alignment: .trailing)
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.activity).font(.headline)
+                Text(session.activity).font(.headline).foregroundStyle(Theme.ink)
                 Text("\(session.module) · \(rotation.name(for: session.module))")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text(prettyDate(session)).font(.caption2).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Theme.inkSecondary)
+                Text(prettyDate(session)).font(.caption2).foregroundStyle(Theme.inkSecondary)
             }
             Spacer(minLength: 0)
         }
         .padding(.vertical, 2)
-    }
-
-    private func findBySurname() {
-        let matches = EngGroupDirectory.lookup(surname: surname)
-        guard let first = matches.first else {
-            lookupMessage = "No match for “\(surname)”. Pick your group manually."
-            return
-        }
-        group = first.group
-        var msg = "\(first.name) → Group \(first.group) (\(first.subgroup)) · workshop \(first.workshop) · drawing \(first.drawing)"
-        if matches.count > 1 { msg += " · \(matches.count) people share this surname — check it's you." }
-        lookupMessage = msg
     }
 
     private func shortTime(_ hhmm: String) -> String {
@@ -169,3 +112,12 @@ struct EngineeringLabsView: View {
         return f.string(from: date)
     }
 }
+
+#if DEBUG
+#Preview("Light") { PreviewScreen.labs.view.previewVariant(.light) }
+#Preview("Dark") { PreviewScreen.labs.view.previewVariant(.dark) }
+#Preview("Largest text") { PreviewScreen.labs.view.previewVariant(.largestText) }
+#Preview("iPhone SE", traits: .fixedLayout(width: 375, height: 667)) {
+    PreviewScreen.labs.view
+}
+#endif

@@ -1,6 +1,7 @@
 import type { SplitRule, RuleProblem } from "./rules";
 import type { RotationSession, Finding } from "@/lib/extraction/rotation";
 import type { Scope } from "./courses";
+import type { RosterRow } from "@/lib/roster/parse";
 
 /// A proposal is whatever the model called a tool to suggest. Discriminated on `kind` so the
 /// panel renders the right thing and `save` calls the right RPC — two proposals that share a
@@ -17,4 +18,8 @@ import type { Scope } from "./courses";
 export type Proposal =
   | { kind: "split"; scope: Scope; rule: SplitRule; problems: RuleProblem[]; source: string }
   | { kind: "rotation"; scope: Scope; courseKey: string; title: string | null;
-      sessions: RotationSession[]; findings: Finding[] };
+      sessions: RotationSession[]; findings: Finding[] }
+  | { kind: "roster"; scope: Scope; courseKey: string; fileName: string;
+      /** How the rows were got: parsed as they stood, or formatted by a model. */
+      readBy: string;
+      rows: RosterRow[]; findings: Finding[] };

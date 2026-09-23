@@ -5,6 +5,7 @@ import { ask, accept, type Turn, type AskResult } from "./actions";
 import type { Proposal } from "@/lib/proposals/types";
 import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
 import { Combobox } from "../combobox";
+import { csvField, ROSTER_HEADER } from "@/lib/roster/parse";
 
 export function Ask() {
   const [programme, setProgramme] = useState(PROGRAMMES[0]?.key ?? "");
@@ -75,7 +76,9 @@ export function Ask() {
       if (result.ok) {
         setSaved(proposal.kind === "split"
           ? `${proposal.rule.moduleKey} ${proposal.rule.activity} saved.`
-          : `${proposal.courseKey} rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`);
+          : proposal.kind === "roster"
+            ? `${proposal.courseKey} class list saved — ${proposal.rows.length} students. Phones re-check on their next launch.`
+            : `${proposal.courseKey} rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`);
         setProposal(null);
       } else {
         setLast({ ok: false, error: result.error });
@@ -86,9 +89,7 @@ export function Ask() {
   }
 
   const blocked = proposal
-    ? proposal.kind === "split"
-      ? proposal.problems.some((p) => p.level === "error")
-      : proposal.findings.some((f) => f.level === "error")
+    ? (proposal.kind === "split" ? proposal.problems : proposal.findings).some((f) => f.level === "error")
     : false;
 
   return (
@@ -135,7 +136,8 @@ export function Ask() {
             <p className="dim">
               Describe a change, or attach a document. For example: &ldquo;In EEG1001,
               surnames A to M have the lecture Tuesday at 10, N to Z Thursday at 2&rdquo; —
-              or drop in a rotation PDF.
+              or attach a document — a lab rotation or a class list, as a PDF, photo,
+              spreadsheet, Word file or CSV.
             </p>
           )}
           {turns.map((t, i) => (
@@ -170,7 +172,7 @@ export function Ask() {
             <input
               ref={fileInput}
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.txt"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx,.csv,.tsv,.txt,.md"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               disabled={busy}
               style={{ flex: 1 }}
@@ -199,7 +201,9 @@ export function Ask() {
           <p className="dim">Nothing proposed yet. Anything it suggests appears here first.</p>
         ) : (
           <>
-            {proposal.kind === "split" ? <SplitPanel p={proposal} /> : <RotationPanel p={proposal} />}
+            {proposal.kind === "split" ? <SplitPanel p={proposal} />
+              : proposal.kind === "roster" ? <RosterPanel p={proposal} />
+              : <RotationPanel p={proposal} />}
             <div className="row" style={{ marginTop: 16 }}>
               <button className="primary" onClick={onAccept} disabled={busy || blocked}>
                 Accept and save
@@ -279,6 +283,71 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
       </div>
     </>
   );
+}
+
+/// Names are shown here, to the administrator, and nowhere else: what is saved is each name
+/// reduced to a key, and what a phone downloads has no names at all.
+function RosterPanel({ p }: { p: Extract<Proposal, { kind: "roster" }> }) {
+  const has = (f: "studentId" | "subgroup" | "day" | "workshop" | "drawing") => p.rows.some((r) => r[f]);
+  return (
+    <>
+      <h2>
+        {p.courseKey || <span className="tag off">no programme</span>}{" "}
+        <span className="dim">class list · {p.rows.length} students · {p.fileName} · {p.readBy}</span>
+      </h2>
+      <div className="row" style={{ margin: "8px 0" }}>
+        <button type="button" onClick={() => downloadCsv(p)}>Download as CSV</button>
+      </div>
+      {p.findings.map((f, i) => (
+        <p key={i} className={f.level === "error" ? "tag off" : f.level === "warn" ? "tag warn" : "tag ok"}>
+          {f.row ? `Row ${f.row}: ` : ""}{f.message}
+        </p>
+      ))}
+      <div style={{ maxHeight: 380, overflowY: "auto", marginTop: 12 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Row</th><th>Surname</th><th>First name</th>
+              {has("studentId") && <th>ID</th>}
+              <th>Group</th>
+              {has("subgroup") && <th>Sub</th>}
+              {has("day") && <th>Day</th>}
+              {has("workshop") && <th>Workshop</th>}
+              {has("drawing") && <th>Drawing</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {p.rows.map((r) => (
+              <tr key={r.row}>
+                <td className="mono dim">{r.row}</td>
+                <td>{r.surname ?? <span className="dim">—</span>}</td>
+                <td>{r.given ?? <span className="dim">—</span>}</td>
+                {has("studentId") && <td className="mono">{r.studentId ?? <span className="dim">—</span>}</td>}
+                <Cell v={r.group} />
+                {has("subgroup") && <td className="mono">{r.subgroup ?? <span className="dim">—</span>}</td>}
+                {has("day") && <td>{r.day ?? <span className="dim">—</span>}</td>}
+                {has("workshop") && <td className="mono">{r.workshop ?? <span className="dim">—</span>}</td>}
+                {has("drawing") && <td className="mono">{r.drawing ?? <span className="dim">—</span>}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+/// The class list exactly as it will be saved, as CSV — the normalised form of whatever
+/// was uploaded. Built in the browser from the rows on the panel, so it is the same data.
+function downloadCsv(p: Extract<Proposal, { kind: "roster" }>) {
+  const lines = [ROSTER_HEADER, ...p.rows.map((r) =>
+    [r.surname, r.given, r.studentId, r.group, r.subgroup, r.day, r.workshop, r.drawing].map(csvField).join(","))];
+  const url = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${p.courseKey || "class-list"}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /// A null is the model saying it could not read the cell, which is a different thing from an

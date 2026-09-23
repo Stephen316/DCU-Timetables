@@ -18,24 +18,32 @@ export type RotationRun = {
   usage: { input?: number; output?: number };
 };
 
+/// A document as text: what the OCR step produced, or the file itself when it already was.
+export type ReadDocument = { text: string; pages: number; ocrModel: string | null };
+
+/// Step one of two. OCR turns pixels into markdown tables; text files skip it — they are
+/// already text. Split out so the console reads a document once and then decides what it
+/// is, rather than paying for OCR again inside whichever extractor it picks.
+export async function readDocument(key: string, file: Attachment): Promise<ReadDocument> {
+  if (file.mimeType.startsWith("text/")) {
+    return { text: Buffer.from(file.base64, "base64").toString("utf8"), pages: 0, ocrModel: null };
+  }
+  const read = await withRetry(() => ocr(key, file));
+  return { text: read.markdown, pages: read.pages, ocrModel: read.model };
+}
+
 export async function extractRotation(opts: {
   key: string; file: Attachment; model?: string;
 }): Promise<RotationRun> {
-  const { key, file, model = ROTATION_MODEL } = opts;
+  return transcribeRotation({ key: opts.key, read: await readDocument(opts.key, opts.file), model: opts.model });
+}
 
-  // Two steps where some models take one: OCR turns pixels into markdown tables, then a
-  // chat model structures the text. Text files skip the first step — they are already text.
-  let text: string;
-  let pages = 0;
-  let ocrModel: string | null = null;
-  if (file.mimeType.startsWith("text/")) {
-    text = Buffer.from(file.base64, "base64").toString("utf8");
-  } else {
-    const read = await withRetry(() => ocr(key, file));
-    text = read.markdown;
-    pages = read.pages;
-    ocrModel = read.model;
-  }
+/// Step two: a chat model structures the text into sessions.
+export async function transcribeRotation(opts: {
+  key: string; read: ReadDocument; model?: string;
+}): Promise<RotationRun> {
+  const { key, model = ROTATION_MODEL } = opts;
+  const { text, pages, ocrModel } = opts.read;
 
   const chat = await withRetry(() => post<{
     model: string;
