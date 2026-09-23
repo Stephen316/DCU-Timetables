@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentProfile } from "@/lib/supabase/server";
+import { pinStatus, isUnlocked } from "@/lib/auth/pin";
+import { LockScreen } from "./lock-screen";
 import { Nav } from "./nav";
 import { signOut } from "./actions";
 
@@ -12,6 +14,15 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   const profile = await currentProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "admin") redirect("/login?denied=1");
+
+  // The PIN gate sits after the session gate, never instead of it. Someone without a
+  // session never reaches this line, so the four digits are only ever a second factor on
+  // a browser that already passed the first.
+  //
+  // No PIN set means no lock. The alternative — defaulting to locked — would lock the
+  // console with a PIN nobody has chosen, and the way out of that is a database edit.
+  const { hasPin } = await pinStatus();
+  if (hasPin && !(await isUnlocked())) return <LockScreen email={profile.email} />;
 
   return (
     <div className="shell">
