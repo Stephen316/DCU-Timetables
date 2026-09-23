@@ -129,7 +129,6 @@ label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px
 .err { color: var(--off); font-size: 13px; margin-top: 8px; }
 
 /* Sign in */
-.signin { width: 100%; max-width: 320px; margin: 15vh auto; padding: 0 16px; }
 
 @media (max-width: 720px) {
   .shell { flex-direction: column; }
@@ -290,3 +289,5 @@ button.send { display: inline-flex; align-items: center; gap: 6px; min-width: 84
 .saved-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
 .saved-head h2 { margin: 0; }
 .saved-head .dim { font-size: 13px; }
+
+.unlock-btn { display: inline-flex; align-items: center; gap: 6px; }

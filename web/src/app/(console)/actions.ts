@@ -44,8 +44,9 @@ export async function findByPI(pi: string) {
   return { profile: match };
 }
 
+/// Ends this browser's session. The code is asked for again on the next visit.
 export async function signOut() {
   const supabase = await supabaseServer();
-  await supabase.auth.signOut();
-  redirect("/login");
+  await supabase.auth.signOut({ scope: "local" });
+  redirect("/unlock");
 }
