@@ -11,16 +11,26 @@ public struct LabSession: Codable, Identifiable, Sendable, Equatable {
     public let start: String       // "14:00"
     public let end: String         // "17:00"
     public let module: String      // "EEG1001"
+    /// The column heading the session sits under in the School's PDF — "Workshop",
+    /// "Drawing" or "Lab". Per session rather than per module, because one module has two:
+    /// EEG1001 runs both the Workshop and the Drawing column.
+    ///
+    /// This used to live on the module, which cannot represent that. The data was bent to
+    /// fit — Drawing was filed under EEG1004 — and 35 of 67 sessions carried the wrong
+    /// module until 23 Sep 2026. See docs/ENGINEERING_LABS.md.
+    public let activity: String
     public let groups: [String]    // ["B"]
 
-    public var id: String { "\(module)-\(date)-\(start)" }
+    /// The activity is part of the identity because the module alone is not: EEG1001 holds
+    /// a Workshop and a Drawing at the same hour on the same afternoon. Without it, the
+    /// corrected rotation has 47 distinct ids for 67 sessions.
+    public var id: String { "\(module)-\(activity)-\(date)-\(start)" }
 }
 
 /// The bundled rotation schedule.
 public struct LabRotation: Codable, Sendable {
     public struct ModuleInfo: Codable, Sendable, Equatable {
         public let name: String
-        public let activity: String   // "Workshop", "Drawing", "Programming lab"
     }
 
     public let title: String
@@ -36,15 +46,16 @@ public struct LabRotation: Codable, Sendable {
     public var moduleCodes: Set<String> { Set(modules.keys) }
 
     /// Sessions a given group attends, in schedule order.
+    ///
+    /// By date, then time. This used to sort by week then time, which put a Friday 09:00
+    /// lab ahead of the same week's Thursday 14:00 drawing class — a week's list read out
+    /// of order for every group with a Friday morning. ISO dates sort correctly as strings.
     public func sessions(forGroup group: String) -> [LabSession] {
         sessions
             .filter { $0.groups.contains(group) }
-            .sorted { ($0.week, $0.start) < ($1.week, $1.start) }
+            .sorted { ($0.date, $0.start) < ($1.date, $1.start) }
     }
 
-    public func activity(for moduleCode: String) -> String {
-        modules[moduleCode]?.activity ?? moduleCode
-    }
     public func name(for moduleCode: String) -> String {
         modules[moduleCode]?.name ?? moduleCode
     }

@@ -60,7 +60,7 @@ public struct ProfileTimetableSource: TimetableSource {
               let end = localDate(session.date, session.end)
         else { return nil }
 
-        let activity = rotation.activity(for: session.module)
+        let activity = session.activity
         let room: [String]
         let lower = activity.lowercased()
         if lower.contains("workshop") {

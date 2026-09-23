@@ -1,7 +1,10 @@
 # Engineering lab rotation
 
-Year-1 Engineering runs EEG1001 (Workshop), EEG1004 (Drawing) and EEG1002 (Programming)
-as a **group rotation** — groups A–E cycle through the labs week by week. The public
+Year-1 Engineering runs EEG1001 Project & Technical Drawing (two columns: **Workshop** and
+**Drawing**), EEG1004 Introduction to Electronics (**Lab**, SG15 & SG16) and EEG1002
+Programming (**Lab**, S210/S143/S144/SG15) as a **group rotation** — groups cycle through
+them week by week, and the two labs alternate fortnightly (EEG1004 in odd weeks 3–11,
+EEG1002 in even weeks 2–12). The public
 timetable API only shows generic lab slots (`P1/P2/P3`) and does **not** expose which
 group is where in which week. That detail lives only in the School's published schedule,
 so the app carries it as bundled data.
@@ -35,12 +38,35 @@ display). Getting these mixed up shifts labs by an hour — see `ProfileTimetabl
 ## Data — two files, two very different privacy levels
 
 ### 1. Rotation (bundled, no personal data)
-`ios/DCUTimetable/Resources/EngineeringLabRotation.json` — group letters × week × module.
-Committed and shipped. Regenerate from the School's rotation PDF:
+`ios/DCUTimetable/Resources/EngineeringLabRotation.json` — group letters × week × module ×
+activity. Committed and shipped. Regenerate from the School's rotation PDF:
 
 ```
-sessions[] = { week, date, day, start, end, module, groups:[letters] }
+sessions[] = { week, date, day, start, end, module, activity, groups:[letters] }
 ```
+
+`activity` is the column heading the cell sits under — `Workshop`, `Drawing` or `Lab` — and
+belongs to the **session**, not the module, because EEG1001 has two. Session ids are
+`module-activity-date-start`: EEG1001 holds a Workshop and a Drawing at the same hour on the
+same afternoon, so without the activity the rotation has 47 distinct ids for 67 sessions.
+
+⚠️ **35 of the 67 sessions carried the wrong module until 23 Sep 2026.** The model stored one
+activity per module, which cannot represent EEG1001's two columns, so the data was bent to
+fit: every Drawing session was filed under EEG1004, the SG15 & SG16 lab under EEG1002, and
+group E's Wednesday workshops under EEG1002. Introduction to Electronics had no lab at all.
+The app labelled those sessions with the wrong module and showed group E no room for its
+workshops — rooms are chosen from the activity.
+
+It was described as hand-verified, and every validator passed it. It was found by the
+extraction harness: Mistral's OCR read the PDF's header correctly and disagreed with the
+file, and the file lost when both were checked against the rendered pages by eye.
+`BundledLabRotationTests` now pins which module owns which column, so a future hand edit
+that shifts a column fails a test rather than reaching a phone.
+
+**Group E.** The 2026/27 PDF prints a group E (in `ABE`, `BE` and the Wednesday workshops),
+but the cohort is four groups of ~52 — there are no E students. The file keeps E because it
+is a transcription of the PDF, and the extraction harness has to be able to compare against
+it; for A–D students `ABE` simply means A and B attend.
 
 ### 2. Surname → group (LOCAL ONLY — never committed, never shipped)
 The class-allocation list holds 207 real students' names with their group, subgroup, day
@@ -73,6 +99,8 @@ Format the app expects in `Documents/eng_groups.json`:
 ## Limitations / maintenance
 
 - **Year-specific.** The 2026/27 rotation is hard-coded; update the JSON each academic year.
+- **The manual picker offers group E**, because it lists every letter the rotation uses.
+  No student is in E this year; picking it shows a schedule that belongs to nobody.
 - **Bespoke to these 3 modules** and the School of Engineering's format.
 - The rotation's group letters (A–E) are finer than the timetable's `P1/P2/P3`; this feature
   is the only place that finer schedule is represented.

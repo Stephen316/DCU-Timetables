@@ -130,7 +130,7 @@ struct EngineeringLabsView: View {
             }
             .frame(width: 56, alignment: .trailing)
             VStack(alignment: .leading, spacing: 2) {
-                Text(rotation.activity(for: session.module)).font(.headline)
+                Text(session.activity).font(.headline)
                 Text("\(session.module) · \(rotation.name(for: session.module))")
                     .font(.caption).foregroundStyle(.secondary)
                 Text(prettyDate(session)).font(.caption2).foregroundStyle(.secondary)
