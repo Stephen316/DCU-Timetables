@@ -73,6 +73,12 @@ export const ROTATION_TOOL = {
             start: { type: Type.STRING, enum: [...ENGINEERING_ROTATION.starts], nullable: true },
             end: { type: Type.STRING, enum: [...ENGINEERING_ROTATION.ends], nullable: true },
             module: { type: Type.STRING, enum: [...ENGINEERING_ROTATION.modules], nullable: true },
+            activity: {
+              type: Type.STRING,
+              enum: [...ENGINEERING_ROTATION.activities],
+              nullable: true,
+              description: "The column heading the session sits under.",
+            },
             groups: {
               type: Type.ARRAY,
               nullable: true,
@@ -80,7 +86,7 @@ export const ROTATION_TOOL = {
             },
             room: { type: Type.STRING, nullable: true },
           },
-          required: ["week", "date", "day", "start", "end", "module", "groups", "room"],
+          required: ["week", "date", "day", "start", "end", "module", "activity", "groups", "room"],
         },
       },
     },

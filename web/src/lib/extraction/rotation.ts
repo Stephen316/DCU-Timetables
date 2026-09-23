@@ -5,7 +5,12 @@
 import { Type } from "@google/genai";
 
 /// A lab rotation session, matching `EngineeringLabRotation.json` in the app so an
-/// extraction can be diffed against the 67 sessions already verified by hand.
+/// extraction can be diffed against its 67 sessions.
+///
+/// That file is only ground truth because it was checked against the PDF itself, by eye,
+/// on 23 Sep 2026. Before then it was "hand-verified" and wrong in 35 of 67 sessions —
+/// see docs/ENGINEERING_LABS.md. A reference is as good as the last time someone
+/// compared it with the source.
 export type RotationSession = {
   week: number | null;
   date: string | null;
@@ -13,6 +18,8 @@ export type RotationSession = {
   start: string | null;
   end: string | null;
   module: string | null;
+  /// The column heading the session sits under: "Workshop", "Drawing" or "Lab".
+  activity: string | null;
   groups: string[] | null;
 };
 
@@ -33,6 +40,15 @@ export const ENGINEERING_ROTATION = {
   starts: ["09:00", "14:00"],
   ends: ["12:00", "17:00"],
   groups: ["A", "B", "C", "D", "E"],
+  activities: ["Workshop", "Drawing", "Lab"],
+  /// Which activity runs under which module heading, read off the PDF's two header rows.
+  /// EEG1001 is one merged heading over two columns; each lab has a heading of its own.
+  columns: [
+    { module: "EEG1001", activity: "Workshop" },
+    { module: "EEG1001", activity: "Drawing" },
+    { module: "EEG1004", activity: "Lab" },
+    { module: "EEG1002", activity: "Lab" },
+  ],
   weeks: { min: 2, max: 12 },
 } as const;
 
@@ -58,6 +74,12 @@ export const rotationSchema = {
           start: { type: Type.STRING, enum: [...ENGINEERING_ROTATION.starts], nullable: true },
           end: { type: Type.STRING, enum: [...ENGINEERING_ROTATION.ends], nullable: true },
           module: { type: Type.STRING, enum: [...ENGINEERING_ROTATION.modules], nullable: true },
+          activity: {
+            type: Type.STRING,
+            enum: [...ENGINEERING_ROTATION.activities],
+            nullable: true,
+            description: "The column heading the session sits under.",
+          },
           groups: {
             type: Type.ARRAY,
             nullable: true,
@@ -65,7 +87,7 @@ export const rotationSchema = {
             description: "Every group letter attending this session.",
           },
         },
-        required: ["week", "date", "day", "start", "end", "module", "groups"],
+        required: ["week", "date", "day", "start", "end", "module", "activity", "groups"],
       },
     },
   },
@@ -82,7 +104,7 @@ export type Finding = {
 ///
 /// These are the ones that catch grid misalignment — a cell read correctly and attributed to
 /// the wrong row produces perfectly valid values in every field, so only a relationship
-/// between rows reveals it. Every check here passes on the hand-verified rotation file.
+/// between rows reveals it. Every check here passes on the corrected rotation file.
 export function validateRotation(sessions: RotationSession[]): Finding[] {
   const findings: Finding[] = [];
   if (sessions.length === 0) return [{ level: "error", message: "No sessions extracted." }];
@@ -162,6 +184,55 @@ export function validateRotation(sessions: RotationSession[]): Finding[] {
       level: "error",
       message: `Week numbers drift against their dates (offsets ${[...offsets].sort().join(", ")}). Expected one.`,
     });
+  }
+
+  // A module and an activity that are each legal can still be a column that does not
+  // exist. "EEG1004 Drawing" is exactly the mistake the bundled file carried for weeks.
+  const columnKey = (m: string, a: string) => `${m} ${a}`;
+  const columns = new Set(ENGINEERING_ROTATION.columns.map((c) => columnKey(c.module, c.activity)));
+  sessions.forEach((s, i) => {
+    if (s.module && s.activity && !columns.has(columnKey(s.module, s.activity))) {
+      findings.push({
+        level: "error",
+        row: i + 1,
+        message: `${s.module} has no ${s.activity} column in this rotation.`,
+      });
+    }
+  });
+
+  // Every check above looks across rows; none of them notices rows that are not there. A
+  // rotation with a whole column missing is perfectly consistent with itself. Mistral Small
+  // returned the two lab columns and skipped Workshop and Drawing — 22 of 67 sessions — and
+  // passed all of them. So every column must appear, and every group must meet every one.
+  //
+  // "Every group" means every group the document actually uses, not every letter the
+  // vocabulary allows. The 2026/27 PDF prints a group E that has no students — the cohort
+  // is four groups of ~52 — and a reissued PDF without it would be correct. Demanding the
+  // vocabulary's E would block exactly that document.
+  const present = new Set(sessions.flatMap((s) => s.groups ?? []));
+  const attends = new Map<string, Set<string>>();
+  for (const s of sessions) {
+    if (!s.module || !s.activity) continue;
+    const key = columnKey(s.module, s.activity);
+    for (const g of s.groups ?? []) attends.set(key, (attends.get(key) ?? new Set()).add(g));
+  }
+  for (const c of ENGINEERING_ROTATION.columns) {
+    const key = columnKey(c.module, c.activity);
+    const groups = attends.get(key);
+    if (!groups) {
+      findings.push({
+        level: "error",
+        message: `No ${key} sessions at all — a whole column may have been skipped.`,
+      });
+      continue;
+    }
+    const absent = [...present].sort().filter((g) => !groups.has(g));
+    if (absent.length) {
+      findings.push({
+        level: "error",
+        message: `Group ${absent.join(", ")} never attend ${key}.`,
+      });
+    }
   }
 
   if (!findings.some((f) => f.level === "error")) {

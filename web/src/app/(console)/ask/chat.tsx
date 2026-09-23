@@ -49,6 +49,23 @@ export function Ask() {
     }
   }
 
+  /// Starts over without leaving the page. Every turn resends the whole history, so this
+  /// trims cost slightly — but the real reason is that turns about one module are still in
+  /// front of the model when you start asking about another.
+  ///
+  /// An unsaved proposal is the one thing worth guarding. A rotation on the panel cost a
+  /// request from a daily budget of twenty, and a stray click should not throw it away.
+  function reset() {
+    if (proposal && !window.confirm("Discard the proposal on the panel? It has not been saved.")) return;
+    setTurns([]);
+    setProposal(null);
+    setLast(null);
+    setSaved(null);
+    setDraft("");
+    setFile(null);
+    if (fileInput.current) fileInput.current.value = "";
+  }
+
   async function onAccept() {
     if (!proposal) return;
     setBusy(true);
@@ -156,6 +173,13 @@ export function Ask() {
               disabled={busy}
               style={{ flex: 1 }}
             />
+            <button
+              type="button"
+              onClick={reset}
+              disabled={busy || (turns.length === 0 && !proposal && !last)}
+            >
+              New conversation
+            </button>
           </div>
         </form>
 
@@ -234,14 +258,14 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
       <div style={{ maxHeight: 380, overflowY: "auto", marginTop: 12 }}>
         <table>
           <thead>
-            <tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Module</th><th>Groups</th></tr>
+            <tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Module</th><th>Activity</th><th>Groups</th></tr>
           </thead>
           <tbody>
             {p.sessions.map((s, i) => (
               <tr key={i}>
                 <Cell v={s.week} /><Cell v={s.date} mono /><Cell v={s.day} />
                 <Cell v={s.start && s.end ? `${s.start}–${s.end}` : null} mono />
-                <Cell v={s.module} mono /><Cell v={s.groups?.join(" ")} />
+                <Cell v={s.module} mono /><Cell v={s.activity} /><Cell v={s.groups?.join(" ")} />
               </tr>
             ))}
           </tbody>
