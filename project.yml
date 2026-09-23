@@ -42,6 +42,7 @@ targets:
         # multitasking is rejected at upload, which requires every orientation.
         INFOPLIST_KEY_UIRequiresFullScreen: YES
         INFOPLIST_KEY_CFBundleDisplayName: "DCU Timetable"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_TESTABILITY: YES
         CODE_SIGN_ENTITLEMENTS: ios/DCUTimetable.entitlements
 
