@@ -6,7 +6,7 @@ import { classify } from "@/lib/mistral/api";
 import { extractRotation } from "@/lib/mistral/rotation";
 import { interpretSplit } from "@/lib/mistral/split";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
-import { checkScope, programmeFor, type Scope } from "@/lib/proposals/courses";
+import { checkScope, moduleFor, programmeFor, type Scope } from "@/lib/proposals/courses";
 import type { Proposal } from "@/lib/proposals/types";
 import { validateRotation } from "@/lib/extraction/rotation";
 
@@ -111,10 +111,12 @@ export async function ask(form: FormData): Promise<AskResult> {
     // Stating the selection removes the clarifying round-trip — the first reply to a
     // well-formed split used to be "which module is this for?".
     const programme = programmeFor(scope.programme);
+    const title = moduleFor(scope.module)?.title;
     const scopeLine = programme && scope.module
       ? `The administrator has selected ${programme.name} (${programme.key}), module ` +
-        `${scope.module}. This request is for that module. Do not ask which module or ` +
-        `course it is for. If the request plainly describes a different module, say so.`
+        `${scope.module}${title ? ` (${title})` : ""}. This request is for that module. Do ` +
+        `not ask which module or course it is for. If the request plainly describes a ` +
+        `different module, say so.`
       : "";
 
     const out = await interpretSplit({

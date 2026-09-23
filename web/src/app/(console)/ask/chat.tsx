@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ask, accept, type Turn, type AskResult } from "./actions";
 import type { Proposal } from "@/lib/proposals/types";
 import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
+import { Combobox } from "../combobox";
 
 export function Ask() {
   const [programme, setProgramme] = useState(PROGRAMMES[0]?.key ?? "");
@@ -93,39 +94,40 @@ export function Ask() {
   return (
     <div className="ask">
       <div className="ask-chat">
-        <div className="row" style={{ marginBottom: 12 }}>
-          <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-            <label htmlFor="programme">Programme</label>
-            <select
-              id="programme"
-              value={programme}
-              disabled={busy}
-              onChange={(e) => {
-                setProgramme(e.target.value);
-                // A module from the old programme is not a module of the new one. Clearing
-                // beats carrying a selection that the scope check would reject later.
-                if (!modulesFor(e.target.value).includes(moduleKey)) setModuleKey("");
-              }}
-            >
-              {PROGRAMMES.map((p) => (
-                <option key={p.key} value={p.key}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-            <label htmlFor="module">Module</label>
-            <select
-              id="module"
-              value={moduleKey}
-              disabled={busy}
-              onChange={(e) => setModuleKey(e.target.value)}
-            >
-              <option value="">Choose a module…</option>
-              {modulesFor(programme).map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
+        <div className="row" style={{ marginBottom: 12, alignItems: "flex-start" }}>
+          <Combobox
+            id="programme"
+            label="Programme"
+            placeholder="Search programmes…"
+            value={programme}
+            disabled={busy}
+            options={PROGRAMMES.map((p) => ({
+              value: p.key,
+              label: p.name,
+              hint: p.covers.map((c) => c.code).join(", "),
+              keywords: p.covers.map((c) => c.name).join(" "),
+            }))}
+            onChange={(key) => {
+              setProgramme(key);
+              // A module from the old programme is not a module of the new one. Clearing
+              // beats carrying a selection that the scope check would reject later.
+              if (!modulesFor(key).some((m) => m.code === moduleKey)) setModuleKey("");
+            }}
+          />
+          <Combobox
+            id="module"
+            label="Module"
+            placeholder="Search by code or name…"
+            value={moduleKey}
+            disabled={busy}
+            options={modulesFor(programme).map((m) => ({
+              value: m.code,
+              label: m.title,
+              hint: `Semester ${m.semester}`,
+              keywords: m.aka,
+            }))}
+            onChange={setModuleKey}
+          />
         </div>
 
         <div className="chat">

@@ -179,3 +179,46 @@ label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px
   text-align: center;
   font-family: var(--mono, ui-monospace, monospace);
 }
+
+/* Searchable select. The panel sits over the chat rather than pushing it down, so opening
+   it never moves the thing you were about to click. */
+.combo { position: relative; }
+.row > .combo { flex: 1; margin-bottom: 0; min-width: 0; }
+.combo input { text-overflow: ellipsis; }
+.combo-list {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  /* At least as wide as the box, and wider when a title needs it: a module list squeezed
+     to the width of its input wrapped every title one word per line. */
+  min-width: 100%;
+  width: max-content;
+  max-width: min(560px, 92vw);
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+/* Code in a fixed column so titles line up; the hint on its own line under the title, so the
+   two can never collide however narrow the panel gets. */
+.combo-opt {
+  display: grid;
+  grid-template-columns: 7ch 1fr;
+  column-gap: 10px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.combo-opt.active { background: var(--raised); }
+.combo-opt[aria-selected="true"] .mono { color: var(--ok); }
+.combo-label { min-width: 0; }
+.combo-hint { grid-column: 2; color: var(--dim); font-size: 12px; }
+.combo-empty { padding: 6px 8px; color: var(--dim); font-size: 13px; }

@@ -3,26 +3,56 @@
 // No `server-only`: pure data and pure functions, so the same check runs when a proposal is
 // made and again when it is saved.
 //
-// ⚠️ This list is not authoritative. It was assembled from the module codes that appear in
-// this repository, and the grouping into a programme is an assumption — nothing in the app
-// or the database records which modules belong to which programme. Correct it here; this is
-// the only place a module code is written down.
+// Sourced from DCU's public timetable API (the one the app reads) on 23 Sep 2026, not from
+// this repository. Six DCU programmes share a common first year, "(Engineering-1)", and the
+// modules here are exactly the EEG modules DCU lists against all six of them. The first
+// version of this list was assembled by grepping the repo for codes: it missed EEG1005 and
+// EEG1008, and picked up EEG1003 only because a comment used it as an example.
 
 import type { RuleProblem } from "./rules";
+
+export type Module = {
+  code: string;
+  /// DCU's title, without the "(Semester …)" suffix it carries in the API.
+  title: string;
+  semester: "1" | "2" | "1 & 2";
+  /// Search-only words, for where people's words and DCU's differ. "maths" is not a
+  /// substring of "Mathematics", and "2" is not in "II" — typing either found nothing.
+  aka?: string;
+};
 
 export type Programme = {
   key: string;
   name: string;
-  modules: readonly string[];
+  /// The DCU programme codes this entry stands for. Searchable, so an administrator who
+  /// thinks of it as "ECE1" or "Mechatronic" still finds it.
+  covers: readonly { code: string; name: string }[];
+  modules: readonly Module[];
 };
 
 export const PROGRAMMES: readonly Programme[] = [
   {
     key: "EEG1",
     name: "Engineering — Year 1",
+    covers: [
+      { code: "BMED1", name: "BEng Biomedical Engineering" },
+      { code: "CAM1", name: "BEng Mechanical & Manufacturing Engineering" },
+      { code: "CE1", name: "Common Entry Engineering" },
+      { code: "ECE1", name: "BEng Electronic & Computer Engineering" },
+      { code: "ME1", name: "BEng Mechatronic Engineering" },
+      { code: "SSE1", name: "BEng Mechanical & Sustainability Engineering" },
+    ],
     modules: [
-      "EEG1000", "EEG1001", "EEG1002", "EEG1003",
-      "EEG1004", "EEG1006", "EEG1007", "EEG1017",
+      { code: "EEG1000", title: "Fundamentals of Professional Development", semester: "1 & 2" },
+      { code: "EEG1001", title: "Project & Technical Drawing", semester: "1 & 2" },
+      { code: "EEG1002", title: "Programming & Software Development for Engineers", semester: "1 & 2" },
+      { code: "EEG1003", title: "Engineering Mechanics-Statics", semester: "2" },
+      { code: "EEG1004", title: "Introduction to Electronics", semester: "1 & 2" },
+      { code: "EEG1005", title: "Numerical Problem Solving for Engineers", semester: "2" },
+      { code: "EEG1006", title: "Materials Engineering", semester: "1" },
+      { code: "EEG1007", title: "Engineering Mathematics I", semester: "1", aka: "maths 1" },
+      { code: "EEG1008", title: "Engineering Mathematics II", semester: "2", aka: "maths 2" },
+      { code: "EEG1017", title: "Basic Sciences for Engineers (Physical, Chemical, Life)", semester: "1" },
     ],
   },
 ];
@@ -31,8 +61,12 @@ export function programmeFor(key: string): Programme | undefined {
   return PROGRAMMES.find((p) => p.key === key);
 }
 
-export function modulesFor(key: string): readonly string[] {
+export function modulesFor(key: string): readonly Module[] {
   return programmeFor(key)?.modules ?? [];
+}
+
+export function moduleFor(code: string): Module | undefined {
+  return PROGRAMMES.flatMap((p) => p.modules).find((m) => m.code === code);
 }
 
 /// What the administrator picked in the two dropdowns.
@@ -65,7 +99,7 @@ export function checkScope(
   if (!scope.module) {
     return [{ level: "error", message: "No module selected." }];
   }
-  if (!programme.modules.some((m) => norm(m) === norm(scope.module))) {
+  if (!programme.modules.some((m) => norm(m.code) === norm(scope.module))) {
     problems.push({
       level: "error",
       message: `${scope.module} is not a module of ${programme.name}.`,
