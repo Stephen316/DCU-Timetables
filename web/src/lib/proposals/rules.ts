@@ -138,3 +138,47 @@ export function bandFor(surname: string, rule: SplitRule): SplitRange | null {
   if (!first || !LETTERS.includes(first)) return null;
   return rule.ranges.find((r) => first >= r.from && first <= r.to) ?? null;
 }
+
+/// Every hour, room and day in a split must be traceable to something the administrator
+/// actually wrote.
+///
+/// The system prompt already says "if no end time is given, ask — do not assume an hour".
+/// On 23 Sep 2026, given "A-M on Tuesday at 10, N-Z on Thursday at 2", Mistral Small
+/// proposed 10:00–11:00 and 14:00–15:00 anyway, and every other check passed it. An
+/// instruction the model can ignore is not a safeguard, so this is the safeguard: a value
+/// that appears nowhere in the conversation was invented, and an invented end time reaches
+/// a student's phone looking exactly like a real one.
+///
+/// Hours are matched as whole numbers in either clock — 14:00 is satisfied by "14" or "2" —
+/// and never inside a longer number, so the 1 in "EEG1001" is not an 11. The cost is a
+/// false alarm when someone confirms with "yes" to a question the model asked, which the
+/// source avoids by including the model's own turns: a time it asked about is on the record.
+export function checkProvenance(rule: SplitRule, source: string): RuleProblem[] {
+  const text = source.toLowerCase();
+  const problems: RuleProblem[] = [];
+  const mentions = (n: number) => new RegExp(`(?<!\\d)${n}(?!\\d)`).test(text);
+  const hourSaid = (hhmm: string) => {
+    const h = Number(hhmm.split(":")[0]);
+    return Number.isFinite(h) && (mentions(h) || mentions(h % 12 === 0 ? 12 : h % 12));
+  };
+
+  for (const r of rule.ranges) {
+    const band = `${r.from}-${r.to}`;
+    const unsaid: string[] = [];
+    if (r.start && !hourSaid(r.start)) unsaid.push(`start ${r.start}`);
+    if (r.end && !hourSaid(r.end)) unsaid.push(`end ${r.end}`);
+    if (r.day && !text.includes(r.day.toLowerCase().slice(0, 3))) unsaid.push(`day ${r.day}`);
+    if (r.room && !text.replace(/\s+/g, "").includes(r.room.toLowerCase().replace(/\s+/g, ""))) {
+      unsaid.push(`room ${r.room}`);
+    }
+    if (unsaid.length) {
+      problems.push({
+        level: "error",
+        message:
+          `${band}: ${unsaid.join(", ")} ${unsaid.length > 1 ? "appear" : "appears"} nowhere in ` +
+          `what you wrote, so it was assumed. Say it explicitly if it is right.`,
+      });
+    }
+  }
+  return problems;
+}

@@ -74,7 +74,7 @@ export function Ask() {
       if (result.ok) {
         setSaved(proposal.kind === "split"
           ? `${proposal.rule.moduleKey} ${proposal.rule.activity} saved.`
-          : `${proposal.courseKey} rotation saved — ${proposal.sessions.length} sessions.`);
+          : `${proposal.courseKey} rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`);
         setProposal(null);
       } else {
         setLast({ ok: false, error: result.error });
@@ -248,7 +248,11 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
     <>
       <h2>
         {p.courseKey || <span className="tag off">no course</span>}{" "}
-        <span className="dim">{p.sessions.length} sessions</span>
+        <span className="dim">
+          {p.sessions.filter((s) => s.groups?.length).length} sessions
+          {p.sessions.some((s) => !s.groups?.length) &&
+            ` · ${p.sessions.filter((s) => !s.groups?.length).length} with no groups, not saved`}
+        </span>
       </h2>
       {p.findings.map((f, i) => (
         <p key={i} className={f.level === "error" ? "tag off" : f.level === "warn" ? "tag warn" : "tag ok"}>

@@ -10,7 +10,11 @@ import type { Scope } from "./courses";
 /// travels with the proposal rather than being read again at save time, because the
 /// dropdowns can move while a proposal sits on the panel: re-reading them would save the
 /// thing you are looking at under a key you changed your mind about.
+///
+/// `source` is the conversation the split was read from — the administrator's words and
+/// the model's questions. It travels for the same reason: `accept` re-runs the provenance
+/// check against exactly what was said, not against whatever is typed next.
 export type Proposal =
-  | { kind: "split"; scope: Scope; rule: SplitRule; problems: RuleProblem[] }
+  | { kind: "split"; scope: Scope; rule: SplitRule; problems: RuleProblem[]; source: string }
   | { kind: "rotation"; scope: Scope; courseKey: string; title: string | null;
       sessions: RotationSession[]; findings: Finding[] };

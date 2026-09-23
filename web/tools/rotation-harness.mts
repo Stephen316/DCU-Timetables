@@ -23,27 +23,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GoogleGenAI } from "@google/genai";
 import { rotationSchema, validateRotation, type RotationSession } from "../src/lib/extraction/rotation.ts";
-import { toJsonSchema } from "./json-schema.mts";
+import { TRANSCRIBE_SYSTEM, TRANSCRIBE_INSTRUCTION } from "../src/lib/extraction/transcribe.ts";
+import { extractRotation } from "../src/lib/mistral/rotation.ts";
 
 // Resolved from this file rather than from the working directory, so it behaves the same
 // however it is invoked.
 const web = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-const SYSTEM_INSTRUCTION = `
-You transcribe timetable tables. You do not interpret them.
-
-Rules, in order of importance:
-
-1. If a cell is not clearly legible, emit null for that field. Never infer a value from
-   surrounding rows, from what would be consistent, or from what a timetable usually looks
-   like. A null is a correct answer; a plausible guess is not.
-2. Emit one object per scheduled session actually printed in the document. Do not
-   interpolate sessions that "should" be there, and do not merge two rows that look similar.
-3. Do not correct apparent mistakes in the source. If the document says a room that seems
-   wrong, transcribe what it says.
-4. Use only the values permitted by the schema. If the document shows something outside
-   them, emit null rather than the closest match.
-`.trim();
 
 const pdfPath = process.argv[2];
 if (!pdfPath) throw new Error('usage: npx tsx tools/rotation-harness.mts "<path to pdf>"');
@@ -52,18 +37,6 @@ const truth: RotationSession[] = JSON.parse(readFileSync(truthPath, "utf8")).ses
 
 const env = readFileSync(join(web, ".env.local"), "utf8");
 const secret = (name: string) => env.match(new RegExp(`^${name}=(.+)$`, "m"))?.[1].trim();
-
-// The same words to every provider. A different instruction per model would make the
-// comparison partly a comparison of prompts.
-//
-// This said "every lab session" until 23 Sep 2026. Only two of the four columns are
-// headed "Lab", and Mistral Small took the word literally: it transcribed those two
-// perfectly and skipped Workshop and Drawing. The instruction was measuring obedience to
-// an ambiguity, not reading.
-const INSTRUCTION =
-  "Transcribe every session in this rotation table, from every column — one object per " +
-  "filled cell. `activity` is the heading the cell sits under. Where a cell lists several " +
-  "groups, put all of them in `groups`.";
 
 type Run = { sessions: RotationSession[]; model: string; usage: string };
 
@@ -77,14 +50,14 @@ async function gemini(pdf: Buffer): Promise<Run> {
       role: "user",
       parts: [
         { inlineData: { mimeType: "application/pdf", data: pdf.toString("base64") } },
-        { text: INSTRUCTION },
+        { text: TRANSCRIBE_INSTRUCTION },
       ],
     }],
     config: {
       temperature: 0,
       candidateCount: 1,
       maxOutputTokens: 8192,
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: TRANSCRIBE_SYSTEM,
       responseMimeType: "application/json",
       responseSchema: rotationSchema,
     },
@@ -96,9 +69,8 @@ async function gemini(pdf: Buffer): Promise<Run> {
   };
 }
 
-/// Mistral reads a PDF in two steps where Gemini takes one: an OCR model turns the pages
-/// into markdown, then a chat model structures that text. Both steps are reported, because
-/// a cost comparison has to include the step Gemini does not need.
+/// The console's own extraction, imported rather than reimplemented: this is the point of
+/// the harness. A local copy here would score the copy.
 async function mistral(pdf: Buffer): Promise<Run> {
   const key = secret("MISTRAL_API_KEY");
   if (!key) {
@@ -107,45 +79,18 @@ async function mistral(pdf: Buffer): Promise<Run> {
       "(API keys), then add the line MISTRAL_API_KEY=... to web/.env.local yourself.",
     );
   }
-  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${key}` };
-
-  const ocr = await post("https://api.mistral.ai/v1/ocr", headers, {
-    model: "mistral-ocr-latest",
-    document: { type: "document_url", document_url: `data:application/pdf;base64,${pdf.toString("base64")}` },
+  const run = await extractRotation({
+    key,
+    model: process.env.MODEL,
+    file: { mimeType: "application/pdf", base64: pdf.toString("base64") },
   });
-  const markdown = (ocr.pages ?? []).map((p: { markdown: string }) => p.markdown).join("\n\n");
-
-  const chat = await post("https://api.mistral.ai/v1/chat/completions", headers, {
-    model: process.env.MODEL ?? "mistral-small-latest",
-    temperature: 0,
-    max_tokens: 8192,
-    messages: [
-      { role: "system", content: SYSTEM_INSTRUCTION },
-      { role: "user", content: `${INSTRUCTION}\n\n${markdown}` },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: { name: "rotation", schema: toJsonSchema(rotationSchema), strict: true },
-    },
-  });
-
   return {
-    sessions: JSON.parse(chat.choices?.[0]?.message?.content ?? "{}").sessions ?? [],
+    sessions: run.sessions,
     // `-latest` is an alias. The response names what actually answered, which is the only
     // version worth recording next to a score.
-    model: `${ocr.model} + ${chat.model}`,
-    usage: `${ocr.usage_info?.pages_processed ?? "?"} OCR page(s) + ` +
-      `${chat.usage?.prompt_tokens} in / ${chat.usage?.completion_tokens} out`,
+    model: run.model,
+    usage: `${run.pages} OCR page(s) + ${run.usage.input} in / ${run.usage.output} out`,
   };
-}
-
-async function post(url: string, headers: Record<string, string>, body: unknown) {
-  const r = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
-  const text = await r.text();
-  // Reported verbatim. On a first run against a new API, the error body is the most useful
-  // thing on the screen.
-  if (!r.ok) throw new Error(`${url} -> HTTP ${r.status}\n${text.slice(0, 600)}`);
-  return JSON.parse(text);
 }
 
 const providers: Record<string, (pdf: Buffer) => Promise<Run>> = { gemini, mistral };
@@ -155,12 +100,15 @@ if (!extract) throw new Error(`PROVIDER must be "gemini" or "mistral", not "${pr
 
 const started = Date.now();
 const run = await extract(readFileSync(pdfPath));
-const got = run.sessions;
+// Scored on what the console would save. accept() drops rows with no groups — blank
+// cells, or ones the reader could not read — so those never reach a student either way.
+const got = run.sessions.filter((s) => s.groups?.length);
+const blank = run.sessions.length - got.length;
 const secs = ((Date.now() - started) / 1000).toFixed(1);
 
 console.log(`\nmodel   ${run.model}   ${secs}s   ${run.usage}`);
 console.log(`truth   ${truth.length} sessions`);
-console.log(`got     ${got.length} sessions\n`);
+console.log(`got     ${got.length} sessions${blank ? `  (+${blank} with no groups, not saved)` : ""}\n`);
 
 console.log("--- validators (blind to ground truth) ---");
 for (const f of validateRotation(got)) {

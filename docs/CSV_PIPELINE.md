@@ -378,10 +378,16 @@ Three caveats:
    checks it would have failed: a module/activity pair must be a real column, and every
    column must be attended by every group the document uses.
 
-   *Measured, 23 Sep 2026:* Mistral OCR + `mistral-small-latest`, **67/67 exact, every field
-   67/67**, identical across two runs at temperature 0. It also emits 14 rows for blank cells
-   with no groups, which the validators flag as warnings. Gemini's run is pending the
-   free-tier quota reset.
+   *Measured, 23 Sep 2026:* Mistral OCR + `mistral-small-latest` scored **67/67 exact, every
+   field correct, in 8 of 9 runs**. The ninth, from byte-identical input, scored 56/67 — the
+   model is not fully deterministic at temperature 0, whatever two matching runs suggest —
+   and failed the group-balance check, so it could not have been saved. The console reads
+   again when the checks fail. It also emits 14 rows with no groups for blank cells; those
+   are listed in one warning and not saved. Gemini's run is pending the free-tier quota
+   reset.
+
+   **The console now extracts with Mistral**, through the same `extractRotation` the harness
+   imports — so the harness scores the console, not a copy of it.
 3. **Extraction script** (`tools/`): normalise → Gemini + PaddleOCR → diff → §4.2 validators
    → CSV. Standalone, testable against one real document before any of it touches the
    console.

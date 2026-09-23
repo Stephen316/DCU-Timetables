@@ -111,14 +111,31 @@ export function validateRotation(sessions: RotationSession[]): Finding[] {
 
   // Illegible cells. Not an error — this is the model correctly declining to guess — but
   // every one needs a human before it can go live.
+  //
+  // Rows whose only gap is `groups` are gathered into one finding. Mistral emits one for
+  // every blank cell in the document — 14 on the engineering rotation — with groups null,
+  // which is also how it marks an illegible cell, so they cannot be told apart and dropped.
+  // One line listing them keeps them in view without burying a real problem among them.
+  const noGroups: number[] = [];
   sessions.forEach((s, i) => {
     const missing = Object.entries(s)
       .filter(([, v]) => v === null || (Array.isArray(v) && v.length === 0))
       .map(([k]) => k);
-    if (missing.length) {
+    if (missing.length === 1 && missing[0] === "groups") noGroups.push(i + 1);
+    else if (missing.length) {
       findings.push({ level: "warn", row: i + 1, message: `Unreadable: ${missing.join(", ")}` });
     }
   });
+  if (noGroups.length) {
+    findings.push({
+      level: "warn",
+      message:
+        `${noGroups.length} row${noGroups.length === 1 ? " has" : "s have"} no groups (row ` +
+        `${noGroups.join(", ")}) — blank cells, or cells that could not be read. A session ` +
+        `with no groups reaches no one and is not saved; check the document if any should ` +
+        `have one.`,
+    });
+  }
 
   // A date and a weekday name are two independent readings of the same fact, so disagreement
   // means one of them is wrong. This caught nothing on the verified file — 0 of 67 — which
