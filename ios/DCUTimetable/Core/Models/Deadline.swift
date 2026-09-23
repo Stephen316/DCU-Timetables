@@ -250,16 +250,12 @@ public enum DeadlineRules {
     }
 
     /// "in 3 days", "tomorrow", "today" — the phrasing students actually think in.
+    ///
+    /// The rule itself lives in `DeadlineCountdown` because the widget extension needs it
+    /// too and cannot see `Core`. Kept here as well so call sites that already think in
+    /// `DeadlineRules` don't have to learn a second type.
     public static func countdown(to due: Date, from now: Date = Date(),
                                  calendar: Calendar = .current) -> String {
-        let days = calendar.dateComponents([.day],
-                                           from: calendar.startOfDay(for: now),
-                                           to: calendar.startOfDay(for: due)).day ?? 0
-        switch days {
-        case ..<0: return "overdue"
-        case 0: return "today"
-        case 1: return "tomorrow"
-        default: return "in \(days) days"
-        }
+        DeadlineCountdown.text(to: due, from: now, calendar: calendar)
     }
 }

@@ -25,6 +25,12 @@ targets:
     platform: iOS
     sources:
       - path: ios/DCUTimetable
+      # Compiled into the app *and* the widget extension. The widgets run in their own
+      # process and cannot see the app's code, so anything both must agree on — the
+      # snapshot format, the highlight rule, the tints — lives here.
+      - path: ios/Shared
+    dependencies:
+      - target: DCUTimetableWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stephenh.dcutimetable
@@ -34,6 +40,29 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_CFBundleDisplayName: "DCU Timetable"
         ENABLE_TESTABILITY: YES
+        CODE_SIGN_ENTITLEMENTS: ios/DCUTimetable.entitlements
+
+  # The home-screen widgets. Entitlements are hand-written rather than generated from an
+  # `entitlements:` block, so that regenerating the project can never rewrite the App Group
+  # the two targets have to share.
+  DCUTimetableWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ios/DCUTimetableWidgets
+        excludes:
+          - Info.plist
+      - path: ios/Shared
+    # No `info:` block: that key makes XcodeGen *generate* the plist at that path, which
+    # would overwrite the hand-written one on every run. Point the build setting at the
+    # file instead.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stephenh.dcutimetable.widgets
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ios/DCUTimetableWidgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ios/DCUTimetableWidgets.entitlements
+        SKIP_INSTALL: YES
 
   DCUTimetableTests:
     type: bundle.unit-test
@@ -52,6 +81,7 @@ schemes:
     build:
       targets:
         DCUTimetable: all
+        DCUTimetableWidgets: all
     test:
       targets:
         - DCUTimetableTests

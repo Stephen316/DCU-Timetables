@@ -85,8 +85,13 @@ final class WeekViewModel: ObservableObject {
     }
 
     /// Non-fatal, like the reports: no deadlines just means no coloured borders.
+    ///
+    /// Asks for every module seen in any loaded week, not only the ones with a class this
+    /// week. The extra rows change nothing on the grid — `DeadlineRules.isDue` still wants
+    /// the same module on the same day — but they are what stops the deadlines widget
+    /// losing a module during a week it happens not to meet.
     func refreshDeadlines() async {
-        let modules = Set(events.map(DeadlineRules.moduleKey(for:)))
+        let modules = Set(moduleKeys).union(events.map(DeadlineRules.moduleKey(for:)))
         guard !modules.isEmpty else {
             deadlines = []
             return
@@ -172,6 +177,9 @@ final class WeekViewModel: ObservableObject {
     func updateHiddenGroups(_ hidden: Set<String>) {
         hiddenGroups = hidden
         applyFilter()
+        // A group the student just hid is a class the widget must stop telling them to
+        // walk to, and nothing else would republish until the next week load.
+        publishWidgetSnapshot()
     }
 
     /// Idempotent: the pager re-asks for the same week constantly, so already-loaded weeks
@@ -190,10 +198,22 @@ final class WeekViewModel: ObservableObject {
         }
         await refreshCancellations()
         await refreshDeadlines()
+        publishWidgetSnapshot()
 
         for neighbour in neighbours(of: weekIndex) where rawByWeekNumber[neighbour.number] == nil {
             await load(neighbour, isCurrent: false)
         }
+    }
+
+    /// Hand the home-screen widgets what is on screen.
+    ///
+    /// This model is the only writer. It is the one place that has the filtered week, the
+    /// cancellation tallies and the deadlines at the same time, and a second writer holding
+    /// a subset of any of the three would overwrite a fuller snapshot with a thinner one.
+    private func publishWidgetSnapshot() {
+        WidgetSnapshotPublisher.publish(events: events,
+                                        deadlines: deadlines,
+                                        status: status(for:))
     }
 
     private func neighbours(of index: Int) -> [TeachingWeek] {
