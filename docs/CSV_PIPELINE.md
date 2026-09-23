@@ -367,10 +367,21 @@ Three caveats:
    below — the manual picker already handles its absence (`ENGINEERING_LABS.md`). *(iOS —
    needs your go-ahead.)*
 2. **Ground-truth harness first, on the rotation document.** `EngineeringLabRotation.json`
-   is a verified extraction of a PDF you still hold: 67 sessions, and every validator in
-   §4.2 passes on it. Run Gemini against that same PDF and diff. It is the right first
-   target because the answer is known, there are no names in it, and the extractor is the
-   same one the class lists will use — mistakes here are cheap and measurable.
+   is the reference for a PDF you still hold: 67 sessions. It is the right first target
+   because the answer is known, there are no names in it, and the extractor is the same one
+   the class lists will use — mistakes here are cheap and measurable.
+
+   ⚠️ *"The answer is known" was wrong until 23 Sep 2026.* The file was described here as a
+   verified extraction and every §4.2 validator passed it, but 35 of its 67 sessions carried
+   the wrong module (`ENGINEERING_LABS.md`). The harness's first real run found it. The file
+   is now checked cell by cell against the rendered PDF, and the validators gained the two
+   checks it would have failed: a module/activity pair must be a real column, and every
+   column must be attended by every group the document uses.
+
+   *Measured, 23 Sep 2026:* Mistral OCR + `mistral-small-latest`, **67/67 exact, every field
+   67/67**, identical across two runs at temperature 0. It also emits 14 rows for blank cells
+   with no groups, which the validators flag as warnings. Gemini's run is pending the
+   free-tier quota reset.
 3. **Extraction script** (`tools/`): normalise → Gemini + PaddleOCR → diff → §4.2 validators
    → CSV. Standalone, testable against one real document before any of it touches the
    console.
