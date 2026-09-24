@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { currentProfile, supabaseServer } from "@/lib/supabase/server";
 import { classes, weeks } from "@/lib/dcu/timetable";
-import { checkChange, hitFindings, removalHits, toRow, type TimetableChange } from "@/lib/changes/change";
+import { audience, checkChange, hitFindings, removalHits, toRow, type TimetableChange } from "@/lib/changes/change";
 import type { Finding } from "@/lib/extraction/rotation";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -38,12 +38,24 @@ export async function reviewChange(change: TimetableChange): Promise<Finding[]> 
 }
 
 export async function saveChange(change: TimetableChange): Promise<Result> {
+  return saveChanges([change]);
+}
+
+/// Several changes, all or none — "keep only for BMED1" is a removal for each of the other
+/// programmes, and half of those saved is a timetable nobody meant.
+export async function saveChanges(changes: TimetableChange[]): Promise<Result> {
   if (!(await admin())) return { ok: false, error: "Not allowed." };
-  const blocker = (await reviewChange(change)).find((f) => f.level === "error");
-  if (blocker) return { ok: false, error: blocker.message };
+  if (!changes.length) return { ok: false, error: "Nothing to save." };
+  for (const change of changes) {
+    const blocker = (await reviewChange(change)).find((f) => f.level === "error");
+    if (blocker) return { ok: false, error: changes.length > 1 ? `${audience(change.group)}: ${blocker.message}` : blocker.message };
+  }
 
   const db = await supabaseServer();
-  const { error } = await db.rpc("save_timetable_change", { p_change: toRow(change) });
+  // One change goes through phase 17's function, so saving one works before phase 19 is run.
+  const { error } = changes.length === 1
+    ? await db.rpc("save_timetable_change", { p_change: toRow(changes[0]) })
+    : await db.rpc("save_timetable_changes", { p_changes: changes.map(toRow) });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/timetable");
   return { ok: true };

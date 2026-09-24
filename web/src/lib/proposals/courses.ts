@@ -8,6 +8,12 @@
 // modules here are exactly the EEG modules DCU lists against all six of them. The first
 // version of this list was assembled by grepping the repo for codes: it missed EEG1005 and
 // EEG1008, and picked up EEG1003 only because a comment used it as an example.
+//
+// The six are one course here — Ask offers only this, General Engineering — and each is
+// also a group of it on the Timetable page: some classes split by programme, which DCU's
+// timetable doesn't show — it lists the same 226 classes against all six (24 Sep 2026). A
+// change for BMED1 reaches only Biomedical students. The database's copy of `covers` is
+// course_programmes (supabase/phase19_programme_groups.sql).
 
 import type { RuleProblem } from "./rules";
 
@@ -25,22 +31,24 @@ export type Programme = {
   key: string;
   name: string;
   /// The DCU programme codes this entry stands for. Searchable, so an administrator who
-  /// thinks of it as "ECE1" or "Mechatronic" still finds it.
-  covers: readonly { code: string; name: string }[];
+  /// thinks of it as "ECE1" or "Mechatronic" still finds it. Each is also a group a change
+  /// can be for.
+  covers: readonly { code: string; name: string; cao: string }[];
   modules: readonly Module[];
 };
 
 export const PROGRAMMES: readonly Programme[] = [
   {
     key: "EEG1",
-    name: "Engineering — Year 1",
+    name: "General Engineering — Year 1",
     covers: [
-      { code: "BMED1", name: "BEng Biomedical Engineering" },
-      { code: "CAM1", name: "BEng Mechanical & Manufacturing Engineering" },
-      { code: "CE1", name: "Common Entry Engineering" },
-      { code: "ECE1", name: "BEng Electronic & Computer Engineering" },
-      { code: "ME1", name: "BEng Mechatronic Engineering" },
-      { code: "SSE1", name: "BEng Mechanical & Sustainability Engineering" },
+      // Names and CAO codes from dcu.ie's course pages.
+      { code: "BMED1", name: "Biomedical Engineering", cao: "DC197" },
+      { code: "CAM1", name: "Mechanical and Manufacturing Engineering", cao: "DC195" },
+      { code: "CE1", name: "Common Entry into Engineering", cao: "DC200" },
+      { code: "ECE1", name: "Electronic and Computer Engineering", cao: "DC190" },
+      { code: "ME1", name: "Mechatronic Engineering", cao: "DC193" },
+      { code: "SSE1", name: "Mechanical and Sustainability Engineering", cao: "DC194" },
     ],
     modules: [
       { code: "EEG1000", title: "Fundamentals of Professional Development", semester: "1 & 2" },
@@ -68,6 +76,9 @@ export function modulesFor(key: string): readonly Module[] {
 export function moduleFor(code: string): Module | undefined {
   return PROGRAMMES.flatMap((p) => p.modules).find((m) => m.code === code);
 }
+
+/// The shape of a programme code, BMED1, as against a lab group's C or C.2.
+export const PROGRAMME_CODE = /^[A-Z]{2,5}[0-9]$/;
 
 /// What the administrator picked in the two dropdowns.
 export type Scope = { programme: string; module: string };

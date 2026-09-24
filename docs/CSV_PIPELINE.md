@@ -358,6 +358,15 @@ Three caveats:
   class's times and room must appear in what the admin wrote. The app downloads a course's
   changes with the rotation and applies them on the phone (`TimetableChanges.apply`).
   Students on a picked programme get only the changes for everyone.
+- **Programmes as groups — server and console done, app to follow.** EEG1 covers six DCU
+  programmes (BMED1, CAM1, CE1, ECE1, ME1, SSE1) that DCU timetables identically, though
+  some classes are for one programme only. Each is now a group of the course
+  (supabase/phase19, `course_programmes`): a change can be for `BMED1`, and the Timetable
+  page's "keep only for" saves a removal for each of the other five in one transaction.
+  Ask offers only General Engineering and refuses a change for one programme. The app
+  still matches lab groups only, so it skips programme changes until it learns the
+  student's programme — it has to read `course_programmes`, show the programme the student
+  picked, and match `grp` against it as well as the lab group.
 - **Deletion.** A student asks for their row to be removed — needs a path that isn't editing
   the database by hand.
 - **Retention.** How long a roster lives after the module ends.

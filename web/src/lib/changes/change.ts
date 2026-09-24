@@ -1,15 +1,16 @@
 // A change to a course's timetable: a class removed or added, for everyone on the course
-// or one group of it (supabase/phase17_timetable_changes.sql).
+// or one group of it — a lab group, a subgroup, or one of the programmes the course covers
+// (supabase/phase17_timetable_changes.sql, phase19_programme_groups.sql).
 //
 // No `server-only`: the Timetable page's forms run the same checks in the browser that
 // saving runs on the server.
 
 import type { Finding } from "@/lib/extraction/rotation";
-import { programmeFor } from "@/lib/proposals/courses";
+import { PROGRAMME_CODE, programmeFor, type Programme } from "@/lib/proposals/courses";
 
 export type TimetableChange = {
   courseKey: string;
-  /// "C", "C.2", or null for everyone on the course.
+  /// "C", "C.2", a programme ("BMED1"), or null for everyone on the course.
   group: string | null;
   kind: "remove" | "add";
   module: string;
@@ -29,7 +30,7 @@ export type SavedChange = TimetableChange & { id: string; createdAt: string };
 
 const TIME = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const GROUP = /^[A-Z](\.[0-9]{1,2})?$/;
+const LAB_GROUP = /^[A-Z](\.[0-9]{1,2})?$/;
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function weekday(date: string): string {
@@ -51,7 +52,10 @@ export function checkChange(c: TimetableChange): Finding[] {
     // allowed; it just isn't one of the programme's own.
     out.push({ level: "warn", message: `${c.module} isn't one of ${programme.key}'s modules — DCU lists it here as a shared class.` });
   }
-  if (c.group && !GROUP.test(c.group)) err(`"${c.group}" isn't a group — a letter, or a letter and a number like C.2.`);
+  if (c.group) {
+    const g = groupProblem(c.group, programme);
+    if (g) err(g);
+  }
   if (!TIME.test(c.start)) err(`"${c.start}" isn't a start time. Use 24-hour, like 14:00.`);
   if (c.kind === "add") {
     if (!c.title?.trim()) err("Say what the class is — Lab, Tutorial…");
@@ -114,8 +118,30 @@ export function fromRow(r: Record<string, any>): SavedChange {
   };
 }
 
+/// Who a change is for, in words: "everyone", "group C", "BMED1".
+export function audience(group: string | null): string {
+  return !group ? "everyone" : PROGRAMME_CODE.test(group) ? group : `group ${group}`;
+}
+
+/// Why this isn't a group the course has, or null when it is. A programme must be one the
+/// course covers: "ECE2" would be saved and then match no student.
+export function groupProblem(group: string, programme: Programme | undefined): string | null {
+  if (LAB_GROUP.test(group)) return null;
+  if (PROGRAMME_CODE.test(group)) {
+    if (!programme || programme.covers.some((c) => c.code === group)) return null;
+    return `${group} isn't one of ${programme.key}'s programmes (${programme.covers.map((c) => c.code).join(", ")}).`;
+  }
+  return `"${group}" isn't a group — a letter, a letter and a number like C.2, or a programme like BMED1.`;
+}
+
+/// "CE1, ECE1 ME1" → ["CE1", "ECE1", "ME1"]; blank → [null], everyone.
+export function groupList(text: string): (string | null)[] {
+  const list = [...new Set(text.toUpperCase().split(/[\s,;]+/).filter(Boolean))];
+  return list.length ? list : [null];
+}
+
 export function describeChange(c: TimetableChange): string {
-  const who = c.group ? `group ${c.group}` : "everyone";
+  const who = audience(c.group);
   const what = c.kind === "remove"
     ? `Remove ${c.activityCode ?? c.module} at ${c.start}`
     : `Add ${c.module} ${c.title ?? ""} ${c.start}–${c.end ?? "?"}${c.room ? ` in ${c.room}` : ""}`;

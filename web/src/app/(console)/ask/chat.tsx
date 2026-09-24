@@ -249,8 +249,9 @@ export function Ask() {
             options={PROGRAMMES.map((p) => ({
               value: p.key,
               label: p.name,
-              hint: p.covers.map((c) => c.code).join(", "),
-              keywords: p.covers.map((c) => c.name).join(" "),
+              // Found by any of its programmes' codes or names, but offered as the one course:
+              // splitting by programme is done on the Timetable page.
+              keywords: p.covers.map((c) => `${c.code} ${c.name} ${c.cao}`).join(" "),
             }))}
             onChange={(key) => {
               setProgramme(key);

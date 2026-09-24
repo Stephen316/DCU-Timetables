@@ -14,7 +14,7 @@ import { classes, dublin, weeks } from "@/lib/dcu/timetable";
 import { checkChangeProvenance, describeChange, fromRow, type TimetableChange } from "@/lib/changes/change";
 import { reviewChange, saveChange } from "../timetable/actions";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
-import { checkScope, moduleFor, programmeFor, type Scope } from "@/lib/proposals/courses";
+import { PROGRAMME_CODE, checkScope, moduleFor, programmeFor, type Scope } from "@/lib/proposals/courses";
 import type { Proposal } from "@/lib/proposals/types";
 import type { Finding } from "@/lib/extraction/rotation";
 import { validateRotation } from "@/lib/extraction/rotation";
@@ -205,6 +205,11 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
   return {
     kind: "change", scope, change, source,
     findings: [
+      // Ask is for the course as a whole; a programme's split is made on the Timetable page,
+      // where its grid shows what that programme's students will see.
+      ...(change.group && PROGRAMME_CODE.test(change.group)
+        ? [{ level: "error" as const, message: `A change for ${change.group} alone is made on the Timetable page, not here.` }]
+        : []),
       ...checkScope(scope, { module: a.module }),
       ...(await reviewChange(change)),
       ...checkChangeProvenance(change, source),
