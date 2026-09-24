@@ -48,6 +48,21 @@ xcodebuild -project DCUTimetable.xcodeproj -scheme DCUTimetable \
 The `.xcodeproj` is generated from `project.yml` and **gitignored** — never hand-edit
 or commit it. After adding/removing/moving a source file, re-run `xcodegen generate`.
 
+## CI
+
+`scripts/ci.sh` runs exactly what GitHub Actions runs, so run it before pushing:
+
+```bash
+scripts/ci.sh          # both
+scripts/ci.sh web      # console production build (type-checks every file)
+scripts/ci.sh ios      # xcodegen + simulator build and unit tests
+```
+
+On push to `main` and on pull requests, `.github/workflows/web.yml` and `ios.yml` run
+the same script, each only when its own files change. The iOS job uses the Xcode that
+`project.yml`'s `xcodeVersion` names, so bumping it there moves CI too. A failed iOS run
+attaches the full `xcodebuild` log to the run.
+
 ## Docs
 
 - [`docs/PLAN.md`](docs/PLAN.md) — scope, milestones, risks, open decisions.
