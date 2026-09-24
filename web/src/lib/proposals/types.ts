@@ -19,9 +19,12 @@ import type { TimetableChange } from "@/lib/changes/change";
 export type Proposal =
   | { kind: "split"; scope: Scope; rule: SplitRule; problems: RuleProblem[]; source: string }
   | { kind: "rotation"; scope: Scope; courseKey: string; title: string | null;
-      sessions: RotationSession[]; findings: Finding[] }
+      sessions: RotationSession[]; findings: Finding[];
+      /** What reading and each correction since changed, in words — carried from version
+       *  to version so the latest shows the whole history. */
+      log?: Finding[] }
   | { kind: "roster"; scope: Scope; courseKey: string; fileName: string;
       /** How the rows were got: parsed as they stood, or formatted by a model. */
       readBy: string;
-      rows: RosterRow[]; findings: Finding[] }
+      rows: RosterRow[]; findings: Finding[]; log?: Finding[] }
   | { kind: "change"; scope: Scope; change: TimetableChange; findings: Finding[]; source: string };

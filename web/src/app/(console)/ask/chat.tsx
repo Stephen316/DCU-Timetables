@@ -21,6 +21,11 @@ type Shown = Turn & { attachment?: { name: string; size: number }; proposalNos?:
 type Item = {
   no: number;
   proposal: Proposal;
+  /// A class list or rotation and its corrections share this: the number of the proposal
+  /// the upload made. Accepting any one of them ends the conversation about it.
+  doc?: number;
+  /// The version this one corrects.
+  basedOn?: number;
   status: "open" | "saving" | "saved";
   message?: string;
   error?: string;
@@ -62,6 +67,10 @@ export function Ask() {
   const [now, setNow] = useState(0);
   const [last, setLast] = useState<AskResult | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  // Said once, when accepting a document starts the conversation again.
+  const [notice, setNotice] = useState<string | null>(null);
+  // The newest unsaved version of a class list or rotation, if there is one.
+  const activeDoc = [...items].reverse().find((i) => i.doc && i.status !== "saved");
   // Bumped after every save, so the Saved list under the chat reads the database again.
   const [refresh, setRefresh] = useState(0);
   // Proposal numbers only go up. Derived from the list, a discarded #3 would hand its number
@@ -107,9 +116,16 @@ export function Ask() {
     if ((!draft.trim() && !file) || busy) return;
     const text = draft.trim();
     const sending = file;
+    // Until it is accepted, a class list or rotation on the panel is what every message is
+    // about. A new file starts on a new document instead.
+    const correcting = sending ? undefined : activeDoc;
     setBusy(true);
     setLast(null);
-    setPending({ label: sending ? `Reading ${sending.name}` : "Thinking", since: Date.now() });
+    setNotice(null);
+    setPending({
+      label: sending ? `Reading ${sending.name}` : correcting ? `Correcting proposal ${correcting.no}` : "Thinking",
+      since: Date.now(),
+    });
 
     const historyBefore: Turn[] = turns.map(({ role, text }) => ({ role, text }));
     setTurns((t) => [...t, {
@@ -124,6 +140,7 @@ export function Ask() {
     form.set("module", moduleKey);
     form.set("history", JSON.stringify(historyBefore));
     if (sending) form.set("file", sending);
+    if (correcting) form.set("document", JSON.stringify(correcting.proposal));
     setDraft("");
     choose(null);
 
@@ -132,7 +149,11 @@ export function Ask() {
       setLast(result);
       // A message can ask for several changes at once; each is its own proposal.
       const made = result.proposals ?? (result.proposal ? [result.proposal] : []);
-      const fresh = made.map((proposal) => ({ no: ++counter.current, proposal, status: "open" as const }));
+      const fresh: Item[] = made.map((proposal) => {
+        const no = ++counter.current;
+        const isDoc = proposal.kind === "roster" || proposal.kind === "rotation";
+        return { no, proposal, status: "open", doc: isDoc ? (correcting?.doc ?? no) : undefined, basedOn: correcting?.no };
+      });
       if (fresh.length) setItems((all) => [...all, ...fresh]);
       if (result.reply || fresh.length) {
         setTurns((t) => [...t, { role: "model", text: result.reply ?? "", proposalNos: fresh.map((f) => f.no) }]);
@@ -167,6 +188,7 @@ export function Ask() {
     setItems([]);
     counter.current = 0;
     setLast(null);
+    setNotice(null);
     setDraft("");
     choose(null);
   }
@@ -196,6 +218,14 @@ export function Ask() {
               : `Rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`,
         });
         setRefresh((r) => r + 1);
+        // A document is settled once one version of it is saved: the other versions go,
+        // and so does the conversation about it — the next message starts fresh.
+        if (item.doc) {
+          setItems((all) => all.filter((i) => i.no === item.no || i.doc !== item.doc || i.status === "saved"));
+          setTurns([]);
+          setLast(null);
+          setNotice(`Proposal ${item.no} saved. This is a new conversation.`);
+        }
       } else {
         update(item.no, { status: "open", error: result.error });
       }
@@ -246,6 +276,7 @@ export function Ask() {
         </div>
 
         <div className="chat">
+          {notice && turns.length === 0 && <p className="tag ok">{notice}</p>}
           {turns.length === 0 && (
             <p className="dim">
               Describe a change, or attach a document. For example: &ldquo;In EEG1001,
@@ -315,12 +346,21 @@ export function Ask() {
               )}
             </div>
           )}
+          {activeDoc && !file && (
+            <p className="correcting">
+              Messages now correct proposal {activeDoc.no} until you accept it — for example
+              &ldquo;row 58 is a heading, not a student&rdquo; or &ldquo;row 12 is group B&rdquo;.
+              Attaching a file starts on a new document.
+            </p>
+          )}
           <div className="row">
             <div className="field" style={{ flex: 1, marginBottom: 0 }}>
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder={file ? "Add a note, or just send the file…" : "Describe a change, or answer its question…"}
+                placeholder={file ? "Add a note, or just send the file…"
+                  : activeDoc ? `Correct proposal ${activeDoc.no}, or ask about it…`
+                  : "Describe a change, or answer its question…"}
                 disabled={busy}
               />
             </div>
@@ -407,7 +447,7 @@ function ProposalCard({ item, others, onAccept, onDiscard, disabled }: {
       <button type="button" className="saved-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span className={open ? "chev open" : "chev"} aria-hidden="true" />
         <span className="saved-title">Proposal {item.no}</span>
-        <span className="dim">{describe(p)}</span>
+        <span className="dim">{describe(p)}{item.basedOn ? ` · corrects ${item.basedOn}` : ""}</span>
         <span className={item.status === "saved" ? "tag ok" : blocked ? "tag off" : "tag warn"} style={{ marginLeft: "auto" }}>
           {item.status === "saved" ? "saved" : item.status === "saving" ? "saving…" : blocked ? "needs fixing" : "unsaved"}
         </span>

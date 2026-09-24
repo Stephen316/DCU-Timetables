@@ -10,6 +10,14 @@ import { toJsonSchema } from "@/lib/extraction/json-schema";
 import { ROTATION_MODEL } from "./rotation";
 import { ROSTER_HEADER } from "@/lib/roster/parse";
 
+/// What the administrator typed with the upload, put in front of the document. Their words
+/// are instructions; the document's are data, and are labelled as such.
+export function withNote(note: string | undefined, text: string): string {
+  return note?.trim()
+    ? `The administrator's note about this document — follow it:\n${note.trim()}\n\n--- Document ---\n${text}`
+    : text;
+}
+
 type Chat = {
   model: string;
   choices: { message: { content: unknown }; finish_reason?: string }[];
@@ -31,8 +39,8 @@ const KIND_SCHEMA = {
 /// first rows, and so does a rotation grid.
 const SAMPLE = 6000;
 
-export async function classifyDocument(opts: { key: string; text: string; model?: string }) {
-  const { key, text, model = ROTATION_MODEL } = opts;
+export async function classifyDocument(opts: { key: string; text: string; model?: string; note?: string }) {
+  const { key, text, model = ROTATION_MODEL, note } = opts;
   const chat = await withRetry(() => post<Chat>("/chat/completions", key, {
     model,
     temperature: 0,
@@ -49,7 +57,7 @@ export async function classifyDocument(opts: { key: string; text: string; model?
           "grid of weeks or dates against modules or activities. It lists groups, not students.\n" +
           "- other: anything else.",
       },
-      { role: "user", content: text.slice(0, SAMPLE) },
+      { role: "user", content: withNote(note, text.slice(0, SAMPLE)) },
     ],
     response_format: {
       type: "json_schema",
@@ -85,20 +93,22 @@ Then one line per student, in the order they appear. Rules:
    Group and "A.1" in Sub-group.
 5. Day, Workshop and Drawing are the day and rooms given for that student, if any.
 6. Quote any value containing a comma.
+7. A heading between groups ("Group B") or a repeated header is not a student; leave it out.
+8. If the administrator's note says to leave rows out or read a column a certain way, do so.
 `.trim();
 
 /// Long enough for ~600 students; a list that hits it is refused rather than half-saved.
 const MAX_TOKENS = 16384;
 
-export async function classListToCsv(opts: { key: string; text: string; model?: string }) {
-  const { key, text, model = ROTATION_MODEL } = opts;
+export async function classListToCsv(opts: { key: string; text: string; model?: string; note?: string }) {
+  const { key, text, model = ROTATION_MODEL, note } = opts;
   const chat = await withRetry(() => post<Chat>("/chat/completions", key, {
     model,
     temperature: 0,
     max_tokens: MAX_TOKENS,
     messages: [
       { role: "system", content: TO_CSV_SYSTEM },
-      { role: "user", content: text },
+      { role: "user", content: withNote(note, text) },
     ],
   }));
   const choice = chat.choices?.[0];

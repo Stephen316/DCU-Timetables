@@ -58,7 +58,8 @@ struct RootView: View {
                 source: ProfileTimetableSource(profile: profile),
                 title: "Year 1 Eng",
                 resetLabel: "Sign out",
-                audience: .forProfile(profile)
+                audience: .forProfile(profile),
+                groupsAssigned: true
             ) { signOut() }
         } else if let selectedProgramme {
             TimetableShell(programme: selectedProgramme, resetLabel: "Sign out") { signOut() }

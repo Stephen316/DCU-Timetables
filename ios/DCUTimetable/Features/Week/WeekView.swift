@@ -5,6 +5,8 @@ struct WeekView: View {
     let source: TimetableSource
     let title: String
     let resetLabel: String
+    /// See `TimetableShell.groupsAssigned`.
+    let groupsAssigned: Bool
     let onReset: () -> Void
 
     /// Owned by `TimetableShell`, not by this view — the deadlines tab reads the same
@@ -28,8 +30,10 @@ struct WeekView: View {
          source: TimetableSource = DCUAPIClient(),
          title: String? = nil,
          resetLabel: String = "Change programme",
+         groupsAssigned: Bool = false,
          onReset: @escaping () -> Void) {
         self.model = model
+        self.groupsAssigned = groupsAssigned
         self.programme = programme
         self.source = source
         self.title = title ?? programme.code
@@ -152,10 +156,12 @@ struct WeekView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button("Select groups", systemImage: "person.2") { showingGroups = true }
-                    if model.hasEngineeringLabs {
-                        Button("Engineering labs", systemImage: "wrench.and.screwdriver") {
-                            showingEngLabs = true
+                    if !groupsAssigned {
+                        Button("Select groups", systemImage: "person.2") { showingGroups = true }
+                        if model.hasEngineeringLabs {
+                            Button("Engineering labs", systemImage: "wrench.and.screwdriver") {
+                                showingEngLabs = true
+                            }
                         }
                     }
                     Button("Account", systemImage: "person.crop.circle") {

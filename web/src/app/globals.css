@@ -356,3 +356,6 @@ label.check input { width: auto; }
 
 /* Moving between console pages: shown at once, while the server renders the next one. */
 .page-loading { display: flex; align-items: center; gap: 8px; color: var(--muted); padding: 24px 0; }
+
+/* Ask — while a document waits to be accepted, the composer says what a message will do. */
+.correcting { font-size: 12px; color: var(--warn); margin: 0 0 8px; }

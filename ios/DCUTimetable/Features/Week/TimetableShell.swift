@@ -10,6 +10,9 @@ struct TimetableShell: View {
     let source: TimetableSource
     let title: String
     let resetLabel: String
+    /// Matched to a class list: groups and labs come from it (and its lab rotation), so
+    /// there is nothing for the student to choose.
+    let groupsAssigned: Bool
     let onReset: () -> Void
 
     @StateObject private var model: WeekViewModel
@@ -19,8 +22,10 @@ struct TimetableShell: View {
          title: String? = nil,
          resetLabel: String = "Change programme",
          audience: TimetableAudience? = nil,
+         groupsAssigned: Bool = false,
          onReset: @escaping () -> Void) {
         self.programme = programme
+        self.groupsAssigned = groupsAssigned
         self.source = source
         self.title = title ?? programme.code
         self.resetLabel = resetLabel
@@ -39,6 +44,7 @@ struct TimetableShell: View {
                      source: source,
                      title: title,
                      resetLabel: resetLabel,
+                     groupsAssigned: groupsAssigned,
                      onReset: onReset)
                 .tabItem { Label("Timetable", systemImage: "calendar") }
 

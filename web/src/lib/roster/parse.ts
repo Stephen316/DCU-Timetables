@@ -21,7 +21,14 @@ export type RosterRow = {
 };
 
 export type ParsedRoster =
-  | { ok: true; rows: RosterRow[]; columns: string[] }
+  | {
+      ok: true; rows: RosterRow[]; columns: string[];
+      /** Lines inside the table that aren't students — a "Group B" heading between two
+       *  groups, a header repeated on the next page. Reported, so nothing vanishes unseen. */
+      skipped: { row: number; text: string }[];
+      /** Anything the parser changed about how a column was read, in words. */
+      notes: string[];
+    }
   | { ok: false; error: string };
 
 type Field = Exclude<keyof RosterRow, "row">;
@@ -99,6 +106,8 @@ export function parseRoster(text: string): ParsedRoster {
   }
 
   const rows: RosterRow[] = [];
+  const skipped: { row: number; text: string }[] = [];
+  let splitGroups = 0;
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const line = lines[i];
     // Markdown's |---|---| divider, and the "# Sheet name" lines a spreadsheet becomes.
@@ -110,6 +119,14 @@ export function parseRoster(text: string): ParsedRoster {
     if (cells.every((c) => c === "")) continue;
     // The same header again, as at the top of a workbook's second sheet.
     if (cells.map((c) => c.toLowerCase()).join("\u0000") === headers.map((h) => h.toLowerCase()).join("\u0000")) continue;
+    // A header again with a cell changed ("Group B" where it said "Group"), or a heading
+    // between groups: "Group B" alone on its line. Measured 24 Sep 2026 — the EEG1001 PDF
+    // read as 210 students, three of them the headings of groups B, C and D.
+    const filled = cells.map((c) => c.replace(/[*_]/g, "").trim()).filter(Boolean);
+    if (filled.filter(known).length >= 2 || (filled.length > 0 && filled.length <= 2 && filled.every(isHeading))) {
+      skipped.push({ row: i + 1, text: filled.join(" ") });
+      continue;
+    }
 
     const row: RosterRow = {
       row: i + 1, surname: null, given: null, studentId: null, group: null,
@@ -121,6 +138,15 @@ export function parseRoster(text: string): ParsedRoster {
       row[f] = v === "" ? null : v;
     });
     row.studentId = normaliseStudentId(row.studentId);
+    // "A.4" under Group, with no Sub-group column: the group is A and A.4 is the subgroup.
+    // Saved as it stood, the student's group would be "A.4" and the app — which looks the
+    // rotation up by letter — would find no labs for them at all.
+    const combined = row.group?.match(/^([A-Za-z])\.(\d{1,2})$/);
+    if (combined && (!row.subgroup || row.subgroup.toUpperCase() === row.group!.toUpperCase())) {
+      row.subgroup = row.group!.toUpperCase();
+      row.group = combined[1].toUpperCase();
+      splitGroups++;
+    }
     rows.push(row);
   }
 
@@ -128,7 +154,16 @@ export function parseRoster(text: string): ParsedRoster {
     ok: true,
     rows,
     columns: headers.filter((_, j) => fields[j]).map((h) => h.trim()),
+    skipped,
+    notes: splitGroups
+      ? [`The Group column held subgroups like ${rows.find((r) => r.subgroup)?.subgroup}, so ${splitGroups} were read as group ${rows.find((r) => r.subgroup)?.group} and subgroup ${rows.find((r) => r.subgroup)?.subgroup}, and so on.`]
+      : [],
   };
+}
+
+/// "Group B", "Lab group C.2", "GROUP A:" — a section heading, not a student.
+function isHeading(cell: string): boolean {
+  return /^((lab|sub)[\s-]?)?group\s*[A-Z](\.\d{1,2})?\s*:?$/i.test(cell) || /^((lab|sub)[\s-]?)?group\s*:?$/i.test(cell);
 }
 
 type Kind = "markdown" | "tsv" | "csv";

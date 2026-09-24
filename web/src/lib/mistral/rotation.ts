@@ -41,6 +41,9 @@ export async function extractRotation(opts: {
 /// Step two: a chat model structures the text into sessions.
 export async function transcribeRotation(opts: {
   key: string; read: ReadDocument; model?: string;
+  /** What the administrator typed with the upload. Absent in the harness, so what it
+   *  measured is what runs when there is no note. */
+  note?: string;
 }): Promise<RotationRun> {
   const { key, model = ROTATION_MODEL } = opts;
   const { text, pages, ocrModel } = opts.read;
@@ -57,7 +60,9 @@ export async function transcribeRotation(opts: {
     max_tokens: 8192,
     messages: [
       { role: "system", content: TRANSCRIBE_SYSTEM },
-      { role: "user", content: `${TRANSCRIBE_INSTRUCTION}\n\n${text}` },
+      { role: "user", content: opts.note?.trim()
+          ? `${TRANSCRIBE_INSTRUCTION}\n\nThe administrator's note about this document — follow it:\n${opts.note.trim()}\n\n--- Document ---\n${text}`
+          : `${TRANSCRIBE_INSTRUCTION}\n\n${text}` },
     ],
     response_format: {
       type: "json_schema",

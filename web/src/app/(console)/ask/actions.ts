@@ -5,6 +5,9 @@ import { mistralKey, MISTRAL_MODEL } from "@/lib/mistral/client";
 import { classify } from "@/lib/mistral/api";
 import { readDocument, transcribeRotation, type ReadDocument } from "@/lib/mistral/rotation";
 import { classifyDocument, classListToCsv } from "@/lib/mistral/roster";
+import { correctTable } from "@/lib/mistral/correct";
+import { applyToRoster, applyToRotation, rosterTable, rotationTable, ROSTER_COLUMNS, ROTATION_COLUMNS } from "@/lib/corrections/apply";
+import type { RotationSession } from "@/lib/extraction/rotation";
 import { normalise } from "@/lib/extraction/normalise";
 import { interpretMessage, type ChangeArgs } from "@/lib/mistral/split";
 import { classes, dublin, weeks } from "@/lib/dcu/timetable";
@@ -13,6 +16,7 @@ import { reviewChange, saveChange } from "../timetable/actions";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
 import { checkScope, moduleFor, programmeFor, type Scope } from "@/lib/proposals/courses";
 import type { Proposal } from "@/lib/proposals/types";
+import type { Finding } from "@/lib/extraction/rotation";
 import { validateRotation } from "@/lib/extraction/rotation";
 import { nameKey, parseRoster, type RosterRow } from "@/lib/roster/parse";
 import { validateRoster } from "@/lib/roster/validate";
@@ -55,7 +59,16 @@ export async function ask(form: FormData): Promise<AskResult> {
 
   const started = Date.now();
   try {
-    if (hasFile) return await readUpload(file, scope, started);
+    // What was typed with the file is about the file — "the headings aren't students" —
+    // and goes to every step that reads it. It used to be dropped here.
+    if (hasFile) return await readUpload(file, scope, started, message);
+
+    // A class list or rotation is waiting to be accepted: until it is, every message is
+    // about it. The browser sends the version on the panel; accepting one starts a new
+    // conversation, and messages go back to splits and timetable changes.
+    const sent = form.get("document");
+    const doc = typeof sent === "string" && sent ? documentFrom(sent) : null;
+    if (doc) return await correctDocument(doc, message, history, started);
 
     const key = mistralKey();
 
@@ -208,7 +221,7 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
 ///   class list  -> the model writes it out as CSV (n61) -> the same parser and validators
 ///   rotation    -> the transcription the harness measured
 ///   -> a proposal on the panel: the review screen (n34). Accept saves it.
-async function readUpload(file: File, scope: Scope, started: number): Promise<AskResult> {
+async function readUpload(file: File, scope: Scope, started: number, note: string): Promise<AskResult> {
   const input = normalise(file.name, file.type, Buffer.from(await file.arrayBuffer()));
   if (input.kind === "unsupported") return { ok: false, error: input.error };
 
@@ -225,15 +238,37 @@ async function readUpload(file: File, scope: Scope, started: number): Promise<As
   // parsed as it stands. Cheaper, exact, and the names never leave the console.
   const direct = parseRoster(read.text);
   if (direct.ok && direct.rows.length > 0) {
-    return rosterProposal(scope, file.name, direct.rows, "read directly, no model", meta(),
-      `Read ${direct.rows.length} students from the ${source} (columns: ${direct.columns.join(", ")}).`);
+    // A note goes through the same step as a follow-up: the model names operations and
+    // code applies them, so the rows it doesn't mention are exactly as the document has them.
+    let rows = direct.rows;
+    let log = readFindings(direct.skipped, direct.notes);
+    let noteReply = "";
+    let noteModel = "";
+    if (note) {
+      const out = await correctTable({
+        key, what: "class list", columns: ROSTER_COLUMNS.map(([c]) => c), rows: rosterTable(rows), message: note,
+      });
+      add(out.usage);
+      const applied = applyToRoster(rows, out.ops);
+      rows = applied.rows;
+      log = [...log, ...applied.log];
+      noteReply = out.reply;
+      noteModel = out.model;
+    }
+    return rosterProposal(scope, file.name, rows,
+      note ? `read directly; your note applied by ${noteModel}` : "read directly, no model",
+      meta(),
+      `Read ${rows.length} students from the ${source} (columns: ${direct.columns.join(", ")}).` +
+        (direct.skipped.length ? ` ${direct.skipped.length} heading line${direct.skipped.length === 1 ? "" : "s"} left out.` : "") +
+        (noteReply ? ` ${noteReply}` : ""),
+      log);
   }
 
-  const { kind, reason, usage: kindUsage } = await classifyDocument({ key, text: read.text, model: MISTRAL_MODEL });
+  const { kind, reason, usage: kindUsage } = await classifyDocument({ key, text: read.text, model: MISTRAL_MODEL, note });
   add(kindUsage);
 
   if (kind === "class_list") {
-    const out = await classListToCsv({ key, text: read.text, model: MISTRAL_MODEL });
+    const out = await classListToCsv({ key, text: read.text, model: MISTRAL_MODEL, note });
     add(out.usage);
     const parsed = parseRoster(out.csv);
     if (!parsed.ok || parsed.rows.length === 0) {
@@ -245,12 +280,14 @@ async function readUpload(file: File, scope: Scope, started: number): Promise<As
     }
     return rosterProposal(scope, file.name, parsed.rows, `formatted by ${out.model}`, meta(),
       `Read the ${source} as a class list and formatted it as CSV: ${parsed.rows.length} students. ` +
-      `Check the names and groups against the document — a misread name is a student who never matches.`);
+      `Check the names and groups against the document — a misread name is a student who never matches.` +
+        (parsed.skipped.length ? ` ${parsed.skipped.length} heading line${parsed.skipped.length === 1 ? "" : "s"} left out.` : ""),
+      readFindings(parsed.skipped, parsed.notes));
   }
 
   if (kind === "rotation") {
     const failed = (f: { level: string }[]) => f.some((x) => x.level === "error");
-    let run = await transcribeRotation({ key, read, model: MISTRAL_MODEL });
+    let run = await transcribeRotation({ key, read, model: MISTRAL_MODEL, note });
     let checks = validateRotation(run.sessions);
     add(run.usage);
 
@@ -262,7 +299,7 @@ async function readUpload(file: File, scope: Scope, started: number): Promise<As
     // trigger it: re-reading cannot fix a module that was never selected.
     let reread = false;
     if (failed(checks)) {
-      const second = await transcribeRotation({ key, read, model: MISTRAL_MODEL });
+      const second = await transcribeRotation({ key, read, model: MISTRAL_MODEL, note });
       add(second.usage);
       const secondChecks = validateRotation(second.sessions);
       if (!failed(secondChecks)) {
@@ -286,6 +323,7 @@ async function readUpload(file: File, scope: Scope, started: number): Promise<As
         title: run.title,
         sessions: run.sessions,
         findings: [...checkScope(scope), ...checks],
+        log: [],
       },
     };
   }
@@ -297,17 +335,105 @@ async function readUpload(file: File, scope: Scope, started: number): Promise<As
   };
 }
 
+/// What reading left out or reinterpreted, shown on the proposal rather than only in the
+/// reply, so it is in front of whoever accepts it.
+function readFindings(skipped: { row: number; text: string }[], notes: string[]): Finding[] {
+  return [
+    ...(skipped.length ? [{
+      level: "info" as const,
+      message: `Not students, left out: ${skipped.map((x) => `row ${x.row} “${x.text}”`).join(", ")}.`,
+    }] : []),
+    ...notes.map((message) => ({ level: "info" as const, message })),
+  ];
+}
+
+type DocProposal = Extract<Proposal, { kind: "roster" | "rotation" }>;
+
+/// A follow-up about the class list or rotation on the panel. The reply answers it; any
+/// operations become a new version of the proposal, with what changed logged on it. A
+/// question changes nothing and makes no new version.
+async function correctDocument(doc: DocProposal, message: string, history: Turn[], started: number): Promise<AskResult> {
+  const key = mistralKey();
+  const meta = (u: { input?: number; output?: number }) =>
+    ({ ms: Date.now() - started, inputTokens: u.input, outputTokens: u.output });
+
+  if (doc.kind === "roster") {
+    const out = await correctTable({
+      key, what: "class list", columns: ROSTER_COLUMNS.map(([c]) => c), rows: rosterTable(doc.rows), message, history,
+    });
+    if (!out.ops.length) return { ok: true, reply: out.reply || "Nothing to change.", meta: meta(out.usage) };
+    const applied = applyToRoster(doc.rows, out.ops);
+    const log = [...(doc.log ?? []), ...applied.log];
+    return {
+      ok: true, reply: out.reply, meta: meta(out.usage),
+      proposal: {
+        ...doc, rows: applied.rows, log,
+        findings: [...rosterScope(doc.scope), ...log, ...validateRoster(applied.rows)],
+      },
+    };
+  }
+
+  const out = await correctTable({
+    key, what: "lab rotation", columns: ROTATION_COLUMNS.map(([c]) => c), rows: rotationTable(doc.sessions), message, history,
+  });
+  if (!out.ops.length) return { ok: true, reply: out.reply || "Nothing to change.", meta: meta(out.usage) };
+  const applied = applyToRotation(doc.sessions, out.ops);
+  const log = [...(doc.log ?? []), ...applied.log];
+  return {
+    ok: true, reply: out.reply, meta: meta(out.usage),
+    proposal: {
+      ...doc, sessions: applied.sessions, log,
+      findings: [...checkScope(doc.scope), ...log, ...validateRotation(applied.sessions)],
+    },
+  };
+}
+
+/// The proposal as the browser sent it back, rebuilt field by field rather than trusted as
+/// it arrived. Its findings are recomputed after correcting, and saving checks everything
+/// again, so nothing here is taken on the browser's word.
+function documentFrom(raw: string): DocProposal | null {
+  let p: Record<string, any>;
+  try { p = JSON.parse(raw); } catch { return null; }
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
+  const scope: Scope = { programme: String(p?.scope?.programme ?? ""), module: String(p?.scope?.module ?? "") };
+  const log: Finding[] = (Array.isArray(p?.log) ? p.log : [])
+    .filter((f: any) => f && ["info", "warn", "error"].includes(f.level) && typeof f.message === "string")
+    .map((f: any) => ({ level: f.level, message: f.message, ...(Number.isInteger(f.row) ? { row: f.row } : {}) }));
+
+  if (p?.kind === "roster" && Array.isArray(p.rows)) {
+    const rows: RosterRow[] = p.rows
+      .map((r: any) => ({
+        row: Number(r?.row), surname: str(r?.surname), given: str(r?.given), studentId: str(r?.studentId),
+        group: str(r?.group), subgroup: str(r?.subgroup), day: str(r?.day), workshop: str(r?.workshop), drawing: str(r?.drawing),
+      }))
+      .filter((r: RosterRow) => Number.isInteger(r.row));
+    return {
+      kind: "roster", scope, courseKey: String(p.courseKey ?? ""), fileName: String(p.fileName ?? ""),
+      readBy: String(p.readBy ?? ""), rows, log, findings: [],
+    };
+  }
+  if (p?.kind === "rotation" && Array.isArray(p.sessions)) {
+    const sessions: RotationSession[] = p.sessions.map((s: any) => ({
+      week: Number.isInteger(s?.week) ? s.week : null, date: str(s?.date), day: str(s?.day),
+      start: str(s?.start), end: str(s?.end), module: str(s?.module), activity: str(s?.activity),
+      groups: Array.isArray(s?.groups) ? s.groups.filter((g: unknown) => typeof g === "string") : null,
+    }));
+    return { kind: "rotation", scope, courseKey: String(p.courseKey ?? ""), title: str(p.title), sessions, log, findings: [] };
+  }
+  return null;
+}
+
 function rosterProposal(
   scope: Scope, fileName: string, rows: RosterRow[], readBy: string,
-  meta: AskResult["meta"], reply: string,
+  meta: AskResult["meta"], reply: string, extra: Finding[] = [],
 ): AskResult {
   return {
     ok: true,
     reply: `${reply} Accepting replaces ${scope.programme || "the selected programme"}'s class list.`,
     meta,
     proposal: {
-      kind: "roster", scope, courseKey: scope.programme, fileName, readBy, rows,
-      findings: [...rosterScope(scope), ...validateRoster(rows)],
+      kind: "roster", scope, courseKey: scope.programme, fileName, readBy, rows, log: extra,
+      findings: [...rosterScope(scope), ...extra, ...validateRoster(rows)],
     },
   };
 }
