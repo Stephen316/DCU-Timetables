@@ -70,7 +70,6 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
         <Entry
           title="Lab rotation"
           meta={`${module ? `${view.rotation.sessions.length} of ${view.rotation.total}` : view.rotation.total} sessions · v${view.rotation.version} · ${when(view.rotation.savedAt)}`}
-          deleteLabel={module ? "Delete the programme’s rotation" : "Delete rotation"}
           deleting={deleting === "rotation"}
           onDelete={() => remove("rotation", { kind: "rotation", programme },
             `Delete the lab rotation for ${programmeName}? All ${view.rotation!.total} sessions go, across every module — not only ${module || "the one shown"}. This can't be undone.`)}
@@ -103,7 +102,6 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
           key={`${sp.module}-${sp.activity}`}
           title={`${sp.module} · ${sp.activity} split`}
           meta={`${sp.ranges.length} band${sp.ranges.length === 1 ? "" : "s"} · ${when(sp.savedAt)}`}
-          deleteLabel="Delete split"
           deleting={deleting === `split:${sp.module}:${sp.activity}`}
           onDelete={() => remove(`split:${sp.module}:${sp.activity}`, { kind: "split", module: sp.module, activity: sp.activity },
             `Delete the ${sp.module} ${sp.activity} split? Students stop seeing which band they are in. This can't be undone.`)}
@@ -127,7 +125,6 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
         <Entry
           title="Class list"
           meta={`${view.classList.members} students · v${view.classList.version} · ${when(view.classList.savedAt)}`}
-          deleteLabel="Delete class list"
           deleting={deleting === "classList"}
           onDelete={() => remove("classList", { kind: "classList", programme },
             `Delete the class list for ${programmeName}? All ${view.classList!.members} students lose their group, and phones set up from it go back to the profile screen on their next launch. This can't be undone.`)}
@@ -154,27 +151,25 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
   );
 }
 
-function Entry({ title, meta, deleteLabel, deleting, onDelete, children }: {
-  title: string; meta: string; deleteLabel: string; deleting: boolean; onDelete: () => void; children: React.ReactNode;
+function Entry({ title, meta, deleting, onDelete, children }: {
+  title: string; meta: string; deleting: boolean; onDelete: () => void; children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="saved-entry">
-      <button type="button" className="saved-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span className={open ? "chev open" : "chev"} aria-hidden="true" />
-        <span className="saved-title">{title}</span>
-        <span className="dim">{meta}</span>
-      </button>
-      {open && (
-        <div className="saved-body">
-          {children}
-          <div className="saved-actions">
-            <button type="button" className="danger" disabled={deleting} onClick={onDelete}>
-              {deleting ? <><Spinner /> Deleting…</> : deleteLabel}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Side by side, not nested: a button inside the toggle would be a button in a button. */}
+      <div className="saved-row">
+        <button type="button" className="saved-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <span className={open ? "chev open" : "chev"} aria-hidden="true" />
+          <span className="saved-title">{title}</span>
+          <span className="dim">{meta}</span>
+        </button>
+        <button type="button" className="danger saved-delete" disabled={deleting} onClick={onDelete}
+                aria-label={`Delete ${title}`}>
+          {deleting ? <><Spinner /> Deleting…</> : "Delete"}
+        </button>
+      </div>
+      {open && <div className="saved-body">{children}</div>}
     </div>
   );
 }

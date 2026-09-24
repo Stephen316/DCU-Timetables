@@ -283,8 +283,9 @@ button.send { display: inline-flex; align-items: center; gap: 6px; min-width: 84
 .saved-body h2 { font-size: 14px; margin: 10px 0; }
 .saved-scroll { max-height: 320px; overflow: auto; }
 .saved-body td, .saved-body th { white-space: nowrap; }
-.saved-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
-.saved-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.saved-row { display: flex; align-items: center; gap: 8px; padding-right: 8px; }
+.saved-row .saved-toggle { flex: 1; min-width: 0; }
+.saved-delete { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 8px; }
 .turn-ref { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
 .saved { margin-top: 20px; }
