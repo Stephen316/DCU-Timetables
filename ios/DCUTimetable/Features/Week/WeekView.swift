@@ -72,6 +72,11 @@ struct WeekView: View {
                     if previous == .background, phase == .active { resetToDefaultDay() }
                 }
                 .onReceive(NotificationCenter.default
+                    .publisher(for: .timetableChangesChanged)
+                    .receive(on: RunLoop.main)) { _ in
+                        model.reloadChanges()
+                    }
+                .onReceive(NotificationCenter.default
                     .publisher(for: .labRotationChanged)
                     .receive(on: RunLoop.main)) { _ in
                         Task { await model.reloadAll() }

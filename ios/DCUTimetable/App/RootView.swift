@@ -57,7 +57,8 @@ struct RootView: View {
                                              categoryTypeIdentity: ""),
                 source: ProfileTimetableSource(profile: profile),
                 title: "Year 1 Eng",
-                resetLabel: "Sign out"
+                resetLabel: "Sign out",
+                audience: .forProfile(profile)
             ) { signOut() }
         } else if let selectedProgramme {
             TimetableShell(programme: selectedProgramme, resetLabel: "Sign out") { signOut() }
@@ -90,6 +91,14 @@ struct RootView: View {
            await LabRotationRefresh.run(courseKey: LabRotationLoader.courseKey, store: rotations,
                                         cache: LabRotationCache(), bundled: LabRotationLoader.bundled()) {
             NotificationCenter.default.post(name: .labRotationChanged, object: nil)
+        }
+
+        // Changes for the course being shown: the profile's, or the picked programme's.
+        let course = profile.map { TimetableAudience.forProfile($0).courseKey }
+            ?? selectedProgramme.flatMap { TimetableAudience.forProgramme(code: $0.code)?.courseKey }
+        if let course, let changes = TimetableChangeStoreFactory.make(),
+           await TimetableChangeRefresh.run(courseKey: course, store: changes, cache: TimetableChangeCache()) {
+            NotificationCenter.default.post(name: .timetableChangesChanged, object: nil)
         }
 
         guard let profile else {

@@ -43,16 +43,8 @@ public struct ProfileTimetableSource: TimetableSource {
 
     // The rotation PDF's times are Irish local clock times, so build the dates in the
     // Dublin timezone (the API's own events are true UTC and handled separately).
-    private static let dublin = TimeZone(identifier: "Europe/Dublin") ?? .current
-
     private func localDate(_ dateString: String, _ time: String) -> Date? {
-        let d = dateString.split(separator: "-").compactMap { Int($0) }
-        let t = time.split(separator: ":").compactMap { Int($0) }
-        guard d.count == 3, t.count == 2 else { return nil }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = Self.dublin
-        return calendar.date(from: DateComponents(year: d[0], month: d[1], day: d[2],
-                                                  hour: t[0], minute: t[1]))
+        DublinTime.date(dateString, time)
     }
 
     private func rotationEvent(_ session: LabSession, _ rotation: LabRotation) -> TimetableEvent? {

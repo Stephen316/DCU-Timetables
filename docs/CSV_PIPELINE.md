@@ -350,6 +350,14 @@ Three caveats:
   device, and falls back to the bundled `EngineeringLabRotation.json` when nothing is saved
   or on first launch with no signal. A failed request keeps the cached copy. Students on a
   programme they picked, with no group attached, still see every group's lab slots.
+- **Timetable changes — done.** For what the rotation doesn't cover, `timetable_changes`
+  (supabase/phase17) removes a class or adds one for a group, a subgroup, or everyone on a
+  course, on listed dates. Made on the console's Timetable page or proposed from Ask, which
+  is given the module's DCU classes, the teaching weeks and what is saved as context (never
+  the class list). A removal is checked against DCU's timetable before it saves; an added
+  class's times and room must appear in what the admin wrote. The app downloads a course's
+  changes with the rotation and applies them on the phone (`TimetableChanges.apply`).
+  Students on a picked programme get only the changes for everyone.
 - **Deletion.** A student asks for their row to be removed — needs a path that isn't editing
   the database by hand.
 - **Retention.** How long a roster lives after the module ends.

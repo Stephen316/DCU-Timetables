@@ -33,6 +33,10 @@ final class WeekViewModel: ObservableObject {
 
     private var rawByWeekNumber: [Int: [TimetableEvent]] = [:]
     private var hiddenGroups: Set<String>
+    /// Whose changes apply here — see `TimetableChanges`. Nil for a programme the console
+    /// has no course for, which shows DCU's timetable as it is.
+    private let audience: TimetableAudience?
+    private var changes: [TimetableChange] = []
     /// Handed to the class page so it talks to the same stores rather than making its own.
     let cancellationStore: CancellationStore
     let deadlineStore: DeadlineStore
@@ -42,6 +46,7 @@ final class WeekViewModel: ObservableObject {
 
     init(programme: TimetableCategory,
          hiddenGroups: Set<String> = [],
+         audience: TimetableAudience? = nil,
          source: TimetableSource = DCUAPIClient(),
          cache: TimetableCache = TimetableCache(),
          cancellationStore: CancellationStore = CancellationStoreFactory.make(),
@@ -49,6 +54,8 @@ final class WeekViewModel: ObservableObject {
          verdictStore: VerdictStore = VerdictStoreFactory.make()) {
         self.programme = programme
         self.hiddenGroups = hiddenGroups
+        self.audience = audience
+        self.changes = audience.map { TimetableChangeCache().changes(courseKey: $0.courseKey) } ?? []
         self.source = source
         self.cache = cache
         self.cancellationStore = cancellationStore
@@ -189,6 +196,15 @@ final class WeekViewModel: ObservableObject {
         publishWidgetSnapshot()
     }
 
+    /// Re-read the saved changes after a refresh downloaded new ones. No refetch: changes
+    /// apply on top of the weeks already loaded.
+    func reloadChanges() {
+        guard let audience else { return }
+        changes = TimetableChangeCache().changes(courseKey: audience.courseKey)
+        applyFilter()
+        publishWidgetSnapshot()
+    }
+
     /// Fetch every loaded week again — the rotation behind them changed.
     func reloadAll() async {
         rawByWeekNumber = [:]
@@ -275,7 +291,13 @@ final class WeekViewModel: ObservableObject {
     }
 
     private func applyFilter() {
-        eventsByWeekNumber = rawByWeekNumber.mapValues { GroupCatalog.filter($0, hiding: hiddenGroups) }
+        // Changes first, then the student's own group filter — so an added class for their
+        // group can still be hidden by them like any other.
+        eventsByWeekNumber = Dictionary(uniqueKeysWithValues: rawByWeekNumber.map { number, events in
+            let changed = TimetableChanges.apply(events, changes: changes, audience: audience,
+                                                 weekStart: weeks.first { $0.number == number }?.firstDay)
+            return (number, GroupCatalog.filter(changed, hiding: hiddenGroups))
+        })
         // `moduleKeys` reads `rawByWeekNumber`, which isn't published; mirroring it here is
         // what tells the deadlines tab a newly-loaded week brought a module with it.
         loadedModuleKeys = moduleKeys

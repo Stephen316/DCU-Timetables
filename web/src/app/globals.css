@@ -294,3 +294,15 @@ button.send { display: inline-flex; align-items: center; gap: 6px; min-width: 84
 .saved-head .dim { font-size: 13px; }
 
 .unlock-btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Timetable — DCU's week with the saved changes on top. A class removed for everyone is
+   struck through rather than hidden, so the page still shows what DCU publishes. */
+.tt td { white-space: nowrap; }
+.tt-removed td { color: var(--dim); text-decoration: line-through; }
+.tt-removed td:nth-last-child(-n+2) { text-decoration: none; }
+.tt-added td { background: var(--surface); }
+.tt-form td, .tt-form:hover td { background: var(--surface); padding: 0; white-space: normal; }
+.tt-edit { padding: 12px; }
+.tt-edit .row { gap: 12px; }
+label.check { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text); white-space: nowrap; }
+label.check input { width: auto; }

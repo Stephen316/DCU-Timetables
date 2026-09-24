@@ -6,7 +6,10 @@ import { classify } from "@/lib/mistral/api";
 import { readDocument, transcribeRotation, type ReadDocument } from "@/lib/mistral/rotation";
 import { classifyDocument, classListToCsv } from "@/lib/mistral/roster";
 import { normalise } from "@/lib/extraction/normalise";
-import { interpretSplit } from "@/lib/mistral/split";
+import { interpretMessage, type ChangeArgs } from "@/lib/mistral/split";
+import { classes, dublin, weeks } from "@/lib/dcu/timetable";
+import { checkChangeProvenance, describeChange, fromRow, type TimetableChange } from "@/lib/changes/change";
+import { reviewChange, saveChange } from "../timetable/actions";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
 import { checkScope, moduleFor, programmeFor, type Scope } from "@/lib/proposals/courses";
 import type { Proposal } from "@/lib/proposals/types";
@@ -23,6 +26,8 @@ export type AskResult = {
   retryable?: boolean;
   reply?: string;
   proposal?: Proposal;
+  /// Several at once — one message can ask for more than one timetable change.
+  proposals?: Proposal[];
   meta?: { ms: number; inputTokens?: number; outputTokens?: number };
 };
 
@@ -65,11 +70,12 @@ export async function ask(form: FormData): Promise<AskResult> {
         `different module, say so.`
       : "";
 
-    const out = await interpretSplit({
+    const out = await interpretMessage({
       key,
       model: MISTRAL_MODEL,
       history,
       text: scopeLine ? `${scopeLine}\n\n${message}` : message,
+      context: await changeContext(scope),
     });
     const meta = { ms: Date.now() - started, inputTokens: out.usage.input, outputTokens: out.usage.output };
 
@@ -109,11 +115,88 @@ export async function ask(form: FormData): Promise<AskResult> {
       };
     }
 
+    if (out.changes.length) {
+      const source = [...history.map((t) => t.text), message].join("\n");
+      const proposals = await Promise.all(out.changes.map((a) => changeProposal(scope, a, source)));
+      return { ok: true, reply: out.reply, meta, proposals };
+    }
+
     return { ok: true, reply: out.reply || "No proposal — tell me what you want to change.", meta };
   } catch (e) {
     const { retryable, message: msg } = classify(e);
     return { ok: false, error: msg, retryable };
   }
+}
+
+/// What the model is shown about the selected module so it can turn "week 5" or "every
+/// Tuesday" into dates and find the class being removed: today, the teaching weeks, DCU's
+/// classes for the module, and what is saved. None of it is personal data — the class list
+/// is deliberately not here.
+async function changeContext(scope: Scope): Promise<string> {
+  if (!programmeFor(scope.programme) || !scope.module) return "";
+  const today = dublin(new Date().toISOString());
+  const lines = [`Context for ${scope.programme}, module ${scope.module}. Today is ${today.day} ${today.date}.`];
+
+  try {
+    const all = await weeks();
+    lines.push("", "Teaching weeks (week: its Monday): " + all.map((w) => `${w.label}: ${w.firstDay}`).join("; "));
+    const found = await classes([scope.module], all.map((w) => w.number));
+    const slots = new Map<string, string[]>();
+    for (const c of found) {
+      const k = `${c.code} (${c.kind}) ${c.day} ${c.start}–${c.end}${c.rooms.length ? `, ${c.rooms.join(" ")}` : ""}`;
+      slots.set(k, [...(slots.get(k) ?? []), c.date]);
+    }
+    lines.push("", `${scope.module} classes as DCU publishes them (for everyone on the course):`);
+    for (const [k, dates] of slots) lines.push(`- ${k}: ${dates.join(", ")}`);
+    if (!slots.size) lines.push("- none");
+  } catch {
+    lines.push("", "DCU's timetable couldn't be reached, so its classes aren't listed. Ask for exact dates and times.");
+  }
+
+  const db = await supabaseServer();
+  const [{ data: rot }, { data: saved }] = await Promise.all([
+    db.from("lab_rotations").select("lab_rotation_sessions(date, day, start_time, end_time, module, activity, groups)")
+      .eq("course_key", scope.programme).maybeSingle(),
+    db.from("timetable_changes").select("*").eq("course_key", scope.programme).eq("module", scope.module),
+  ]);
+  const sessions = ((rot?.lab_rotation_sessions ?? []) as Record<string, any>[])
+    .filter((s) => s.module === scope.module)
+    .sort((a, b) => `${a.date}${a.start_time}`.localeCompare(`${b.date}${b.start_time}`));
+  if (sessions.length) {
+    lines.push("", `Saved lab rotation for ${scope.module} — which groups attend which session:`);
+    for (const s of sessions) lines.push(`- ${s.date} ${s.day} ${s.start_time}–${s.end_time} ${s.activity ?? ""}: groups ${(s.groups ?? []).join(" ")}`);
+  }
+  if (saved?.length) {
+    lines.push("", "Changes already saved:");
+    for (const c of saved.map(fromRow)) lines.push(`- ${describeChange(c)}: ${c.dates.join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Promise<Proposal> {
+  const kind = a.kind === "add" ? "add" : "remove";
+  const change: TimetableChange = {
+    courseKey: scope.programme,
+    group: a.group?.trim().toUpperCase() || null,
+    kind,
+    // The selection wins, as for a split; what the model read is compared in checkScope.
+    module: scope.module,
+    activityCode: kind === "remove" ? a.activityCode?.trim() || null : null,
+    title: kind === "add" ? a.title?.trim() || null : null,
+    dates: [...new Set((a.dates ?? []).map((d) => d.trim()))].sort(),
+    start: (a.start ?? "").trim().padStart(5, "0"),
+    end: kind === "add" && a.end ? a.end.trim().padStart(5, "0") : null,
+    room: kind === "add" ? a.room?.trim() || null : null,
+    note: a.note?.trim() || null,
+  };
+  return {
+    kind: "change", scope, change, source,
+    findings: [
+      ...checkScope(scope, { module: a.module }),
+      ...(await reviewChange(change)),
+      ...checkChangeProvenance(change, source),
+    ],
+  };
 }
 
 /// Any upload, whatever it is, through csv_pipeline.mmd's ingestion path:
@@ -273,6 +356,14 @@ export async function accept(proposal: Proposal) {
       p_ranges: proposal.rule.ranges,
     });
     return error ? { ok: false, error: error.message } : { ok: true };
+  }
+
+  if (proposal.kind === "change") {
+    const blocker = [...checkScope(proposal.scope), ...checkChangeProvenance(proposal.change, proposal.source ?? "")]
+      .find((f) => f.level === "error");
+    if (blocker) return { ok: false, error: blocker.message };
+    // Re-checks the change, including against DCU's timetable, before it saves.
+    return saveChange(proposal.change);
   }
 
   if (proposal.kind === "roster") {

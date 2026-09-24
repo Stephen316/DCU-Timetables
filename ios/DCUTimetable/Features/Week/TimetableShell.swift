@@ -18,6 +18,7 @@ struct TimetableShell: View {
          source: TimetableSource = DCUAPIClient(),
          title: String? = nil,
          resetLabel: String = "Change programme",
+         audience: TimetableAudience? = nil,
          onReset: @escaping () -> Void) {
         self.programme = programme
         self.source = source
@@ -27,6 +28,7 @@ struct TimetableShell: View {
         let hidden = HiddenGroups.decode(UserDefaults.standard.data(forKey: "hiddenGroups") ?? Data())
         _model = StateObject(wrappedValue: WeekViewModel(programme: programme,
                                                          hiddenGroups: hidden,
+                                                         audience: audience ?? TimetableAudience.forProgramme(code: programme.code),
                                                          source: source))
     }
 

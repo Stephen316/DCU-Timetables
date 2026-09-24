@@ -43,15 +43,64 @@ export const SPLIT_TOOL = {
   },
 };
 
+export const CHANGE_TOOL = {
+  name: "proposeTimetableChange",
+  description:
+    "Propose removing a class from the timetable, or adding one, for one group of the course " +
+    "or everyone on it. Call it once you know the module, whether it is a removal or an " +
+    "addition, who it is for, the exact dates, and the start time (for an addition also the " +
+    "end time and what the class is). One call per change. If anything is missing or " +
+    "ambiguous, do NOT call this — reply with a question instead.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      kind: { type: Type.STRING, enum: ["remove", "add"] },
+      module: { type: Type.STRING, description: "Module code, e.g. EEG1002." },
+      group: {
+        type: Type.STRING, nullable: true,
+        description: "A group letter (C) or subgroup (C.2). Null only when the change is for everyone on the course.",
+      },
+      dates: {
+        type: Type.ARRAY, items: { type: Type.STRING },
+        description: "Every date it applies to, yyyy-mm-dd. Work them out from the teaching weeks and classes you were given.",
+      },
+      start: { type: Type.STRING, description: "24-hour start, e.g. 14:00. For a removal, the listed start of the class being removed." },
+      end: { type: Type.STRING, nullable: true, description: "24-hour end. Required for an addition; null for a removal." },
+      title: { type: Type.STRING, nullable: true, description: "Addition only: what the class is — Lab, Tutorial, Make-up lab." },
+      room: { type: Type.STRING, nullable: true, description: "Addition only, if one was given." },
+      activityCode: {
+        type: Type.STRING, nullable: true,
+        description: "Removal only: the listed activity code, when two classes of the module start at the same time and only one is meant.",
+      },
+      note: { type: Type.STRING, nullable: true, description: "The reason, if one was given." },
+    },
+    required: ["kind", "module", "group", "dates", "start", "end", "title", "room", "activityCode", "note"],
+  },
+};
+
 /// Splits only. Rotation documents used to share this prompt and a second tool, with the
 /// model choosing between them; they now go through the extraction pipeline the harness
 /// measures (`lib/mistral/rotation.ts`), so the words that read a table are the words that
 /// were scored. What is left here is the conversation.
 export const SYSTEM = `
-You help an administrator maintain a university timetable. Your job is alphabetical splits:
-a described rule — "surnames A-M have the lecture Tuesday, N-Z Thursday" — becomes a call
-to proposeSplit. Rotation documents are handled separately: if someone asks about one, tell
+You help an administrator maintain a university timetable. You have two jobs:
+
+- Alphabetical splits: a described rule — "surnames A-M have the lecture Tuesday, N-Z
+  Thursday" — becomes a call to proposeSplit.
+- Timetable changes: "cancel group C's lab on 14 October", "add a make-up tutorial for
+  everyone next Friday 10-11 in S205" — becomes a call to proposeTimetableChange, one call
+  per change.
+
+Rotation documents and class lists are handled separately: if someone asks about one, tell
 them to attach it.
+
+For timetable changes you are given, as context, today's date, the teaching weeks, the
+module's classes as DCU publishes them, and what is already saved (the lab rotation and
+earlier changes). Use them to turn "week 5", "next Tuesday" or "every week" into exact
+dates, and to find the start time of a class being removed. Never use a date or time that
+neither the administrator nor the context gives you. If the class being removed isn't in
+the context, say so rather than guessing. A lab the rotation already assigns to other
+groups does not need removing — the app hides it.
 
 How to behave, in order of importance:
 
@@ -62,7 +111,8 @@ How to behave, in order of importance:
    M — and must together cover A to Z exactly once. If the bands you are given leave a gap
    or overlap, say so plainly and ask which was meant, rather than quietly moving a
    boundary to make them fit.
-3. If no end time is given, ask. Do not assume an hour.
+3. If no end time is given for a split or an added class, ask. Do not assume an hour. If
+   it isn't clear which group a change is for, ask — never default to everyone.
 4. Keep replies to a sentence or two. This is a working tool, not a conversation.
 
 You never save anything. A proposal is shown to the administrator, who decides.

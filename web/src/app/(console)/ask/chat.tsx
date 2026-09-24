@@ -9,10 +9,11 @@ import { csvField, ROSTER_HEADER } from "@/lib/roster/parse";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/upload";
 import { Spinner } from "../spinner";
 import { SavedPanel } from "./saved-panel";
+import { describeChange, weekday } from "@/lib/changes/change";
 
 /// What the transcript shows. The attachment and proposal number are display only — the
 /// history sent back to the model is the words, as before.
-type Shown = Turn & { attachment?: { name: string; size: number }; proposalNo?: number };
+type Shown = Turn & { attachment?: { name: string; size: number }; proposalNos?: number[] };
 
 /// Every proposal made in this conversation, kept until it is saved or thrown away. A
 /// follow-up question used to replace the proposal on the panel, so answering one lost the
@@ -29,12 +30,15 @@ type Item = {
 /// other, so whichever is accepted last is what is kept.
 function target(p: Proposal): string {
   if (p.kind === "split") return `split ${p.rule.moduleKey} ${p.rule.activity}`;
+  // Changes add up rather than replace; only an identical one is "the same thing".
+  if (p.kind === "change") return `change ${JSON.stringify(p.change)}`;
   return `${p.kind} ${p.courseKey}`;
 }
 
 function describe(p: Proposal): string {
   if (p.kind === "split") return `${p.rule.moduleKey || "?"} ${p.rule.activity} split`;
   if (p.kind === "roster") return `${p.courseKey || "?"} class list · ${p.rows.length} students`;
+  if (p.kind === "change") return describeChange(p.change);
   return `${p.courseKey || "?"} rotation · ${p.sessions.filter((s) => s.groups?.length).length} sessions`;
 }
 
@@ -126,10 +130,12 @@ export function Ask() {
     try {
       const result = await ask(form);
       setLast(result);
-      const no = result.proposal ? ++counter.current : undefined;
-      if (result.proposal) setItems((all) => [...all, { no: no!, proposal: result.proposal!, status: "open" }]);
-      if (result.reply || no) {
-        setTurns((t) => [...t, { role: "model", text: result.reply ?? "", proposalNo: no }]);
+      // A message can ask for several changes at once; each is its own proposal.
+      const made = result.proposals ?? (result.proposal ? [result.proposal] : []);
+      const fresh = made.map((proposal) => ({ no: ++counter.current, proposal, status: "open" as const }));
+      if (fresh.length) setItems((all) => [...all, ...fresh]);
+      if (result.reply || fresh.length) {
+        setTurns((t) => [...t, { role: "model", text: result.reply ?? "", proposalNos: fresh.map((f) => f.no) }]);
       }
     } catch (e) {
       // The request itself failed — the connection, or the platform refusing it. Put the
@@ -183,6 +189,8 @@ export function Ask() {
           status: "saved",
           message: proposal.kind === "split"
             ? `${proposal.rule.moduleKey} ${proposal.rule.activity} saved.`
+            : proposal.kind === "change"
+              ? "Change saved. Phones pick it up when the app next opens."
             : proposal.kind === "roster"
               ? `Class list saved — ${proposal.rows.length} students. Phones re-check on their next launch.`
               : `Rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`,
@@ -255,7 +263,11 @@ export function Ask() {
                 </div>
               )}
               {!(t.attachment && t.text === `Attached ${t.attachment.name}`) && t.text}
-              {t.proposalNo && <div className="turn-ref">Proposal {t.proposalNo} is on the panel →</div>}
+              {!!t.proposalNos?.length && (
+                <div className="turn-ref">
+                  Proposal{t.proposalNos.length > 1 ? "s" : ""} {t.proposalNos.join(", ")} {t.proposalNos.length > 1 ? "are" : "is"} on the panel →
+                </div>
+              )}
             </div>
           ))}
           {pending && (
@@ -403,7 +415,10 @@ function ProposalCard({ item, others, onAccept, onDiscard, disabled }: {
 
       {open && (
         <div className="saved-body">
-          {p.kind === "split" ? <SplitPanel p={p} /> : p.kind === "roster" ? <RosterPanel p={p} /> : <RotationPanel p={p} />}
+          {p.kind === "split" ? <SplitPanel p={p} />
+            : p.kind === "roster" ? <RosterPanel p={p} />
+            : p.kind === "change" ? <ChangePanel p={p} />
+            : <RotationPanel p={p} />}
 
           {item.status !== "saved" && savedTwin && (
             <p className="tag warn">Proposal {savedTwin.no} saved the same thing. Accepting this replaces it.</p>
@@ -461,6 +476,31 @@ function SplitPanel({ p }: { p: Extract<Proposal, { kind: "split" }> }) {
       </table>
       {p.problems.map((x, i) => (
         <p key={i} className={x.level === "error" ? "tag off" : "tag warn"}>{x.message}</p>
+      ))}
+    </>
+  );
+}
+
+function ChangePanel({ p }: { p: Extract<Proposal, { kind: "change" }> }) {
+  const c = p.change;
+  return (
+    <>
+      <h2>
+        {c.kind === "remove" ? "Remove" : "Add"} {c.module}{" "}
+        <span className="dim">for {c.group ? `group ${c.group}` : "everyone on " + c.courseKey}</span>
+      </h2>
+      <table>
+        <tbody>
+          <tr><th>{c.kind === "remove" ? "Class" : "What"}</th>
+            <td>{c.kind === "remove" ? <span className="mono">{c.activityCode ?? `every ${c.module} class`}</span> : c.title}</td></tr>
+          <tr><th>Time</th><td className="mono">{c.start}{c.end ? `–${c.end}` : ""}</td></tr>
+          {c.room && <tr><th>Room</th><td className="mono">{c.room}</td></tr>}
+          <tr><th>Dates</th><td>{c.dates.map((d) => `${weekday(d)} ${d}`).join(", ")}</td></tr>
+          {c.note && <tr><th>Note</th><td>{c.note}</td></tr>}
+        </tbody>
+      </table>
+      {p.findings.map((f, i) => (
+        <p key={i} className={f.level === "error" ? "tag off" : f.level === "warn" ? "tag warn" : "tag ok"}>{f.message}</p>
       ))}
     </>
   );
