@@ -5,6 +5,10 @@ struct AccountView: View {
     @Environment(\.dismiss) private var dismiss
 
     private let store: ProfileStore
+    private let deadlines: DeadlineStore
+    /// Nil until counted, so a failed count shows nothing rather than a wrong "No one".
+    @State private var hiddenCount: Int?
+    @State private var unhiding = false
     @State private var profile: AccountProfile?
     @State private var loadFailed = false
     @State private var copied = false
@@ -15,8 +19,10 @@ struct AccountView: View {
 
     private let user = SignedInUser.current
 
-    init(store: ProfileStore = ProfileStoreFactory.make()) {
+    init(store: ProfileStore = ProfileStoreFactory.make(),
+         deadlines: DeadlineStore = DeadlineStoreFactory.make()) {
         self.store = store
+        self.deadlines = deadlines
     }
 
     var body: some View {
@@ -26,6 +32,8 @@ struct AccountView: View {
                     signedInSection
                     appearanceSection
                     identifierSection
+                    hiddenSection
+                    aboutSection
                     dangerSection
                 }
                 .themedRows()
@@ -132,6 +140,46 @@ struct AccountView: View {
         }
     }
 
+    /// The way back from "Hide posts from this person". All at once, because the app never
+    /// learns who was hidden — only how many.
+    @ViewBuilder
+    private var hiddenSection: some View {
+        if let hiddenCount, hiddenCount > 0 {
+            Section {
+                LabeledContent("Hidden", value: hiddenCount == 1 ? "1 person" : "\(hiddenCount) people")
+                Button {
+                    Task { await unhideAll() }
+                } label: {
+                    HStack {
+                        Text("Show everyone again")
+                        if unhiding {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                    .contentShape(.rect)
+                }
+                .disabled(unhiding)
+            } header: {
+                Text("Hidden people")
+            } footer: {
+                Text("Deadlines from people you've hidden don't reach you.")
+            }
+        }
+    }
+
+    private var aboutSection: some View {
+        Section {
+            Link("Privacy policy", destination: AppLinks.privacy)
+            Link("Terms of use", destination: AppLinks.terms)
+            Link("Help and contact", destination: AppLinks.support)
+        } header: {
+            Text("About")
+        } footer: {
+            Text("An independent student project. Not affiliated with or endorsed by Dublin City University.")
+        }
+    }
+
     @ViewBuilder
     private var dangerSection: some View {
         Section {
@@ -156,6 +204,7 @@ struct AccountView: View {
     // MARK: - Actions
 
     private func load() async {
+        hiddenCount = try? await deadlines.hiddenAuthorCount()
         do {
             let fetched = try await store.myProfile()
             profile = fetched
@@ -165,6 +214,17 @@ struct AccountView: View {
             // The ID is a convenience, not something worth an error dialog over — it
             // shows as `--` and the student can come back.
             loadFailed = true
+        }
+    }
+
+    private func unhideAll() async {
+        unhiding = true
+        defer { unhiding = false }
+        do {
+            try await deadlines.unhideAllAuthors()
+            hiddenCount = 0
+        } catch {
+            hiddenCount = try? await deadlines.hiddenAuthorCount()
         }
     }
 

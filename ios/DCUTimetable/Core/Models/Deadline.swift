@@ -259,3 +259,18 @@ public enum DeadlineRules {
         DeadlineCountdown.text(to: due, from: now, calendar: calendar)
     }
 }
+
+/// Why a student is reporting someone else's deadline. The raw values are the database's
+/// `deadline_reports.reason` check, so they must stay in step with it.
+public enum DeadlineReportReason: String, CaseIterable, Sendable {
+    case offensive, spam, wrong, other
+
+    public var label: String {
+        switch self {
+        case .offensive: return "Offensive or abusive"
+        case .spam:      return "Spam or nonsense"
+        case .wrong:     return "The date or details are wrong"
+        case .other:     return "Something else"
+        }
+    }
+}

@@ -86,4 +86,26 @@ final class DeadlinesViewModel: ObservableObject {
         }
         await reload()
     }
+
+    /// Hidden from this student by the server from now on, so a reload is all that's
+    /// needed to take it off the list.
+    func report(_ deadline: Deadline, reason: DeadlineReportReason) async {
+        guard !isMine(deadline) else { return }
+        do {
+            try await store.report(deadlineID: deadline.id, reason: reason)
+        } catch {
+            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't send that report."
+        }
+        await reload()
+    }
+
+    func hideAuthor(of deadline: Deadline) async {
+        guard !isMine(deadline) else { return }
+        do {
+            try await store.hideAuthor(ofDeadlineID: deadline.id)
+        } catch {
+            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't hide that person."
+        }
+        await reload()
+    }
 }

@@ -17,6 +17,16 @@ export async function verifyDeadline(id: string, status: "verified" | "rejected"
   return {};
 }
 
+/// Closes every open report on a deadline. "remove" also rejects the deadline, which takes
+/// it out of every student's view.
+export async function resolveReports(id: string, action: "dismiss" | "remove") {
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("resolve_deadline_reports", { p_deadline: id, p_action: action });
+  if (error) return { error: error.message };
+  revalidatePath("/review");
+  return {};
+}
+
 export async function setRole(id: string, role: "student" | "trusted" | "admin") {
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc("set_user_role", { target: id, new_role: role });

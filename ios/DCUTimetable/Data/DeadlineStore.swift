@@ -15,6 +15,26 @@ public protocol DeadlineStore: Sendable {
     func standings(forDeadlineIDs ids: [String]) async throws -> [String: DeadlineStanding]
     func confirm(deadlineID: String, confirmerID: String) async throws
     func unconfirm(deadlineID: String, confirmerID: String) async throws
+
+    // Moderation (App Review 1.2). Each names a deadline, never a person: deadlines are
+    // anonymous to students, and the server looks up who posted one.
+
+    /// Sends the deadline to the console's review queue and hides it from this student.
+    func report(deadlineID: String, reason: DeadlineReportReason) async throws
+    /// Stops everything the deadline's author posts reaching this student.
+    func hideAuthor(ofDeadlineID deadlineID: String) async throws
+    /// How many people this student has hidden. A count, not a list: a list would say who
+    /// wrote what.
+    func hiddenAuthorCount() async throws -> Int
+    func unhideAllAuthors() async throws
+}
+
+/// With nowhere to share deadlines, there is no one else's content to moderate.
+public extension DeadlineStore {
+    func report(deadlineID: String, reason: DeadlineReportReason) async throws {}
+    func hideAuthor(ofDeadlineID deadlineID: String) async throws {}
+    func hiddenAuthorCount() async throws -> Int { 0 }
+    func unhideAllAuthors() async throws {}
 }
 
 public struct SupabaseDeadlineStore: DeadlineStore {
@@ -186,6 +206,36 @@ public struct SupabaseDeadlineStore: DeadlineStore {
         await apply(&request)
         let (_, response) = try await session.data(for: request)
         try check(response)
+    }
+
+    // MARK: Moderation
+
+    public func report(deadlineID: String, reason: DeadlineReportReason) async throws {
+        _ = try await rpc("report_deadline", ["p_deadline": deadlineID, "p_reason": reason.rawValue])
+    }
+
+    public func hideAuthor(ofDeadlineID deadlineID: String) async throws {
+        _ = try await rpc("hide_author_of", ["p_deadline": deadlineID])
+    }
+
+    public func hiddenAuthorCount() async throws -> Int {
+        let data = try await rpc("hidden_author_count", [:])
+        return (try? JSONDecoder().decode(Int.self, from: data)) ?? 0
+    }
+
+    public func unhideAllAuthors() async throws {
+        _ = try await rpc("unhide_all_authors", [:])
+    }
+
+    private func rpc(_ name: String, _ arguments: [String: String]) async throws -> Data {
+        var request = URLRequest(url: URL(string: "\(config.url)/rest/v1/rpc/\(name)")!)
+        request.httpMethod = "POST"
+        await apply(&request)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(arguments)
+        let (data, response) = try await session.data(for: request)
+        try check(response)
+        return data
     }
 
     /// Authorised as the signed-in student, so the database can check `auth.uid()` against

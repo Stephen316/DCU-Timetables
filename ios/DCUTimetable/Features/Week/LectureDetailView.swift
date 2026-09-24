@@ -347,7 +347,9 @@ struct LectureDetailView: View {
                                 standing: model.standing(for: deadline),
                                 isMine: model.isMine(deadline),
                                 onConfirm: { Task { await model.toggleConfirmation(deadline) } },
-                                onDelete: { Task { await model.removeDeadline(deadline) } })
+                                onDelete: { Task { await model.removeDeadline(deadline) } },
+                                onReport: { reason in Task { await model.report(deadline, reason: reason) } },
+                                onHideAuthor: { Task { await model.hideAuthor(of: deadline) } })
                 }
             }
             Button {
@@ -414,6 +416,8 @@ private struct DeadlineRow: View {
     let isMine: Bool
     let onConfirm: () -> Void
     let onDelete: () -> Void
+    let onReport: (DeadlineReportReason) -> Void
+    let onHideAuthor: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -445,6 +449,7 @@ private struct DeadlineRow: View {
                     Button(standing.confirmedByMe ? "Confirmed" : "This is right") { onConfirm() }
                         .buttonStyle(.inlineAction(tint: standing.confirmedByMe
                                                    ? TimetableTint.confirmed : Theme.accent))
+                    DeadlineModerationMenu(deadline: deadline, onReport: onReport, onHideAuthor: onHideAuthor)
                 }
             }
             .modifier(HangingIndent())

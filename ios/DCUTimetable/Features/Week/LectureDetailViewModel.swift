@@ -189,4 +189,29 @@ final class LectureDetailViewModel: ObservableObject {
         }
         await load()
     }
+
+    /// Off the page at once; the server keeps it off on every later load.
+    func report(_ deadline: Deadline, reason: DeadlineReportReason) async {
+        guard !isMine(deadline) else { return }
+        deadlines.removeAll { $0.id == deadline.id }
+        do {
+            try await deadlineStore.report(deadlineID: deadline.id, reason: reason)
+        } catch {
+            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't send that report."
+        }
+        await load()
+    }
+
+    /// Which other rows go with it is only known to the server, so this reloads rather
+    /// than guessing.
+    func hideAuthor(of deadline: Deadline) async {
+        guard !isMine(deadline) else { return }
+        deadlines.removeAll { $0.id == deadline.id }
+        do {
+            try await deadlineStore.hideAuthor(ofDeadlineID: deadline.id)
+        } catch {
+            errorText = (error as? LocalizedError)?.errorDescription ?? "Couldn't hide that person."
+        }
+        await load()
+    }
 }

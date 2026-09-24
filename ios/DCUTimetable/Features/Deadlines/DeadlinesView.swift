@@ -59,7 +59,9 @@ struct DeadlinesView: View {
                                     standing: model.standing(for: deadline),
                                     isMine: model.isMine(deadline),
                                     onConfirm: { Task { await model.toggleConfirmation(deadline) } },
-                                    onDelete: { Task { await model.remove(deadline) } })
+                                    onDelete: { Task { await model.remove(deadline) } },
+                                    onReport: { reason in Task { await model.report(deadline, reason: reason) } },
+                                    onHideAuthor: { Task { await model.hideAuthor(of: deadline) } })
                     }
                 }
             }
@@ -110,6 +112,8 @@ private struct ScheduleRow: View {
     let isMine: Bool
     let onConfirm: () -> Void
     let onDelete: () -> Void
+    let onReport: (DeadlineReportReason) -> Void
+    let onHideAuthor: () -> Void
 
     private var tint: Color {
         deadline.kind.isSatInClass ? TimetableTint.test : TimetableTint.due
@@ -151,6 +155,7 @@ private struct ScheduleRow: View {
                     Button(standing.confirmedByMe ? "Confirmed" : "This is right") { onConfirm() }
                         .buttonStyle(.inlineAction(tint: standing.confirmedByMe
                                                    ? TimetableTint.confirmed : Theme.accent))
+                    DeadlineModerationMenu(deadline: deadline, onReport: onReport, onHideAuthor: onHideAuthor)
                 }
             }
             .modifier(HangingIndent())

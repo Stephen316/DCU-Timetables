@@ -59,6 +59,13 @@ struct SignInView: View {
         }
     }
 
+    private static let termsNotice: AttributedString = {
+        let markdown = "By creating an account you agree to the [Terms of use](\(AppLinks.terms.absoluteString)) "
+            + "and [Privacy policy](\(AppLinks.privacy.absoluteString)). Abusive or objectionable posts "
+            + "aren't tolerated: they're removed, and the account that posted them is banned."
+        return (try? AttributedString(markdown: markdown)) ?? AttributedString(markdown)
+    }()
+
     @ViewBuilder
     private var credentials: some View {
         Group {
@@ -120,6 +127,15 @@ struct SignInView: View {
                 .disabled(!canSubmit)
                 .bareRow()
                 .listRowInsets(Theme.standaloneRowInsets)
+            } footer: {
+                if mode == .createAccount {
+                    // App Review 1.2: agreeing to terms that rule out abuse is part of letting
+                    // people post where classmates read it.
+                    Text(Self.termsNotice)
+                        .font(.caption)
+                        .foregroundStyle(Theme.inkSecondary)
+                        .tint(Theme.accent)
+                }
             }
 
             if mode == .signIn {

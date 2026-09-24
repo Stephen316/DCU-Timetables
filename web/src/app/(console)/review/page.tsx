@@ -1,5 +1,6 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { ReviewRow } from "./row";
+import { ReportedRow, type Reported } from "./reported-row";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,26 @@ export default async function Review() {
 
   const rows = (data ?? []) as Deadline[];
 
+  // Open reports first: App Review expects them acted on within a day. Grouped per
+  // deadline, since three reports of one thing are one decision.
+  const { data: reportData, error: reportError } = await supabase
+    .from("deadline_reports")
+    .select("reason, created_at, module_deadlines(id, module_key, title, due_at, kind, status, submitter_id)")
+    .is("resolved_at", null)
+    .order("created_at", { ascending: true })
+    .limit(500);
+
+  const reported = new Map<string, Reported>();
+  for (const r of (reportData ?? []) as unknown as {
+    reason: string; created_at: string; module_deadlines: Deadline | null;
+  }[]) {
+    const d = r.module_deadlines;
+    if (!d) continue;
+    const entry = reported.get(d.id) ?? { deadline: d, reasons: {}, first: r.created_at };
+    entry.reasons[r.reason] = (entry.reasons[r.reason] ?? 0) + 1;
+    reported.set(d.id, entry);
+  }
+
   // Confirmations are counted here rather than joined, because PostgREST cannot aggregate
   // a child table in a select. One extra query for the whole page is cheaper than the
   // view it would otherwise need.
@@ -47,6 +68,28 @@ export default async function Review() {
         <h1>Review queue</h1>
         <p>Deadlines students have shared, waiting on a decision.</p>
       </div>
+
+      {reportError && <div className="err">{reportError.message}</div>}
+      {reported.size > 0 && (
+        <>
+          <h2>Reported by students</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Module</th>
+                <th>Title</th>
+                <th>Reasons</th>
+                <th>First reported</th>
+                <th className="right">Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...reported.values()].map((r) => <ReportedRow key={r.deadline.id} reported={r} />)}
+            </tbody>
+          </table>
+          <h2>Waiting on a decision</h2>
+        </>
+      )}
 
       {error && <div className="err">{error.message}</div>}
 
