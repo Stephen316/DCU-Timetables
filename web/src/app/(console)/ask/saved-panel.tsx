@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listSaved, type SavedView } from "./saved";
+import { deleteSaved, listSaved, type SavedTarget, type SavedView } from "./saved";
 import { moduleFor, programmeFor } from "@/lib/proposals/courses";
 import { Spinner } from "../spinner";
 
@@ -11,6 +11,8 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
   const [view, setView] = useState<SavedView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let current = true;
@@ -26,11 +28,27 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
       .finally(() => current && setLoading(false));
     // A newer selection supersedes this one; its answer must not land on top.
     return () => { current = false; };
-  }, [programme, module, refresh]);
+  }, [programme, module, refresh, reload]);
+
+  async function remove(key: string, target: SavedTarget, question: string) {
+    if (!window.confirm(question)) return;
+    setDeleting(key);
+    setError(null);
+    try {
+      const r = await deleteSaved(target);
+      if (!r.ok) setError(r.error);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleting(null);
+      setReload((n) => n + 1);
+    }
+  }
 
   const scope = module
     ? `${module}${moduleFor(module) ? ` · ${moduleFor(module)!.title}` : ""}`
     : programmeFor(programme)?.name ?? programme;
+  const programmeName = programmeFor(programme)?.name ?? programme;
   const empty = view && !view.rotation && view.splits.length === 0 && !view.classList;
 
   return (
@@ -52,6 +70,10 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
         <Entry
           title="Lab rotation"
           meta={`${module ? `${view.rotation.sessions.length} of ${view.rotation.total}` : view.rotation.total} sessions · v${view.rotation.version} · ${when(view.rotation.savedAt)}`}
+          deleteLabel={module ? "Delete the programme’s rotation" : "Delete rotation"}
+          deleting={deleting === "rotation"}
+          onDelete={() => remove("rotation", { kind: "rotation", programme },
+            `Delete the lab rotation for ${programmeName}? All ${view.rotation!.total} sessions go, across every module — not only ${module || "the one shown"}. This can't be undone.`)}
         >
           {view.rotation.sessions.length === 0 ? (
             <p className="dim" style={{ fontSize: 13 }}>
@@ -81,6 +103,10 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
           key={`${sp.module}-${sp.activity}`}
           title={`${sp.module} · ${sp.activity} split`}
           meta={`${sp.ranges.length} band${sp.ranges.length === 1 ? "" : "s"} · ${when(sp.savedAt)}`}
+          deleteLabel="Delete split"
+          deleting={deleting === `split:${sp.module}:${sp.activity}`}
+          onDelete={() => remove(`split:${sp.module}:${sp.activity}`, { kind: "split", module: sp.module, activity: sp.activity },
+            `Delete the ${sp.module} ${sp.activity} split? Students stop seeing which band they are in. This can't be undone.`)}
         >
           <table>
             <thead><tr><th>Surnames</th><th>Day</th><th>Time</th><th>Room</th></tr></thead>
@@ -101,6 +127,10 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
         <Entry
           title="Class list"
           meta={`${view.classList.members} students · v${view.classList.version} · ${when(view.classList.savedAt)}`}
+          deleteLabel="Delete class list"
+          deleting={deleting === "classList"}
+          onDelete={() => remove("classList", { kind: "classList", programme },
+            `Delete the class list for ${programmeName}? All ${view.classList!.members} students lose their group, and phones set up from it go back to the profile screen on their next launch. This can't be undone.`)}
         >
           <p className="dim" style={{ fontSize: 12, marginBottom: 6 }}>
             Counts only — names are stored as keys and can&rsquo;t be shown.
@@ -124,7 +154,9 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
   );
 }
 
-function Entry({ title, meta, children }: { title: string; meta: string; children: React.ReactNode }) {
+function Entry({ title, meta, deleteLabel, deleting, onDelete, children }: {
+  title: string; meta: string; deleteLabel: string; deleting: boolean; onDelete: () => void; children: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="saved-entry">
@@ -133,7 +165,16 @@ function Entry({ title, meta, children }: { title: string; meta: string; childre
         <span className="saved-title">{title}</span>
         <span className="dim">{meta}</span>
       </button>
-      {open && <div className="saved-body">{children}</div>}
+      {open && (
+        <div className="saved-body">
+          {children}
+          <div className="saved-actions">
+            <button type="button" className="danger" disabled={deleting} onClick={onDelete}>
+              {deleting ? <><Spinner /> Deleting…</> : deleteLabel}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

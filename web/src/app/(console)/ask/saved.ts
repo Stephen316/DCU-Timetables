@@ -110,3 +110,25 @@ export async function listSaved(programme: string, module: string):
     },
   };
 }
+
+export type SavedTarget =
+  | { kind: "split"; module: string; activity: string }
+  | { kind: "rotation"; programme: string }
+  | { kind: "classList"; programme: string };
+
+/// Removes one entry from the Saved list. Each kind has its own definer function, which
+/// checks the caller is an admin and writes the audit row.
+export async function deleteSaved(target: SavedTarget): Promise<{ ok: true } | { ok: false; error: string }> {
+  const profile = await currentProfile();
+  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
+  const db = await supabaseServer();
+
+  const { error } =
+    target.kind === "split"
+      ? await db.rpc("delete_module_split", { p_module_key: target.module, p_activity: target.activity })
+      : await db.rpc(target.kind === "rotation" ? "delete_lab_rotation" : "delete_roster",
+                     { p_course_key: target.programme });
+  // Nothing to delete (someone else got there first) is not an error: the list reloads
+  // either way.
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
