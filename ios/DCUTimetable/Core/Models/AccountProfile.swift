@@ -33,14 +33,18 @@ public struct AccountProfile: Codable, Sendable, Equatable {
     public let pi: String?
     public let displayName: String?
     public let bannedUntil: Date?
+    /// "A12345678", once the student has given it (`StudentIDView`). Set once; only an
+    /// admin can change it after.
+    public let studentID: String?
 
     public init(id: String, role: AppRole = .student, pi: String? = nil,
-                displayName: String? = nil, bannedUntil: Date? = nil) {
+                displayName: String? = nil, bannedUntil: Date? = nil, studentID: String? = nil) {
         self.id = id
         self.role = role
         self.pi = pi
         self.displayName = displayName
         self.bannedUntil = bannedUntil
+        self.studentID = studentID
     }
 
     public func isBanned(at now: Date = Date()) -> Bool {

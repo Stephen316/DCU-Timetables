@@ -54,6 +54,9 @@ targets:
         # Only HTTPS through the system, which is exempt. Without this key every upload
         # stops in App Store Connect to ask.
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        # The student-ID step reads the barcode on the student card. Without this key the
+        # first camera request crashes the app.
+        INFOPLIST_KEY_NSCameraUsageDescription: "Reads the barcode on your student card to fill in your student number. The photo stays on your phone."
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_TESTABILITY: YES

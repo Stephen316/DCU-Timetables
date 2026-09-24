@@ -1,8 +1,14 @@
 import SwiftUI
 
-/// Flow: sign in with a DCU address → the profile resolves from the name in that address
-/// → timetable. "Choose a programme instead" covers anyone not in the class list.
+/// Flow: sign in with a DCU address → student number from the card → the profile resolves
+/// from the name in that address → timetable. "Choose a programme instead" covers anyone
+/// not in the class list.
 struct RootView: View {
+    /// Recorded once `StudentIDView` has saved it, so the step is asked once rather than on
+    /// every launch. The server holds the real one; this only says the step is done. It
+    /// comes before the profile because `resolve_allocation` uses it to tell apart two
+    /// students with the same name.
+    @AppStorage("studentID") private var studentID = ""
     @AppStorage("studentProfile") private var profileData = Data()
     @AppStorage("selectedProgramme") private var selectedProgrammeData = Data()
     @AppStorage("hiddenGroups") private var hiddenGroupsData = Data()
@@ -50,6 +56,8 @@ struct RootView: View {
     private var flow: some View {
         if signedIn == nil {
             SignInView { user in signedIn = user }
+        } else if studentID.isEmpty {
+            StudentIDView(onSaved: { studentID = $0 }, onSignOut: { signOut() })
         } else if let profile {
             TimetableShell(
                 programme: TimetableCategory(identity: "profile-\(profile.group)",
@@ -135,6 +143,7 @@ struct RootView: View {
         ReporterID.reset()
         CachedRole.reset()
         signedIn = nil
+        studentID = ""
         profileData = Data()
         selectedProgrammeData = Data()
         hiddenGroupsData = Data()
