@@ -217,4 +217,41 @@ public enum AllocationRefresh {
             return .unchanged
         }
     }
+
+    public enum Adoption: Equatable, Sendable {
+        /// On a list now: the timetable switches from the programme they picked to their labs.
+        case adopted(StudentProfile)
+        /// Stay on the picked programme. `tried` is each list's version as asked about, so
+        /// the same list isn't asked about again.
+        case stay(tried: [String: Int])
+    }
+
+    /// For a student who picked a programme because no list had them — often because none
+    /// was uploaded yet. Each list is asked about once per version: a conflict files a flag
+    /// for an admin on every call, and a student who isn't on a list stays not on it until
+    /// it changes.
+    ///
+    /// A shared name comes back ambiguous and stays: settling it needs the subgroup
+    /// question, which belongs on the profile screen rather than appearing unasked.
+    public static func adopt(name: String, tried: [String: Int], store: AllocationStore) async -> Adoption {
+        var tried = tried
+        do {
+            let fresh = try await store.rosters().filter {
+                StudentProfile.Cohort(courseKey: $0.courseKey) != nil && tried[$0.courseKey] != $0.version
+            }
+            for roster in fresh.sorted(by: { $0.courseKey < $1.courseKey }) {
+                guard let cohort = StudentProfile.Cohort(courseKey: roster.courseKey) else { continue }
+                if case .matched(let key, let version) = try await store.resolve(courseKey: roster.courseKey, subgroup: nil),
+                   let allocation = try await store.allocation(courseKey: roster.courseKey, key: key) {
+                    return .adopted(StudentProfile(name: name, cohort: cohort, allocation: allocation,
+                                                   allocationKey: key, rosterVersion: version))
+                }
+                tried[roster.courseKey] = roster.version
+            }
+        } catch {
+            // Offline: whatever was asked about before the failure stays asked; the rest is
+            // tried next time.
+        }
+        return .stay(tried: tried)
+    }
 }

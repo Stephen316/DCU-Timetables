@@ -131,4 +131,53 @@ struct AllocationRefreshTests {
         #expect(await AllocationRefresh.check(legacy, store: store) == .unchanged)
         #expect(store.resolveCalls == 0)
     }
+
+    // A student who picked a programme before their list was uploaded.
+
+    @Test func pickedProgrammeMovesOntoANewList() async {
+        let store = FakeStore(version: 1, resolution: .matched(key: "cc", version: 1),
+                              row: Allocation(group: "C", subgroup: "C.3", workshop: "SG23", drawing: "SB39"))
+        guard case .adopted(let p) = await AllocationRefresh.adopt(name: "Student Example", tried: [:], store: store) else {
+            Issue.record("expected adoption")
+            return
+        }
+        #expect(p.group == "C")
+        #expect(p.courseKey == "EEG1")
+        #expect(p.rosterVersion == 1)
+        #expect(p.name == "Student Example")
+    }
+
+    /// Asked once per version: a conflict files a flag on every call.
+    @Test func aListAlreadyAskedAboutIsNotAskedAgain() async {
+        let store = FakeStore(version: 4, resolution: .conflict)
+        #expect(await AllocationRefresh.adopt(name: "", tried: [:], store: store) == .stay(tried: ["EEG1": 4]))
+        #expect(await AllocationRefresh.adopt(name: "", tried: ["EEG1": 4], store: store) == .stay(tried: ["EEG1": 4]))
+        #expect(store.resolveCalls == 1)
+    }
+
+    @Test func aCorrectedListIsAskedAboutAgain() async {
+        let store = FakeStore(version: 5, resolution: .notListed)
+        #expect(await AllocationRefresh.adopt(name: "", tried: ["EEG1": 4], store: store) == .stay(tried: ["EEG1": 5]))
+        #expect(store.resolveCalls == 1)
+    }
+
+    /// The subgroup question belongs on the profile screen, not sprung on a student mid-week.
+    @Test func aSharedNameStaysOnThePickedProgramme() async {
+        let store = FakeStore(version: 1, resolution: .ambiguous)
+        #expect(await AllocationRefresh.adopt(name: "", tried: [:], store: store) == .stay(tried: ["EEG1": 1]))
+    }
+
+    @Test func offlineLeavesTheListToBeAskedAboutLater() async {
+        let store = FakeStore(version: 1)
+        store.failing = true
+        #expect(await AllocationRefresh.adopt(name: "", tried: [:], store: store) == .stay(tried: [:]))
+    }
+
+    @Test func aListForACourseTheAppCantShowIsIgnored() async {
+        let store = FakeStore(version: 1, resolution: .matched(key: "dd", version: 1),
+                              row: Allocation(group: "A"))
+        store.rosterList = [RosterSummary(courseKey: "CASE3", title: nil, version: 1)]
+        #expect(await AllocationRefresh.adopt(name: "", tried: [:], store: store) == .stay(tried: [:]))
+        #expect(store.resolveCalls == 0)
+    }
 }

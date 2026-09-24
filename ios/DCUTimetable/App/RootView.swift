@@ -8,7 +8,12 @@ struct RootView: View {
     @AppStorage("hiddenGroups") private var hiddenGroupsData = Data()
     @AppStorage("useProgrammePicker") private var useProgrammePicker = false
     @AppStorage(Attendance.storageKey) private var skippedData = Data()
+    /// Class-list versions already asked about for a student on a picked programme — see
+    /// `AllocationRefresh.adopt`.
+    @AppStorage("allocationTried") private var allocationTriedData = Data()
     @State private var signedIn = SignedInUser.current
+    @State private var refreshing = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private var profile: StudentProfile? {
         try? JSONDecoder().decode(StudentProfile.self, from: profileData)
@@ -19,10 +24,14 @@ struct RootView: View {
 
     var body: some View {
         flow
-            // A corrected class list re-uploaded in the console bumps its version; a profile
-            // made from the old one is resolved again rather than trusted. Once per launch
-            // and sign-in — the list changes a few times a year, not by the minute.
+            // A class list saved or corrected in the console bumps its version; a profile
+            // made from the old one is resolved again rather than trusted, and a student on
+            // a picked programme is looked up on the new list. On launch, sign-in and return
+            // to the foreground — one version fetch when nothing has changed.
             .task(id: signedIn?.id) { await refreshAllocation() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await refreshAllocation() } }
+            }
             // The session can die while the app is open; when it does the student is no
             // longer signed in, whatever the last launch recorded.
             .onReceive(NotificationCenter.default
@@ -72,7 +81,25 @@ struct RootView: View {
     }
 
     private func refreshAllocation() async {
-        guard let profile, let store = AllocationStoreFactory.make() else { return }
+        // Launch fires both the task and the foreground change.
+        guard !refreshing, let user = signedIn, let store = AllocationStoreFactory.make() else { return }
+        refreshing = true
+        defer { refreshing = false }
+
+        guard let profile else {
+            guard selectedProgramme != nil else { return }
+            let tried = (try? JSONDecoder().decode([String: Int].self, from: allocationTriedData)) ?? [:]
+            switch await AllocationRefresh.adopt(name: user.email?.displayName ?? "", tried: tried, store: store) {
+            case .adopted(let adopted):
+                profileData = (try? JSONEncoder().encode(adopted)) ?? Data()
+                selectedProgrammeData = Data()
+                hiddenGroupsData = Data()
+                allocationTriedData = Data()
+            case .stay(let now):
+                allocationTriedData = (try? JSONEncoder().encode(now)) ?? allocationTriedData
+            }
+            return
+        }
         switch await AllocationRefresh.check(profile, store: store) {
         case .unchanged:
             break
@@ -96,6 +123,7 @@ struct RootView: View {
         selectedProgrammeData = Data()
         hiddenGroupsData = Data()
         skippedData = Data()
+        allocationTriedData = Data()
         useProgrammePicker = false
     }
 }
