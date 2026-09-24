@@ -3,29 +3,39 @@ import SwiftUI
 /// Between signing in and the timetable: the student's number, read from the barcode on
 /// their student card. "See other options" lets them type it instead.
 ///
-/// The number is set once — after that only an admin can change it (`set_student_id` in
-/// `supabase/phase13_roster_allocations.sql`) — so one read from the card is shown back to
-/// be checked before anything is saved. The photo is read on the phone and dropped; only
-/// the number is sent (see `IDCardCamera`).
+/// A number is saved the moment it's read or entered, and `SavedOverlay` confirms it over
+/// the camera. There's no "is this right?" step, and the number can be set only once —
+/// after that only an admin can change it (`set_student_id` in
+/// `supabase/phase13_roster_allocations.sql`) — so a misread is stopped before it gets
+/// here: `StudentNumber(barcode:)` refuses anything not shaped like a card's barcode, and
+/// a live read counts only once several frames agree (`IDCardCamera.liveAgreement`).
+///
+/// The photo is read on the phone and dropped; only the number is sent.
 struct StudentIDView: View {
     let onSaved: (String) -> Void
     let onSignOut: () -> Void
+
+    /// The number on its way to the server, and whether it has arrived.
+    private struct Confirmation: Equatable {
+        let number: StudentNumber
+        var saved = false
+    }
 
     @StateObject private var camera = IDCardCamera()
     /// The server is asked first. A reinstall or a second phone already has a number there,
     /// and shouldn't be asked for the camera only to find that out.
     @State private var checking = true
-    /// The last number read, shown in the confirmation sheet. Kept apart from `confirming`
-    /// so the sheet still has it to draw while it slides away.
-    @State private var candidate: StudentNumber?
-    @State private var confirming = false
     @State private var showingOptions = false
-    @State private var saving = false
+    /// A number typed in the sheet, saved once the sheet has gone — started any sooner, the
+    /// confirmation plays out underneath it.
+    @State private var typed: StudentNumber?
+    @State private var confirmation: Confirmation?
     @State private var saveError: String?
     /// Once saved, a sheet closing must not start the camera behind a screen that's leaving.
-    @State private var saved = false
+    @State private var finished = false
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let store = ProfileStoreFactory.make()
 
     var body: some View {
@@ -38,6 +48,12 @@ struct StudentIDView: View {
                     if !checking { CameraPreview(camera: camera) }
                     GuideOverlay(guide: guide)
                     layout(guide: guide, insets: insets)
+                    if let confirmation {
+                        SavedOverlay(number: confirmation.number, saved: confirmation.saved)
+                            .position(x: guide.midX, y: guide.midY)
+                            .transition(reduceMotion ? .opacity
+                                                     : .scale(scale: 0.8).combined(with: .opacity))
+                    }
                 }
                 // Dark over the camera whatever the setting, as the Camera app is. Applied
                 // here rather than to the whole view so the sheets still follow the setting.
@@ -48,14 +64,11 @@ struct StudentIDView: View {
             .ignoresSafeArea()
         }
         .statusBarHidden()
-        .sensoryFeedback(.success, trigger: camera.read) { _, read in read != nil }
+        .sensoryFeedback(.success, trigger: confirmation?.saved) { _, saved in saved == true }
         .task { await begin() }
         .onDisappear { camera.stop() }
         .onChange(of: camera.read) { _, read in
-            guard let read else { return }
-            candidate = read
-            saveError = nil
-            confirming = true
+            if let read { save(read) }
         }
         .onChange(of: showingOptions) { _, showing in
             if showing {
@@ -63,15 +76,12 @@ struct StudentIDView: View {
                 camera.stop()
             }
         }
-        .sheet(isPresented: $confirming, onDismiss: resumeScanning) {
-            if let candidate {
-                NumberConfirmation(number: candidate, saving: saving, error: saveError,
-                                   onSave: { save(candidate) },
-                                   onRetake: { confirming = false })
-            }
-        }
-        .sheet(isPresented: $showingOptions, onDismiss: resumeScanning) {
-            OtherOptions(saving: saving, error: saveError, onSave: save, onSignOut: onSignOut)
+        .sheet(isPresented: $showingOptions, onDismiss: optionsClosed) {
+            OtherOptions(onSave: { number in
+                             typed = number
+                             showingOptions = false
+                         },
+                         onSignOut: onSignOut)
         }
     }
 
@@ -120,7 +130,10 @@ struct StudentIDView: View {
 
     @ViewBuilder
     private var frameMessage: some View {
-        if checking {
+        if confirmation != nil {
+            // The confirmation sits in the frame; a message behind it shows at its edges.
+            EmptyView()
+        } else if checking {
             ProgressView().tint(.white)
         } else {
             switch camera.status {
@@ -144,10 +157,8 @@ struct StudentIDView: View {
 
     private var controls: some View {
         VStack(spacing: Theme.Space.m) {
-            if let problem = camera.problem {
-                Text(problem == .notACard
-                     ? "That barcode isn't from a DCU student card."
-                     : "Couldn't read the barcode. Tilt the card away from the light and try again.")
+            if let message = saveError ?? camera.problem.map(Self.describe) {
+                Text(message)
                     .font(.footnote)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -183,6 +194,15 @@ struct StudentIDView: View {
             }
             .buttonStyle(.plain)
         }
+        .disabled(confirmation != nil)
+        .opacity(confirmation == nil ? 1 : 0.4)
+    }
+
+    private static func describe(_ problem: IDCardCamera.Problem) -> String {
+        switch problem {
+        case .notACard: return "That barcode isn't from a DCU student card."
+        case .unreadable: return "Couldn't read the barcode. Tilt the card away from the light and try again."
+        }
     }
 
     private var shutter: some View {
@@ -205,36 +225,118 @@ struct StudentIDView: View {
     }
 
     private func begin() async {
-        if let existing = try? await store.myProfile()?.studentID {
-            saved = true
-            onSaved(existing)
+        do {
+            if let existing = try await store.myProfile()?.studentID {
+                finished = true
+                onSaved(existing)
+                return
+            }
+        } catch ProfileStoreError.notSignedIn {
+            // Signed in on this phone, but with no session to act as: the app remembers who
+            // signed in, and the tokens that let it act for them are gone. Nothing can be
+            // saved without them, so back to sign-in rather than a scan whose Save can only
+            // answer "You're not signed in."
+            onSignOut()
             return
+        } catch {
+            // Offline, or the server erred. Scanning still works; the save will say so.
         }
         checking = false
         await camera.start()
     }
 
-    private func resumeScanning() {
-        guard !saved, !confirming, !showingOptions else { return }
-        camera.resume()
+    private func optionsClosed() {
+        if let number = typed {
+            typed = nil
+            save(number)
+        } else if !finished, confirmation == nil {
+            camera.resume()
+        }
     }
 
+    /// Shows the confirmation at once, then saves. The ring draws while the request is out
+    /// and the tick draws when the server has the number — usually before the ring closes.
     private func save(_ number: StudentNumber) {
-        guard !saving else { return }
-        saving = true
+        guard confirmation == nil else { return }
         saveError = nil
+        camera.stop()
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.35, bounce: 0.25)) {
+            confirmation = Confirmation(number: number)
+        }
         Task {
-            defer { saving = false }
             do {
                 try await store.setStudentID(number)
-                saved = true
+                confirmation?.saved = true
+                // Long enough to see the tick land before the next screen replaces this one.
+                try? await Task.sleep(for: .seconds(1.1))
+                finished = true
                 onSaved(number.value)
-            } catch let error as ProfileStoreError {
-                saveError = error.errorDescription
+            } catch ProfileStoreError.notSignedIn {
+                onSignOut()
             } catch {
-                saveError = "Couldn't reach the server. Check your connection and try again."
+                withAnimation(.easeOut(duration: 0.25)) { confirmation = nil }
+                saveError = (error as? ProfileStoreError)?.errorDescription
+                    ?? "Couldn't reach the server. Check your connection and try again."
+                camera.resume()
             }
         }
+    }
+}
+
+/// The translucent confirmation over the frozen camera image: a ring that draws while the
+/// number is sent, then a tick, with the number itself underneath so the student sees what
+/// was saved.
+private struct SavedOverlay: View {
+    let number: StudentNumber
+    let saved: Bool
+
+    @State private var ring: CGFloat = 0
+    @ScaledMetric(relativeTo: .title) private var badge: CGFloat = 84
+
+    var body: some View {
+        VStack(spacing: Theme.Space.l) {
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.25), lineWidth: 5)
+                Circle()
+                    .trim(from: 0, to: saved ? 1 : ring)
+                    .stroke(.white, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Tick()
+                    .trim(from: 0, to: saved ? 1 : 0)
+                    .stroke(.white, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                    .padding(badge * 0.28)
+            }
+            .frame(width: badge, height: badge)
+
+            VStack(spacing: Theme.Space.xs) {
+                Text(number.value)
+                    .font(.title2.weight(.semibold).monospacedDigit())
+                Text(saved ? "Student number saved" : "Saving…")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, Theme.Space.xxl)
+        .padding(.vertical, Theme.Space.xl)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .animation(.easeOut(duration: 0.35), value: saved)
+        .onAppear {
+            // Most of the way round, not all: the last stretch is the server's to close.
+            withAnimation(.easeOut(duration: 0.8)) { ring = 0.85 }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct Tick: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.midY + rect.height * 0.05))
+        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.38, y: rect.maxY - rect.height * 0.12))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + rect.height * 0.15))
+        return path
     }
 }
 
@@ -286,75 +388,12 @@ private struct GuideOverlay: View {
     }
 }
 
-/// "Is this your student number?" — asked of every number read from a card, because it
-/// can't be changed afterwards without an admin. Drawn like `ConfirmSheet`, which can't be
-/// used as is: that one closes before its action runs, and this one has to stay up to show
-/// a failed save.
-private struct NumberConfirmation: View {
-    let number: StudentNumber
-    let saving: Bool
-    let error: String?
-    let onSave: () -> Void
-    let onRetake: () -> Void
-
-    @ScaledMetric(relativeTo: .body) private var detentHeight: CGFloat = 340
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: Theme.Space.m) {
-                    Image(systemName: "person.text.rectangle")
-                        .font(.title)
-                        .foregroundStyle(Theme.accent)
-                    Text("Is this your student number?")
-                        .font(.headline)
-                        .foregroundStyle(Theme.ink)
-                    Text(number.value)
-                        .font(.largeTitle.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(Theme.ink)
-                    Text("Check it against your card. Once it's saved, only an admin can change it.")
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.inkSecondary)
-                    if let error {
-                        Text(error)
-                            .font(.footnote)
-                            .foregroundStyle(Theme.inkSecondary)
-                    }
-                }
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.top, Theme.Space.xl + Theme.Space.xs)
-                .padding(.horizontal, Theme.Space.xl)
-            }
-
-            VStack(spacing: Theme.Space.s) {
-                Button(action: onSave) {
-                    HStack(spacing: Theme.Space.s) {
-                        if saving { ProgressView().controlSize(.small).tint(Theme.onAccent) }
-                        Text("Save")
-                    }
-                }
-                .buttonStyle(.primary)
-                Button("Retake", action: onRetake)
-                    .buttonStyle(.secondary)
-            }
-            .disabled(saving)
-            .padding(.horizontal, Theme.Space.xl)
-            .padding(.top, Theme.Space.l)
-            .padding(.bottom, Theme.Space.xl)
-        }
-        .presentationDetents([.height(detentHeight)])
-        .presentationDragIndicator(.visible)
-        .presentationBackground(Theme.surface)
-        .interactiveDismissDisabled(saving)
-    }
-}
-
 /// Typing the number instead, for a card that won't scan, a camera that isn't allowed, or
 /// no card to hand. And the way out, for someone who signed in with the wrong account.
+///
+/// Save closes the sheet and hands the number back, so the confirmation plays on the
+/// camera screen like a scanned one, and a failure is reported there too.
 private struct OtherOptions: View {
-    let saving: Bool
-    let error: String?
     let onSave: (StudentNumber) -> Void
     let onSignOut: () -> Void
 
@@ -384,34 +423,24 @@ private struct OtherOptions: View {
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .submitLabel(.done)
-                            .onSubmit { if let number, !saving { onSave(number) } }
+                            .onSubmit { if let number { onSave(number) } }
                         Text(caption)
                             .font(.caption)
                             .foregroundStyle(Theme.inkSecondary)
                     }
 
-                    if let error {
-                        Section { Text(error).font(.callout).foregroundStyle(Theme.inkSecondary) }
-                    }
-
                     Section {
-                        Button { if let number { onSave(number) } } label: {
-                            HStack(spacing: Theme.Space.s) {
-                                if saving { ProgressView().controlSize(.small).tint(Theme.onAccent) }
-                                Text("Save")
-                            }
-                        }
-                        .buttonStyle(.primary)
-                        .disabled(number == nil || saving)
-                        .bareRow()
-                        .listRowInsets(Theme.standaloneRowInsets)
+                        Button("Save") { if let number { onSave(number) } }
+                            .buttonStyle(.primary)
+                            .disabled(number == nil)
+                            .bareRow()
+                            .listRowInsets(Theme.standaloneRowInsets)
                     }
 
                     Section {
                         Button(role: .destructive, action: onSignOut) {
                             Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                         }
-                        .disabled(saving)
                     }
                 }
                 .themedRows()
@@ -422,11 +451,10 @@ private struct OtherOptions: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.disabled(saving)
+                    Button("Cancel") { dismiss() }
                 }
             }
         }
-        .interactiveDismissDisabled(saving)
     }
 }
 

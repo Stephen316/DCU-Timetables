@@ -44,10 +44,13 @@ final class IDCardCamera: NSObject, ObservableObject {
     /// Configuring, starting and stopping a session block, so they happen here.
     private let queue = DispatchQueue(label: "ie.dcu.timetable.id-camera")
     private var configured = false
-    /// A live read counts once the same number comes back twice running. The barcode has no
-    /// check character, so one frame caught mid-blur could otherwise hand over a wrong
-    /// number that still has the right shape.
-    private var lastLiveRead: StudentNumber?
+    /// A live read counts once this many frames agree. The barcode has no check character,
+    /// so one frame caught mid-blur could otherwise hand over a wrong number that still has
+    /// the right shape — and it's saved without a second look (`StudentIDView`). At 30
+    /// frames a second, three is a tenth of a second on a card held still.
+    static let liveAgreement = 3
+    /// The number the last frames agreed on, and how many of them.
+    private var liveRead: (number: StudentNumber, frames: Int)?
 
     /// The preview's layer and the guide frame in its coordinates. Together they say which
     /// part of the sensor holds the card.
@@ -109,7 +112,7 @@ final class IDCardCamera: NSObject, ObservableObject {
     func resume() {
         read = nil
         problem = nil
-        lastLiveRead = nil
+        liveRead = nil
         guard status == .running else { return }
         let session = session
         queue.async { if !session.isRunning { session.startRunning() } }
@@ -248,11 +251,9 @@ extension IDCardCamera: AVCaptureMetadataOutputObjectsDelegate {
         MainActor.assumeIsolated {
             guard read == nil,
                   let number = payloads.lazy.compactMap(StudentNumber.init(barcode:)).first else { return }
-            if number == lastLiveRead {
-                deliver(number)
-            } else {
-                lastLiveRead = number
-            }
+            let frames = liveRead?.number == number ? (liveRead?.frames ?? 0) + 1 : 1
+            liveRead = (number, frames)
+            if frames >= Self.liveAgreement { deliver(number) }
         }
     }
 }
