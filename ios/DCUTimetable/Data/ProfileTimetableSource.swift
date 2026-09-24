@@ -6,14 +6,12 @@ import Foundation
 public struct ProfileTimetableSource: TimetableSource {
     private let profile: StudentProfile
     private let moduleCodes: [String]
-    private let rotation: LabRotation?
     private let client: DCUAPIClient
 
     public init(profile: StudentProfile, client: DCUAPIClient = DCUAPIClient()) {
         self.profile = profile
         self.client = client
         self.moduleCodes = EngineeringYear1.bundled()?.modules ?? []
-        self.rotation = LabRotationLoader.bundled()
     }
 
     public func searchProgrammes(query: String, page: Int) async throws -> [TimetableCategory] { [] }
@@ -25,7 +23,9 @@ public struct ProfileTimetableSource: TimetableSource {
     public func events(for category: TimetableCategory, weeks: [TeachingWeek]) async throws -> [TimetableEvent] {
         var events = try await client.events(forModuleCodes: moduleCodes, weeks: weeks)
 
-        if let rotation {
+        // Read per load, not per source: a rotation corrected in the console replaces the
+        // cached one while this source is alive, and the reload that follows must see it.
+        if let rotation = LabRotationLoader.current() {
             // Drop the generic lab slots for the rotation modules — the student's real labs
             // come from their group's rotation, not the all-groups timetable slot.
             let rotationModules = rotation.moduleCodes
@@ -77,7 +77,8 @@ public struct ProfileTimetableSource: TimetableSource {
             end: end,
             type: .onCampus,
             locations: room,
-            moduleName: "\(activity) · \(rotation.name(for: session.module))",
+            moduleName: activity.isEmpty ? rotation.name(for: session.module)
+                                         : "\(activity) · \(rotation.name(for: session.module))",
             staff: [],
             activity: ActivityCode(session.module),   // module code parses out of the first token
             weekLabels: ["\(session.week)"]

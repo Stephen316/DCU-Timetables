@@ -86,6 +86,12 @@ struct RootView: View {
         refreshing = true
         defer { refreshing = false }
 
+        if let rotations = LabRotationStoreFactory.make(),
+           await LabRotationRefresh.run(courseKey: LabRotationLoader.courseKey, store: rotations,
+                                        cache: LabRotationCache(), bundled: LabRotationLoader.bundled()) {
+            NotificationCenter.default.post(name: .labRotationChanged, object: nil)
+        }
+
         guard let profile else {
             guard selectedProgramme != nil else { return }
             let tried = (try? JSONDecoder().decode([String: Int].self, from: allocationTriedData)) ?? [:]

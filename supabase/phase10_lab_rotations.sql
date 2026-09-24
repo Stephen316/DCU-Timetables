@@ -11,8 +11,7 @@
 -- or deletion obligations in CSV_PIPELINE.md §2.
 --
 -- The app keeps the bundled JSON as a fallback for first launch and for offline, and
--- prefers this when it can reach it. That part is an iOS change and is not done yet — until
--- it is, this table is written by the console and read by nothing.
+-- prefers this when it can reach it (ios/DCUTimetable/Data/LabRotationStore.swift).
 --
 -- Safe to re-run. Run it in the Supabase SQL editor.
 

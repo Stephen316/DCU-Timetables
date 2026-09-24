@@ -28,7 +28,7 @@ public struct LabSession: Codable, Identifiable, Sendable, Equatable {
 }
 
 /// The bundled rotation schedule.
-public struct LabRotation: Codable, Sendable {
+public struct LabRotation: Codable, Sendable, Equatable {
     public struct ModuleInfo: Codable, Sendable, Equatable {
         public let name: String
     }
@@ -67,5 +67,14 @@ public enum LabRotationLoader {
         guard let url = bundle.url(forResource: "EngineeringLabRotation", withExtension: "json"),
               let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(LabRotation.self, from: data)
+    }
+
+    /// The course every rotation here belongs to, until a second one has a rotation.
+    public static let courseKey = StudentProfile.Cohort.engineeringYear1.courseKey
+
+    /// What the app shows: the rotation last downloaded from the console, else the bundled
+    /// one. `LabRotationRefresh` keeps the download current.
+    public static func current(cache: LabRotationCache = LabRotationCache(), in bundle: Bundle = .main) -> LabRotation? {
+        cache.entry(courseKey: courseKey)?.rotation ?? bundled(in: bundle)
     }
 }

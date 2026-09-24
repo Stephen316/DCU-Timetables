@@ -11,7 +11,7 @@ struct EngineeringLabsView: View {
     @AppStorage("engLabGroup") private var group = ""
     @AppStorage("studentProfile") private var profileData = Data()
 
-    private let rotation = LabRotationLoader.bundled()
+    private let rotation = LabRotationLoader.current()
 
     var body: some View {
         NavigationStack {
@@ -85,7 +85,7 @@ struct EngineeringLabsView: View {
             }
             .frame(width: 56, alignment: .trailing)
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.activity).font(.headline).foregroundStyle(Theme.ink)
+                Text(session.activity.isEmpty ? session.module : session.activity).font(.headline).foregroundStyle(Theme.ink)
                 Text("\(session.module) · \(rotation.name(for: session.module))")
                     .font(.caption).foregroundStyle(Theme.inkSecondary)
                 Text(prettyDate(session)).font(.caption2).foregroundStyle(Theme.inkSecondary)

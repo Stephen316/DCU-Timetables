@@ -38,7 +38,7 @@ final class WeekViewModel: ObservableObject {
     let deadlineStore: DeadlineStore
     let verdictStore: VerdictStore
     private let reporterID = ReporterID.current
-    private let engLabModules = LabRotationLoader.bundled()?.moduleCodes ?? []
+    private let engLabModules = LabRotationLoader.current()?.moduleCodes ?? []
 
     init(programme: TimetableCategory,
          hiddenGroups: Set<String> = [],
@@ -187,6 +187,12 @@ final class WeekViewModel: ObservableObject {
         // A group the student just hid is a class the widget must stop telling them to
         // walk to, and nothing else would republish until the next week load.
         publishWidgetSnapshot()
+    }
+
+    /// Fetch every loaded week again — the rotation behind them changed.
+    func reloadAll() async {
+        rawByWeekNumber = [:]
+        await loadCurrentWeek()
     }
 
     /// Idempotent: the pager re-asks for the same week constantly, so already-loaded weeks

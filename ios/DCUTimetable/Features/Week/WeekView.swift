@@ -71,6 +71,11 @@ struct WeekView: View {
                     // Control Centre gives .inactive, and shouldn't discard the day being read.
                     if previous == .background, phase == .active { resetToDefaultDay() }
                 }
+                .onReceive(NotificationCenter.default
+                    .publisher(for: .labRotationChanged)
+                    .receive(on: RunLoop.main)) { _ in
+                        Task { await model.reloadAll() }
+                    }
                 .onChange(of: hiddenGroupsData) { _, newValue in
                     model.updateHiddenGroups(HiddenGroups.decode(newValue))
                 }

@@ -345,13 +345,11 @@ Three caveats:
   cheap version check at launch to trigger it.
 - **The HMAC secret.** Where it lives, how it rotates, and who can read it — §2.0 sets the
   requirements but not the mechanism.
-- **Rotation delivery — an app change, needs a decision.** `LabRotation.bundled()` reads
-  `EngineeringLabRotation.json` from the app bundle and nowhere else, so a mid-semester
-  amendment from the School currently needs an App Store release to reach anyone. Faster
-  extraction does not help if delivery still takes a week. Proposal: the app reads
-  `lab_rotations` from Supabase and falls back to the bundled JSON when offline or on first
-  launch. No privacy cost — there are no names in it. The diagram draws this as a dotted
-  overlay onto the general timetable.
+- **Rotation delivery — done.** The app reads `lab_rotations` from Supabase
+  (`LabRotationRefresh`, on launch, sign-in and return to the foreground), caches it on the
+  device, and falls back to the bundled `EngineeringLabRotation.json` when nothing is saved
+  or on first launch with no signal. A failed request keeps the cached copy. Students on a
+  programme they picked, with no group attached, still see every group's lab slots.
 - **Deletion.** A student asks for their row to be removed — needs a path that isn't editing
   the database by hand.
 - **Retention.** How long a roster lives after the module ends.
