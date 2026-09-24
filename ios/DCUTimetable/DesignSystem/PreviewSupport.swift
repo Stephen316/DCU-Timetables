@@ -216,7 +216,7 @@ enum PreviewScreen: String, CaseIterable {
         case .labs:
             EngineeringLabsView()
         case .account:
-            AccountView(store: LocalProfileStore())
+            AccountView(store: LocalProfileStore(), deadlines: PreviewDeadlineStore(), user: PreviewData.user)
         case .confirm:
             Color.clear.sheet(isPresented: .constant(true)) {
                 ConfirmSheet(title: "Report this lecture as cancelled?",

@@ -50,11 +50,13 @@ enum Theme {
 
     // MARK: Shape
 
-    /// Two radii for two jobs, not one radius on everything: a block on the week grid has
-    /// to stay a rectangle at 26pt tall, and a button is a thing your thumb aims at.
+    /// A radius per job, not one radius on everything: a block on the week grid has to stay
+    /// a rectangle at 26pt tall, a button is a thing your thumb aims at, and a card is a
+    /// panel of rows the size of the screen's width.
     enum Radius {
         static let block: CGFloat = 4
         static let control: CGFloat = 8
+        static let card: CGFloat = 16
     }
 
     /// A button standing on its own in a list: the list's own side margins, none above or
