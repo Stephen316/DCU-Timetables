@@ -44,8 +44,12 @@ export function checkChange(c: TimetableChange): Finding[] {
 
   if (!programme) err("Pick the programme this change is for.");
   if (!c.module) err("No module.");
+  else if (!/^[A-Z]{2,6}[0-9]{3,5}$/.test(c.module)) err(`"${c.module}" isn't a module code.`);
   else if (programme && !programme.modules.some((m) => m.code === c.module)) {
-    err(`${c.module} isn't a ${programme.key} module.`);
+    // DCU shares some classes between modules — CHM1006's lectures sit on EEG1017's
+    // timetable — and the phone knows them by the first module's code. So removing one is
+    // allowed; it just isn't one of the programme's own.
+    out.push({ level: "warn", message: `${c.module} isn't one of ${programme.key}'s modules — DCU lists it here as a shared class.` });
   }
   if (c.group && !GROUP.test(c.group)) err(`"${c.group}" isn't a group — a letter, or a letter and a number like C.2.`);
   if (!TIME.test(c.start)) err(`"${c.start}" isn't a start time. Use 24-hour, like 14:00.`);

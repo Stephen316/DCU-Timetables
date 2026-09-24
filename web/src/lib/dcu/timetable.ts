@@ -1,10 +1,17 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 
 // DCU's public MyTimetable API — the one the app reads — trimmed to what the console needs:
 // the teaching weeks, and one programme's classes for a week. A port of
 // ios/DCUTimetable/Data/DCUOpenAPI/DCUAPIClient.swift; docs/API.md has the endpoint notes.
 //
 // Everything here is public, anonymous, and has no personal data in it.
+//
+// DCU's API is slow and uneven — one week of one programme took 0.6 s once and 3.5 s the
+// next, measured 24 Sep 2026 — and a page asked it again on every click. So answers are
+// cached on the server: a module's identity for a week (it never changes), a week's classes
+// for ten minutes (DCU edits its timetable rarely, and a console that shows a change ten
+// minutes late is fine where one that takes four seconds per click is not).
 
 const API = "https://scientia-eu-v4-api-d1-03.azurewebsites.net/api";
 const INSTITUTION = "a1fdee6b-68eb-47b8-b2ac-a4c60c8e6177";
@@ -44,8 +51,8 @@ async function call<T>(path: string, init?: { body: unknown; query?: Record<stri
     method: init ? "POST" : "GET",
     headers: init ? { ...HEADERS, "Content-Type": "application/json" } : HEADERS,
     body: init ? JSON.stringify(init.body) : undefined,
-    // The week list changes once a year and a module's identity never; classes are
-    // re-read on every page load.
+    // The week list is a GET and caches here. The POSTs don't — fetch won't cache a POST
+    // — so their answers are cached by `unstable_cache` below instead.
     next: { revalidate: init ? 0 : 3600 },
   });
   if (!res.ok) throw new Error(`DCU's timetable returned ${res.status}.`);
@@ -59,7 +66,9 @@ export async function weeks(): Promise<Week[]> {
   return vo.Weeks.map((w) => ({ number: w.WeekNumber, label: w.WeekLabel, firstDay: dublin(w.FirstDayInWeek).date }));
 }
 
-async function moduleIdentity(code: string): Promise<string | null> {
+const moduleIdentity = unstable_cache(lookupModule, ["dcu-module-identity"], { revalidate: 7 * 86_400 });
+
+async function lookupModule(code: string): Promise<string | null> {
   const res = await call<{ Results: { Identity: string; Name: string }[] }>(
     `Public/CategoryTypes/${MODULE_TYPE}/Categories/FilterWithCache/${INSTITUTION}`,
     { body: [], query: { query: code, itemsPerPage: "50", pageNumber: "1", returnOccurrences: "false" } },
@@ -70,6 +79,12 @@ async function moduleIdentity(code: string): Promise<string | null> {
 
 /// Every class of these modules in the given weeks.
 export async function classes(moduleCodes: string[], weekNumbers: number[]): Promise<DcuClass[]> {
+  return cachedClasses([...moduleCodes].sort(), [...weekNumbers].sort((a, b) => a - b));
+}
+
+const cachedClasses = unstable_cache(fetchClasses, ["dcu-classes"], { revalidate: 600 });
+
+async function fetchClasses(moduleCodes: string[], weekNumbers: number[]): Promise<DcuClass[]> {
   const vo = await viewOptions();
   const wanted = vo.Weeks.filter((w) => weekNumbers.includes(w.WeekNumber)).sort((a, b) => a.WeekNumber - b.WeekNumber);
   if (!wanted.length || !moduleCodes.length) return [];
