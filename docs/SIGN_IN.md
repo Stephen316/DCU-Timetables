@@ -52,10 +52,9 @@ is a UI guard, not a security boundary.
 
 ## What's stored
 
-Only the verified address and the Supabase user id, in `UserDefaults` — no password and no
-access token, so there's no credential at rest. The trade-off: "signed in" is local state, so
-it isn't tamper-proof on a jailbroken device. Keep the session token in the Keychain if you
-later make authenticated writes.
+The verified address and the Supabase user id in the app's device storage, and the
+session tokens in the Keychain (`expo-secure-store`, this-device-only). No password is ever
+stored.
 
 ## Effect on cancellation reports
 

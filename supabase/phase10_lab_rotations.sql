@@ -2,7 +2,7 @@
 -- Phase 10 — lab rotations, so an amendment doesn't need an App Store release
 -- ---------------------------------------------------------------------------
 --
--- `EngineeringLabRotation.json` is read by `LabRotation.bundled()` from the app bundle and
+-- `EngineeringLabRotation.json` is read by `bundledRotation()` from the app bundle and
 -- nowhere else. When the School moves a group or changes a room in week 6, fixing it today
 -- means a new build and a review queue — days, for a data correction.
 --
@@ -11,7 +11,7 @@
 -- or deletion obligations in CSV_PIPELINE.md §2.
 --
 -- The app keeps the bundled JSON as a fallback for first launch and for offline, and
--- prefers this when it can reach it (ios/DCUTimetable/Data/LabRotationStore.swift).
+-- prefers this when it can reach it (mobile/src/data/courseData.ts).
 --
 -- Safe to re-run. Run it in the Supabase SQL editor.
 

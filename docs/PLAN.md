@@ -2,7 +2,7 @@
 
 ## Vision
 
-A fast, no-login iOS app that shows a DCU student their real timetable and warns them
+A fast iPhone app (React Native, built with Expo) that shows a DCU student their real timetable and warns them
 about clashes, working offline. Not a calendar clone — it understands DCU's structure
 (programmes, modules, lab/tutorial groups) so a student sees exactly the classes they
 attend.
@@ -11,7 +11,7 @@ attend.
 
 | Decision | Choice |
 |---|---|
-| Platform | iOS native, SwiftUI, iOS 17+ |
+| Platform | React Native + Expo (TypeScript), iOS 17+; home-screen widgets stay SwiftUI |
 | Data source | DCU public timetable JSON API (anonymous guest mode) |
 | Audience | Public — any DCU student |
 | MVP features | Day & week views · clash detection · offline cache |
@@ -35,14 +35,14 @@ Layered so the fragile data source is isolated. See `ARCHITECTURE.md` for detail
 
 ```
 Core     pure domain — models, ActivityCode parsing, clash detection, week calendar
-Data     TimetableSource protocol + DCU API client (Codable) + on-disk cache
-Features SwiftUI screens: onboarding (programme + group), week/day views
-App      entry point, root shell
+Data     TimetableSource interface + DCU API client + on-device cache
+Features React Native screens: onboarding (programme + group), week/day views
+App      Expo Router routes, root flow
 ```
 
-`TimetableSource` is a protocol; the DCU API client is one implementation. An iCal
+`TimetableSource` is an interface; the DCU API client is one implementation. An iCal
 importer (DCU's officially-supported export) is the planned fallback behind the same
-protocol, so the UI never changes if the scrape source breaks.
+interface, so the UI never changes if the scrape source breaks.
 
 ## The data source (verified live 2026-09-15)
 
