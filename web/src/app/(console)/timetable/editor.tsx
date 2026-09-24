@@ -286,10 +286,13 @@ function AddedDetail({ change, date, onDone }: { change: SavedChange; date: stri
         {" "}{change.dates.length} date{change.dates.length === 1 ? "" : "s"} in all{change.note ? ` · ${change.note}` : ""}
       </p>
       {error && <p className="err">{error}</p>}
-      <button type="button" className="danger" disabled={busy} onClick={() => start(async () => {
-        const res = await deleteChange(change.id);
-        if (res.ok) onDone(); else setError(res.error);
-      })}>
+      <button type="button" className="danger" disabled={busy} onClick={() => {
+        if (!window.confirm(`Delete this addition (${change.dates.length} date${change.dates.length === 1 ? "" : "s"})? It leaves every student's view. This can't be undone.`)) return;
+        start(async () => {
+          const res = await deleteChange(change.id);
+          if (res.ok) onDone(); else setError(res.error);
+        });
+      }}>
         {busy ? <><Spinner /> Deleting</> : `Delete this addition (all ${change.dates.length} date${change.dates.length === 1 ? "" : "s"})`}
       </button>
     </>
@@ -452,6 +455,8 @@ function Saved({ changes }: { changes: SavedChange[] }) {
   const [, start] = useTransition();
 
   const remove = (id: string) => {
+    const change = changes.find((c) => c.id === id);
+    if (!window.confirm(`Delete "${change ? describeChange(change) : "this change"}"? It leaves every student's view. This can't be undone.`)) return;
     setBusy(id);
     setError(null);
     start(async () => {

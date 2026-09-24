@@ -2,12 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { setBan, setRole } from "../actions";
+import { Spinner } from "../spinner";
 import type { Contributor } from "./page";
 
 const joined = new Intl.DateTimeFormat("en-IE", { day: "numeric", month: "short", year: "2-digit" });
 
 export function PersonRow({ person, isMe }: { person: Contributor; isMe: boolean }) {
   const [pending, start] = useTransition();
+  const [action, setAction] = useState<"ban" | "unban" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const banned = person.banned_until !== null && new Date(person.banned_until) > new Date();
@@ -49,13 +51,17 @@ export function PersonRow({ person, isMe }: { person: Contributor; isMe: boolean
           </>
         )}
         {banned ? (
-          <button disabled={pending} onClick={() => run(() => setBan(person.id, null, ""))}>
-            Unban
+          <button disabled={pending} onClick={() => { setAction("unban"); run(() => setBan(person.id, null, "")); }}>
+            {pending && action === "unban" ? <><Spinner /> Working</> : "Unban"}
           </button>
         ) : (
           <button className="danger" disabled={pending}
-                  onClick={() => run(() => setBan(person.id, 30, "False activity"))}>
-            Ban 30d
+                  onClick={() => {
+                    if (!window.confirm(`Ban ${person.pi ?? "this account"} for 30 days? They can't post or confirm until it ends.`)) return;
+                    setAction("ban");
+                    run(() => setBan(person.id, 30, "False activity"));
+                  }}>
+            {pending && action === "ban" ? <><Spinner /> Banning</> : "Ban 30d"}
           </button>
         )}
           </>

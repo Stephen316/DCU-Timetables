@@ -1,19 +1,27 @@
 "use client";
 
-import { useActionState, useRef } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { unlock, type UnlockState } from "./actions";
 import { Spinner } from "../(console)/spinner";
 
 export function UnlockForm() {
   const [state, action, pending] = useActionState<UnlockState, FormData>(unlock, null);
   const form = useRef<HTMLFormElement>(null);
+  const input = useRef<HTMLInputElement>(null);
   const locked = state?.attemptsLeft === 0;
+
+  // A wrong code would otherwise sit in the box, and only the Enter key fires another
+  // submit while four digits are already there. Start the retry empty instead.
+  useEffect(() => {
+    if (state?.error) input.current?.form?.reset();
+  }, [state]);
 
   return (
     <form ref={form} action={action}>
       <div className="field">
         <label htmlFor="code">Code</label>
         <input
+          ref={input}
           id="code"
           name="code"
           className="pin-input"
