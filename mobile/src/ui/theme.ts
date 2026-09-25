@@ -9,7 +9,10 @@ import { createContext, useContext } from 'react';
  * (`tint`). Keeping everything else grey is what lets those four be seen at a glance on a
  * phone held at arm's length on the way to a lecture.
  *
- * Values are the iOS app's asset-catalog colours, light and dark.
+ * Light is Solarized Light, as VS Code draws it: base2 canvas, base3 rows, the theme's
+ * #DDD6C1 chrome. Ink steps down from base02 so the faintest tier is still the editor's
+ * body text. The accent is violet because Solarized's yellow, blue and green are taken by
+ * `tint`. Dark is the iOS app's asset-catalog colours.
  */
 export interface Palette {
   scheme: 'light' | 'dark';
@@ -53,19 +56,19 @@ export interface Palette {
 
 export const light: Palette = {
   scheme: 'light',
-  canvas: '#EDEFF4',
-  surface: '#FAFBFD',
-  raised: '#E1E4EC',
-  separator: '#D3D7E1',
-  rail: '#A7ADBE',
-  ink: '#1C1D26',
-  inkSecondary: '#4F5569',
-  inkTertiary: '#5E6478',
-  accent: '#3E4A94',
-  onAccent: '#FFFFFF',
-  destructive: '#C62828',
-  tint: { due: '#A04A06', test: '#1D4ED8', off: '#B43C0A', confirmed: '#047857', offFill: '#C2410C' },
-  modules: ['#007AFF', '#34C759', '#AF52DE', '#30B0C7', '#5856D6', '#FF2D55', '#A2845E'],
+  canvas: '#EEE8D5',
+  surface: '#FDF6E3',
+  raised: '#DDD6C1',
+  separator: '#D3CBB7',
+  rail: '#93A1A1',
+  ink: '#073642',
+  inkSecondary: '#586E75',
+  inkTertiary: '#657B83',
+  accent: '#6C71C4',
+  onAccent: '#FDF6E3',
+  destructive: '#DC322F',
+  tint: { due: '#B58900', test: '#268BD2', off: '#CB4B16', confirmed: '#859900', offFill: '#CB4B16' },
+  modules: ['#268BD2', '#859900', '#D33682', '#2AA198', '#6C71C4', '#DC322F', '#AC9D57'],
 };
 
 export const dark: Palette = {
