@@ -1,0 +1,39 @@
+name: Desktop
+on:
+  push:
+    paths: ["desktop/**", ".github/workflows/desktop.yml", "ios/DCUTimetable/Resources/Engineering*.json"]
+  pull_request:
+    paths: ["desktop/**", ".github/workflows/desktop.yml", "ios/DCUTimetable/Resources/Engineering*.json"]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            bundle: app
+          - os: windows-latest
+            bundle: nsis
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run tauri build -- --bundles ${{ matrix.bundle }}

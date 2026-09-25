@@ -1,7 +1,7 @@
 # DCU-Timetables
 
-An iOS app to help DCU students keep track of all their modules, classes, and
-deadlines — built on DCU's live public timetable API.
+An iOS app and a React/Tauri desktop app for Windows and macOS to help DCU students
+keep track of their modules, classes, and deadlines — built on DCU's live public timetable API.
 
 ## What it does (MVP)
 
@@ -22,6 +22,15 @@ undocumented, so the data layer is deliberately swappable (see
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
 
 ## Getting started
+
+### Desktop (Windows / macOS)
+
+The student desktop app is in [`desktop/`](desktop/README.md). It is separate from the
+Next.js admin console in `web/` and does not replace the SwiftUI iOS app. Configure a
+public Supabase URL and anon key, then run `npm ci && npm run tauri dev` from `desktop/`.
+See its README for prerequisites, builds and limitations.
+
+### iOS
 
 Requires Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
