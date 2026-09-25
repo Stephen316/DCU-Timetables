@@ -203,11 +203,36 @@ describe('Auth requests', () => {
     await expect(service.signIn(email, 'x')).rejects.toMatchObject({ kind: 'emailNotConfirmed' });
   });
 
+  test('a wrong password or unknown address says the two do not match an account', async () => {
+    // What the live project answers for either — it never says which.
+    const { fn } = fakeFetch(() => ({ status: 400, body: { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' } }));
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.signIn(email, 'x')).rejects.toMatchObject({ kind: 'invalidCredentials' });
+    await expect(service.signIn(email, 'x')).rejects.toThrow("That email and password don't match an account.");
+  });
+
+  test('a retry after a wrong password signs in', async () => {
+    let attempt = 0;
+    const { calls, fn } = fakeFetch(() => (++attempt === 1
+      ? { status: 400, body: { error_code: 'invalid_credentials', msg: 'Invalid login credentials' } }
+      : { body: { access_token: 'a', refresh_token: 'r', expires_in: 3600, user: { id: 'u1' } } }));
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.signIn(email, 'wrong')).rejects.toMatchObject({ kind: 'invalidCredentials' });
+    await expect(service.signIn(email, 'Password1')).resolves.toEqual({ id: 'u1', address: 'aoife.murphy5@mail.dcu.ie' });
+    expect(calls[1]).toMatchObject({ body: { password: 'Password1' } });
+  });
+
+  test('no answer from the server says so rather than looking like a wrong password', async () => {
+    const fn = (async () => { throw new TypeError('Network request failed'); }) as unknown as typeof fetch;
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.signIn(email, 'x')).rejects.toThrow("Couldn't reach the server.");
+  });
+
   test("the server's own words are shown, and 429 is explained", async () => {
     let status = 400;
-    const { fn } = fakeFetch(() => ({ status, body: status === 400 ? { error_description: 'Invalid login credentials' } : {} }));
+    const { fn } = fakeFetch(() => ({ status, body: status === 400 ? { msg: 'Signups not allowed for this instance' } : {} }));
     const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
-    await expect(service.signIn(email, 'x')).rejects.toThrow('Invalid login credentials');
+    await expect(service.signIn(email, 'x')).rejects.toThrow('Signups not allowed for this instance');
     status = 429;
     await expect(service.signIn(email, 'x')).rejects.toThrow('Too many attempts — wait a minute and try again.');
   });

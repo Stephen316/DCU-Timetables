@@ -3,7 +3,10 @@ import { AuthenticatedUser, parseAuthSession, SupabaseConfig, SupabaseSession } 
 
 /** Why sign-in failed, in words for the student. */
 export class AuthError extends Error {
-  constructor(readonly kind: 'notConfigured' | 'emailNotConfirmed' | 'server', message: string) {
+  constructor(
+    readonly kind: 'notConfigured' | 'emailNotConfirmed' | 'invalidCredentials' | 'server',
+    message: string,
+  ) {
     super(message);
     this.name = 'UserFacingError';
   }
@@ -15,6 +18,17 @@ export class AuthError extends Error {
   /** The address exists but hasn't been confirmed, so the "check your email" step opens. */
   static emailNotConfirmed(): AuthError {
     return new AuthError('emailNotConfirmed', 'Confirm your DCU email address first.');
+  }
+
+  /**
+   * Supabase answers an unknown address and a wrong password identically, so the message
+   * can't say which — and shouldn't, or it would tell anyone which addresses have accounts.
+   */
+  static invalidCredentials(): AuthError {
+    return new AuthError(
+      'invalidCredentials',
+      "That email and password don't match an account. Check both and try again, or create an account if you haven't yet.",
+    );
   }
 }
 
@@ -61,8 +75,9 @@ export class SupabaseAuthService implements AuthService {
     } catch (error) {
       // Supabase reports an unconfirmed address as a plain sign-in failure; the form needs
       // to tell the two apart so it can open the confirmation step instead.
-      if (error instanceof AuthError && error.kind === 'server' && isUnconfirmed(error.message)) {
-        throw AuthError.emailNotConfirmed();
+      if (error instanceof AuthError && error.kind === 'server') {
+        if (isUnconfirmed(error.message)) throw AuthError.emailNotConfirmed();
+        if (isInvalidCredentials(error.message)) throw AuthError.invalidCredentials();
       }
       throw error;
     }
@@ -83,11 +98,18 @@ export class SupabaseAuthService implements AuthService {
   }
 
   private async post(path: string, body: Record<string, string>): Promise<unknown> {
-    const response = await this.fetchFn(this.config.url + path, {
-      method: 'POST',
-      headers: { apikey: this.config.anonKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      response = await this.fetchFn(this.config.url + path, {
+        method: 'POST',
+        headers: { apikey: this.config.anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      // No answer at all — offline, or the address can't be found. Said plainly, so it
+      // isn't mistaken for a wrong password.
+      throw new AuthError('server', "Couldn't reach the server. Check your internet connection and try again.");
+    }
     const text = await response.text();
     let json: unknown = null;
     try {
@@ -98,6 +120,12 @@ export class SupabaseAuthService implements AuthService {
     if (!response.ok) throw new AuthError('server', serverMessage(json, response.status));
     return json;
   }
+}
+
+/** Matches Supabase's "Invalid login credentials", with or without its `error_code`. */
+function isInvalidCredentials(message: string): boolean {
+  const lowered = message.toLowerCase();
+  return lowered.includes('invalid login credentials') || lowered.includes('invalid_credentials');
 }
 
 function isUnconfirmed(message: string): boolean {

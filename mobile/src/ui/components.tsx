@@ -39,6 +39,7 @@ const ICONS = {
   add: 'add-circle-outline',
   flag: 'flag-outline',
   hide: 'eye-off-outline',
+  show: 'eye-outline',
   copy: 'copy-outline',
   check: 'checkmark',
   unconfirmed: 'help-circle-outline',

@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Linking, StyleSheet, TextInput, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, TextInput, TextInputProps, View } from 'react-native';
 import { DCUEmail, parseDCUEmail, PasswordValidation } from '../../core/identity';
 import { AuthError, AuthService } from '../../data/auth';
 import { errorMessage } from '../../data/rest';
 import { AuthenticatedUser } from '../../data/session';
 import { useServices } from '../../state/hooks';
 import { AppLinks } from '../../ui/links';
-import { ActionRow, ListScroll, PrimaryButton, Row, Section, Segmented, Txt } from '../../ui/components';
+import { ActionRow, Icon, ListScroll, PrimaryButton, Row, Section, Segmented, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 import { ScreenTitle } from './ScreenTitle';
 
@@ -24,6 +24,8 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
   const [address, setAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  /** One switch for both fields, so the two can be compared by eye. */
+  const [revealed, setRevealed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   /** Set once the confirmation email has been sent — the form then shows only that step. */
@@ -61,8 +63,15 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
     try {
       onSignedIn(await service.signIn(account, password));
     } catch (error) {
-      if (error instanceof AuthError && error.kind === 'emailNotConfirmed') await notConfirmed();
-      else throw error;
+      if (error instanceof AuthError && error.kind === 'emailNotConfirmed') {
+        await notConfirmed();
+        return;
+      }
+      // Emptied so the retry is typed fresh. Left filled, iOS wipes a secure field on the
+      // first keystroke after it regains focus, and the text React holds can disagree with
+      // what the field shows — so a correct second try could send something else.
+      if (error instanceof AuthError && error.kind === 'invalidCredentials') setPassword('');
+      throw error;
     }
   };
 
@@ -174,29 +183,27 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
             </Row>
             <Row>
               {/* "password", never "newPassword": the latter opens iOS's strong-password sheet over the fields. */}
-              <TextInput
+              <PasswordField
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Password"
-                placeholderTextColor={theme.inkTertiary}
-                secureTextEntry
-                textContentType="password"
                 autoComplete="password"
-                style={[styles.input, { color: theme.ink }]}
-                accessibilityLabel="Password"
+                revealed={revealed}
+                onToggleReveal={() => setRevealed((shown) => !shown)}
+                returnKeyType={mode === 'signIn' ? 'go' : 'next'}
+                onSubmitEditing={() => mode === 'signIn' && canSubmit && submit()}
               />
             </Row>
             {mode === 'createAccount' ? (
               <Row>
-                <TextInput
+                <PasswordField
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   placeholder="Confirm password"
-                  placeholderTextColor={theme.inkTertiary}
-                  secureTextEntry
-                  textContentType="password"
-                  style={[styles.input, { color: theme.ink }]}
-                  accessibilityLabel="Confirm password"
+                  revealed={revealed}
+                  onToggleReveal={() => setRevealed((shown) => !shown)}
+                  returnKeyType="go"
+                  onSubmitEditing={() => canSubmit && submit()}
                 />
                 {/* The rules are stated before they type; the current problem takes their place. */}
                 <Txt type="caption" color={theme.inkSecondary}>
@@ -246,8 +253,51 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
   );
 }
 
+/**
+ * A password input with a button to show what's been typed. The eye shows the state it
+ * switches to, as iOS's own password fields do.
+ */
+function PasswordField({
+  placeholder, revealed, onToggleReveal, ...input
+}: Pick<TextInputProps, 'value' | 'onChangeText' | 'autoComplete' | 'returnKeyType' | 'onSubmitEditing'> & {
+  placeholder: string;
+  revealed: boolean;
+  onToggleReveal: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={styles.passwordLine}>
+      <TextInput
+        {...input}
+        placeholder={placeholder}
+        placeholderTextColor={theme.inkTertiary}
+        secureTextEntry={!revealed}
+        textContentType="password"
+        // Shown in plain text, the keyboard would otherwise capitalise and correct it.
+        autoCapitalize="none"
+        autoCorrect={false}
+        spellCheck={false}
+        style={[styles.input, styles.passwordInput, { color: theme.ink }]}
+        accessibilityLabel={placeholder}
+      />
+      <Pressable
+        onPress={onToggleReveal}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={revealed ? 'Hide password' : 'Show password'}
+        style={styles.reveal}
+      >
+        <Icon name={revealed ? 'hide' : 'show'} size={22} color={theme.inkSecondary} />
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   intro: { marginHorizontal: Space.xs },
   input: { fontSize: 17, minHeight: 36 },
+  passwordLine: { flexDirection: 'row', alignItems: 'center' },
+  passwordInput: { flex: 1 },
+  reveal: { minWidth: 44, minHeight: 36, alignItems: 'flex-end', justifyContent: 'center' },
   bottom: { height: Space.xl },
 });
