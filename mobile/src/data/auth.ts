@@ -36,7 +36,9 @@ export type SignUpOutcome =
   /** Supabase sent a confirmation email; the address must be confirmed before sign-in. */
   | { kind: 'needsEmailConfirmation' }
   /** Confirmations are switched off in Supabase, so the account is usable immediately. */
-  | { kind: 'signedIn'; user: AuthenticatedUser };
+  | { kind: 'signedIn'; user: AuthenticatedUser }
+  /** The address already has a confirmed account. Supabase sends no email for this. */
+  | { kind: 'alreadyRegistered' };
 
 export interface AuthService {
   signUp(email: DCUEmail, password: string): Promise<SignUpOutcome>;
@@ -65,6 +67,7 @@ export class SupabaseAuthService implements AuthService {
       await this.session.save(session);
       return { kind: 'signedIn', user: { id: session.userID, address: email.address } };
     }
+    if (isRepeatedSignUp(json)) return { kind: 'alreadyRegistered' };
     return { kind: 'needsEmailConfirmation' };
   }
 
@@ -120,6 +123,18 @@ export class SupabaseAuthService implements AuthService {
     if (!response.ok) throw new AuthError('server', serverMessage(json, response.status));
     return json;
   }
+}
+
+/**
+ * Signing up an address that already has a confirmed account gets a 200 with a stand-in user
+ * whose `identities` is empty, and no email — so a caller can't learn which addresses exist
+ * from the status alone. An unconfirmed address comes back with its identity and a fresh
+ * confirmation email, which is the ordinary path.
+ */
+function isRepeatedSignUp(json: unknown): boolean {
+  if (typeof json !== 'object' || json === null) return false;
+  const identities = (json as { identities?: unknown }).identities;
+  return Array.isArray(identities) && identities.length === 0;
 }
 
 /** Matches Supabase's "Invalid login credentials", with or without its `error_code`. */

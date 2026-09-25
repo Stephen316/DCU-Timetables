@@ -90,7 +90,13 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
       run(async (service) => {
         const outcome = await service.signUp(email, password);
         if (outcome.kind === 'needsEmailConfirmation') startConfirmation(email, null);
-        else onSignedIn(outcome.user);
+        else if (outcome.kind === 'alreadyRegistered') {
+          // Back to Sign in with the address kept, so signing in or resetting is one tap.
+          setMode('signIn');
+          setPassword('');
+          setConfirmPassword('');
+          setNote('An account with this email already exists. Sign in, or tap "Forgot password?" to reset it.');
+        } else onSignedIn(outcome.user);
       });
     }
   };

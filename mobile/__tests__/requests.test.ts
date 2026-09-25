@@ -237,6 +237,13 @@ describe('Auth requests', () => {
     await expect(service.signIn(email, 'x')).rejects.toThrow('Too many attempts — wait a minute and try again.');
   });
 
+  test('signing up an address that already has an account says so instead of waiting for an email', async () => {
+    // The live project's answer for a confirmed address: a stand-in user, no identities.
+    const { fn } = fakeFetch(() => ({ body: { id: 'x', email: 'aoife.murphy5@mail.dcu.ie', identities: [] } }));
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.signUp(email, 'Password1')).resolves.toEqual({ kind: 'alreadyRegistered' });
+  });
+
   test('sign-up without a session needs the email confirmed', async () => {
     const { fn } = fakeFetch(() => ({ body: { id: 'u1', email: 'x' } }));
     const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
