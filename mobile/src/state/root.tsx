@@ -8,10 +8,10 @@ import { AuthenticatedUser, userEmail } from '../data/session';
 import { PrefKey } from '../data/storage';
 import { bundledRotation, ProfileTimetableSource, ROTATION_COURSE_KEY } from '../data/timetable';
 import { WeekModel } from '../features/week/WeekModel';
-import { useAppEvent, usePref, usePrefBool, usePrefJSON, useServices } from './hooks';
+import { useAppEvent, usePref, usePrefJSON, useServices } from './hooks';
 
 /** Which screen the app is on, decided from what the device remembers. */
-export type Flow = 'signIn' | 'studentID' | 'profileCreator' | 'programmePicker' | 'shell';
+export type Flow = 'signIn' | 'studentID' | 'programmePicker' | 'shell';
 
 /** The signed-in app's timetable: whose it is and where it comes from. */
 export interface ShellConfig {
@@ -50,17 +50,16 @@ export function useWeekModel(): WeekModel {
 }
 
 /**
- * Flow: sign in with a DCU address → student number from the card → the profile resolves
- * from the name in that address → timetable. "Choose a programme instead" covers anyone not
- * in the class list.
+ * Flow: sign in with a DCU address → student number from the card → pick a programme →
+ * timetable. Once a programme is picked, the class list for its course is checked in the
+ * background; a student on it moves onto their lab group, anyone else stays as they are.
  */
 export function RootProvider({ children }: { children: ReactNode }) {
   const services = useServices();
   const [user, setUser] = useState<AuthenticatedUser | null>(() => services.user.current);
   const [studentID] = usePref(PrefKey.studentID);
   const [profileRaw, setProfileRaw] = usePrefJSON<unknown>(PrefKey.profile, null);
-  const [programme, setProgramme] = usePrefJSON<TimetableCategory | null>(PrefKey.selectedProgramme, null);
-  const [useProgrammePicker] = usePrefBool(PrefKey.useProgrammePicker);
+  const [programme] = usePrefJSON<TimetableCategory | null>(PrefKey.selectedProgramme, null);
   const [, setHidden] = usePref(PrefKey.hiddenGroups);
   const [triedRaw, setTried] = usePrefJSON<Record<string, number>>(PrefKey.allocationTried, {});
   const profile = useMemo(() => decodeProfile(profileRaw), [profileRaw]);
@@ -79,8 +78,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
     user === null ? 'signIn'
       : !studentID ? 'studentID'
         : profile || programme ? 'shell'
-          : useProgrammePicker ? 'programmePicker'
-            : 'profileCreator';
+          : 'programmePicker';
 
   // MARK: The timetable behind the shell
 
@@ -153,11 +151,13 @@ export function RootProvider({ children }: { children: ReactNode }) {
       }
 
       if (!savedProfile) {
-        if (!picked) return;
-        const outcome = await AllocationRefresh.adopt(userEmail(current)?.displayName ?? '', tried, store);
+        // No list for this programme's course means nothing to look up: it stays as picked.
+        if (!course) return;
+        const outcome = await AllocationRefresh.adopt(userEmail(current)?.displayName ?? '', tried, store, course);
         if (outcome.kind === 'adopted') {
+          // The picked programme is kept underneath, so a profile later dropped from the
+          // list falls back to it rather than to an empty picker.
           setProfileRaw(outcome.profile as StudentProfile);
-          setProgramme(null);
           setHidden(null);
           setTried(null);
         } else {
@@ -174,11 +174,12 @@ export function RootProvider({ children }: { children: ReactNode }) {
     } finally {
       refreshing.current = false;
     }
-  }, [services, setProfileRaw, setProgramme, setHidden, setTried]);
+  }, [services, setProfileRaw, setHidden, setTried]);
 
+  // Also on picking a programme, which is when its class list is first worth asking about.
   useEffect(() => {
     void refreshAllocation();
-  }, [user?.id, refreshAllocation]);
+  }, [user?.id, programme?.identity, refreshAllocation]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {

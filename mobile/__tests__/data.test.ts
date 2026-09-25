@@ -149,6 +149,13 @@ describe('Allocation refresh', () => {
     expect(await AllocationRefresh.adopt('', {}, store)).toEqual({ kind: 'stay', tried: {} });
   });
 
+  test("only the picked programme's own course list is looked up", async () => {
+    const store = new FakeAllocationStore(1, { kind: 'matched', key: 'cc', version: 1 }, alloc('C', 'C.3', 'SG23', 'SB39'));
+    expect(await AllocationRefresh.adopt('', {}, store, 'CASE1')).toEqual({ kind: 'stay', tried: {} });
+    expect(store.resolveCalls).toBe(0);
+    expect((await AllocationRefresh.adopt('', {}, store, 'EEG1')).kind).toBe('adopted');
+  });
+
   test("a list for a course the app can't show is ignored", async () => {
     const store = new FakeAllocationStore(1, { kind: 'matched', key: 'dd', version: 1 }, alloc('A', '', '', ''));
     store.rosterList = [{ courseKey: 'CASE3', title: null, version: 1 }];

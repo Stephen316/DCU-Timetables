@@ -109,7 +109,6 @@ export const PrefKey = {
   profile: 'studentProfile',
   selectedProgramme: 'selectedProgramme',
   hiddenGroups: 'hiddenGroups',
-  useProgrammePicker: 'useProgrammePicker',
   skipped: 'skippedEvents',
   allocationTried: 'allocationTried',
   weekShowsCalendar: 'weekShowsCalendar',

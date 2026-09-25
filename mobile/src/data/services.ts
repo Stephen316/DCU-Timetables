@@ -114,7 +114,7 @@ export async function createServices(platform: Platform): Promise<Services> {
       role.reset();
       for (const key of [
         PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme, PrefKey.hiddenGroups,
-        PrefKey.skipped, PrefKey.allocationTried, PrefKey.useProgrammePicker,
+        PrefKey.skipped, PrefKey.allocationTried,
       ]) {
         prefs.set(key, null);
       }

@@ -131,19 +131,25 @@ export const AllocationRefresh = {
   },
 
   /**
-   * For a student who picked a programme because no list had them. Each list is asked about
-   * once per version: a conflict files a flag for an admin on every call. A shared name comes
-   * back ambiguous and stays — the subgroup question belongs on the profile screen.
+   * For a student on the programme they picked: if the class list for that programme's
+   * course has them, they move onto their lab group; if not, they stay as they are. Each list
+   * is asked about once per version: a conflict files a flag for an admin on every call. A
+   * shared name comes back ambiguous and stays on the programme.
+   *
+   * `courseKey` limits the lookup to one course's list, so picking a programme only ever
+   * matches against that programme's students.
    */
   async adopt(
     name: string,
     tried: Record<string, number>,
     store: AllocationStore,
+    courseKey?: string,
   ): Promise<{ kind: 'adopted'; profile: StudentProfile } | { kind: 'stay'; tried: Record<string, number> }> {
     const next = { ...tried };
     try {
       const fresh = (await store.rosters())
         .filter((r) => cohortForCourseKey(r.courseKey) !== null && next[r.courseKey] !== r.version)
+        .filter((r) => courseKey === undefined || r.courseKey === courseKey)
         .sort((a, b) => (a.courseKey < b.courseKey ? -1 : a.courseKey > b.courseKey ? 1 : 0));
       for (const roster of fresh) {
         const cohort = cohortForCourseKey(roster.courseKey);
