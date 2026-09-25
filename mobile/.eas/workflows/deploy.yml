@@ -1,0 +1,71 @@
+# On every push to main that touches the app: if the native side (packages, app.json, the
+# widget target) is unchanged since the last store build, ship the JavaScript as an
+# over-the-air update; otherwise build a new binary and send it to TestFlight.
+name: Deploy
+
+on:
+  push:
+    branches: ['main']
+    paths: ['mobile/**']
+
+concurrency:
+  cancel_in_progress: true
+  group: ${{ workflow.filename }}-${{ github.ref }}
+
+jobs:
+  # The same checks as scripts/ci.sh mobile, so a broken push never reaches a phone.
+  check:
+    name: Type-check, lint and test
+    steps:
+      - uses: eas/checkout
+      - name: Install
+        run: |
+          test -f eas.json || cd mobile
+          npm ci
+      - name: Check
+        run: |
+          test -f eas.json || cd mobile
+          npx tsc --noEmit
+          npx eslint .
+          npx jest --ci
+
+  fingerprint:
+    name: Fingerprint
+    needs: [check]
+    type: fingerprint
+    environment: production
+
+  get_ios_build:
+    name: Find a build with this fingerprint
+    needs: [fingerprint]
+    type: get-build
+    params:
+      platform: ios
+      profile: production
+      fingerprint_hash: ${{ needs.fingerprint.outputs.ios_fingerprint_hash }}
+
+  build_ios:
+    name: Build iOS
+    needs: [get_ios_build]
+    if: ${{ !needs.get_ios_build.outputs.build_id }}
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit_ios:
+    name: Send to TestFlight
+    needs: [build_ios]
+    type: submit
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}
+
+  update_ios:
+    name: Publish over-the-air update
+    needs: [get_ios_build]
+    if: ${{ needs.get_ios_build.outputs.build_id }}
+    type: update
+    environment: production
+    params:
+      platform: ios
+      channel: production

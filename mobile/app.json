@@ -2,8 +2,15 @@
   "expo": {
     "name": "DCU Timetable",
     "slug": "dcu-timetable",
+    "owner": "s.harcourt",
     "scheme": "dcutimetable",
     "version": "1.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c4f17bdd-0f1c-4ca7-960b-c7a034fbf0b9"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -102,6 +109,11 @@
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c4f17bdd-0f1c-4ca7-960b-c7a034fbf0b9"
+      }
     }
   }
 }

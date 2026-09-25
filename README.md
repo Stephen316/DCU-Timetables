@@ -101,6 +101,13 @@ scanner, the widget target, entitlements, `app.json` permissions, a new Expo pac
 with native code — needs a **new build and App Review**. `eas update` over-the-air
 updates only cover JavaScript and images.
 
+**Deploys are automatic.** `mobile/.eas/workflows/deploy.yml` runs on EAS for every push
+to `main` that touches `mobile/`: it runs the checks, then fingerprints the native side
+(`runtimeVersion: fingerprint`). If a store build with that fingerprint exists, the push
+goes out as an over-the-air update on the `production` channel; if not, EAS builds a new
+binary and sends it to TestFlight. `fingerprint.config.js` adds the widget's Swift files to
+the fingerprint, so a widget change always gets a new build.
+
 `mobile/ios` and `mobile/android` are generated (`npx expo prebuild`) and git-ignored — never
 edit them by hand.
 
