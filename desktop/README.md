@@ -27,6 +27,10 @@ builds the frontend. `npm run tauri build -- --bundles app` on macOS, or
 builds may trigger OS trust prompts; distribution signing/notarization needs separately
 managed certificates and is not configured here.
 
+Pull-request CI builds both platforms and attaches the macOS `.app` zip and Windows
+NSIS installer as workflow artifacts. These are unsigned test builds, not release
+downloads; macOS Gatekeeper and Windows SmartScreen may block them.
+
 The Supabase Auth project's URL configuration must allow desktop confirmation links to
 return to a web page where the student can then sign in. Do not place a service-role key,
 admin credentials, or student records in `.env.local` or the app bundle.

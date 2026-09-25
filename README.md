@@ -68,7 +68,8 @@ scripts/ci.sh ios      # xcodegen + simulator build and unit tests
 ```
 
 On push to `main` and on pull requests, `.github/workflows/web.yml` and `ios.yml` run
-the same script, each only when its own files change. The iOS job uses the Xcode that
+the same script, each only when its own files change. Desktop checks and native builds
+run separately in `.github/workflows/desktop.yml`. The iOS job uses the Xcode that
 `project.yml`'s `xcodeVersion` names, so bumping it there moves CI too. A failed iOS run
 attaches the full `xcodebuild` log to the run.
 

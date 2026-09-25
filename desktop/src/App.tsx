@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   cancellationEventKey,
@@ -37,6 +37,113 @@ const APP_LINKS = {
   terms: "https://stephen316.github.io/DCU-Timetables/terms.html",
   support: "https://stephen316.github.io/DCU-Timetables/support.html",
 };
+const OFFLINE_PROFILE_KEY = "dcu-timetable:offline-profile:";
+const TIMETABLE_CACHE_PREFIX = "dcu-timetable:v1:";
+
+interface OfflineProfileSnapshot {
+  user: AuthenticatedUser;
+  account: AccountProfile;
+  resolved: Profile;
+  savedAt: string;
+}
+
+function localSupabaseUser(): AuthenticatedUser | null {
+  const configuredUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabase || !configuredUrl) return null;
+  try {
+    const projectRef = new URL(configuredUrl).hostname.split(".")[0];
+    const savedSession = localStorage.getItem(`sb-${projectRef}-auth-token`);
+    if (!savedSession) return null;
+    const session = JSON.parse(savedSession) as {
+      access_token?: unknown;
+      refresh_token?: unknown;
+      user?: { id?: unknown; email?: unknown };
+    };
+    const id = session.user?.id;
+    const email = session.user?.email;
+    return typeof session.access_token === "string" && typeof session.refresh_token === "string"
+      && typeof id === "string" && typeof email === "string" ? { id, email } : null;
+  } catch {
+    return null;
+  }
+}
+
+function offlineSnapshotFor(user: AuthenticatedUser): OfflineProfileSnapshot | null {
+  try {
+    const snapshot = JSON.parse(localStorage.getItem(`${OFFLINE_PROFILE_KEY}${user.id}`) ?? "null") as OfflineProfileSnapshot | null;
+    if (!snapshot || snapshot.user.id !== user.id || snapshot.account.id !== user.id
+      || snapshot.resolved.id !== user.id || snapshot.resolved.allocationStatus !== "matched"
+      || !snapshot.resolved.group || snapshot.user.email.trim().toLowerCase() !== user.email.trim().toLowerCase()) return null;
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+function persistOfflineProfile(user: AuthenticatedUser, resolved: Profile): void {
+  if (navigator.onLine === false || resolved.id !== user.id || resolved.allocationStatus !== "matched" || !resolved.group) return;
+  const account: AccountProfile = {
+    id: resolved.id,
+    role: resolved.role,
+    pi: resolved.pi,
+    displayName: resolved.displayName,
+    bannedUntil: resolved.bannedUntil,
+    studentId: resolved.studentId,
+  };
+  try {
+    localStorage.setItem(`${OFFLINE_PROFILE_KEY}${user.id}`, JSON.stringify({
+      user, account, resolved, savedAt: new Date().toISOString(),
+    } satisfies OfflineProfileSnapshot));
+  } catch {
+    // Keep online onboarding usable if browser storage is blocked or full.
+  }
+}
+
+function clearOfflineProfile(userId: string | null): void {
+  if (!userId) return;
+  try {
+    localStorage.removeItem(`${OFFLINE_PROFILE_KEY}${userId}`);
+    localStorage.removeItem(`dcu-timetable:programme:${userId}`);
+  } catch {
+    // Storage can be unavailable in hardened browser contexts.
+  }
+}
+
+function cachedProfileCalendar(profile: Profile): WeekCalendar | null {
+  try {
+    const envelope = JSON.parse(localStorage.getItem(`${TIMETABLE_CACHE_PREFIX}week-calendar`) ?? "null") as
+      { value?: WeekCalendar } | null;
+    const calendar = envelope?.value;
+    if (!calendar || !Array.isArray(calendar.weeks) || !Array.isArray(calendar.days)) return null;
+    const hasAnyWeek = cachedProfileWeekNumbers(profile, calendar).length > 0;
+    return hasAnyWeek ? calendar : null;
+  } catch {
+    return null;
+  }
+}
+
+function cachedProfileWeekNumbers(profile: Profile, calendar: WeekCalendar): number[] {
+  const course = profile.courseKey ?? ENGINEERING_COURSE;
+  return calendar.weeks.filter((week) => {
+    try {
+      const key = `${TIMETABLE_CACHE_PREFIX}profile-events:${profile.id}:${course}:${profile.group}:${profile.subgroup ?? ""}:${week.number}`;
+      const cached = JSON.parse(localStorage.getItem(key) ?? "null") as { value?: unknown } | null;
+      return Array.isArray(cached?.value);
+    } catch {
+      return false;
+    }
+  }).map((week) => week.number);
+}
+
+function cachedProfileEvents(profile: Profile, week: TeachingWeek): TimetableEvent[] | null {
+  try {
+    const key = `${TIMETABLE_CACHE_PREFIX}profile-events:${profile.id}:${profile.courseKey ?? ENGINEERING_COURSE}:${profile.group}:${profile.subgroup ?? ""}:${week.number}`;
+    const cached = JSON.parse(localStorage.getItem(key) ?? "null") as { value?: unknown } | null;
+    return Array.isArray(cached?.value) ? cached.value as TimetableEvent[] : null;
+  } catch {
+    return null;
+  }
+}
 
 const kindOptions: Array<{ value: DeadlineKind; label: string }> = [
   { value: "assignment", label: "Assignment" },
@@ -251,8 +358,10 @@ function App() {
   const [offlineWarning, setOfflineWarning] = useState(false);
   const [reportsUnavailable, setReportsUnavailable] = useState(false);
   const [deadlinesUnavailable, setDeadlinesUnavailable] = useState(false);
+  const [offlineRestored, setOfflineRestored] = useState(false);
   const [toast, setToast] = useState("");
   const [globalError, setGlobalError] = useState("");
+  const activeUserId = useRef<string | null>(null);
   const service = dataService;
 
   useEffect(() => {
@@ -309,12 +418,73 @@ function App() {
   }, [toast]);
 
   useEffect(() => {
+    activeUserId.current = user?.id ?? null;
+  }, [user]);
+
+  useEffect(() => {
     let active = true;
     if (!service) {
       setStage("auth");
       return () => { active = false; };
     }
     void (async () => {
+      if (navigator.onLine === false) {
+        const localUser = localSupabaseUser();
+        const snapshot = localUser ? offlineSnapshotFor(localUser) : null;
+        const savedCalendar = snapshot ? cachedProfileCalendar(snapshot.resolved) : null;
+        const cachedWeeks = snapshot && savedCalendar
+          ? savedCalendar.weeks.flatMap((week) => {
+            const events = cachedProfileEvents(snapshot.resolved, week);
+            return events ? [[week, events] as const] : [];
+          }) : [];
+        if (!localUser || !snapshot || !savedCalendar || !cachedWeeks.length) {
+          setStage("auth");
+          setGlobalError("You're offline. Reconnect to verify your account or load a saved profile timetable.");
+          return;
+        }
+        const todayKey = dublinDateKey(new Date());
+        const currentIndex = savedCalendar.weeks.findIndex((week) => {
+          const start = dublinDateKey(week.firstDay);
+          const [year, month, day] = start.split("-").map(Number);
+          const end = dublinDateKey(new Date(Date.UTC(year, month - 1, day + 6, 12)));
+          return todayKey >= start && todayKey <= end;
+        });
+        const selectedIndex = cachedWeeks
+          .map(([week]) => savedCalendar.weeks.findIndex((item) => item.number === week.number))
+          .filter((index) => index >= 0)
+          .sort((left, right) => Math.abs(left - Math.max(currentIndex, 0)) - Math.abs(right - Math.max(currentIndex, 0)))[0];
+        if (selectedIndex == null) {
+          setStage("auth");
+          setGlobalError("You're offline and no saved timetable week is available. Reconnect to refresh your schedule.");
+          return;
+        }
+        setUser(localUser);
+        setOfflineRestored(true);
+        setProfile(snapshot.account);
+        setStudentProfile(snapshot.resolved);
+        setCalendar(savedCalendar);
+        setCalendarUnavailable(false);
+        setCachedCalendarNotice(true);
+        setOfflineWarning(true);
+        setReportsUnavailable(true);
+        setDeadlinesUnavailable(true);
+        setUsingProgramme(false);
+        setProgramme(null);
+        setWeekIndex(selectedIndex);
+        setDayIndex(Math.min(dublinWeekday(new Date()), 4));
+        setPage("timetable");
+        setStage("app");
+        setGlobalError("");
+        try {
+          const key = `dcu-timetable:groups:${localUser.id}:profile:${snapshot.resolved.courseKey ?? ENGINEERING_COURSE}:${snapshot.resolved.group}:${snapshot.resolved.subgroup ?? ""}`;
+          setHiddenGroups(new Set(JSON.parse(localStorage.getItem(key) ?? "[]") as string[]));
+        } catch {
+          setHiddenGroups(new Set());
+        }
+        setEventsByWeek(Object.fromEntries(cachedWeeks.map(([week, events]) => [week.number, events])));
+        setWeekLoading(false);
+        return;
+      }
       try {
         const current = await service.currentUser();
         if (!active) return;
@@ -338,9 +508,51 @@ function App() {
   }, [service]);
 
   useEffect(() => {
+    if (!online || !offlineRestored || !service) return;
+    let active = true;
+    void (async () => {
+      setStage("checking");
+      try {
+        const verifiedUser = await service.currentUser();
+        if (!active) return;
+        if (!verifiedUser) {
+          clearOfflineProfile(activeUserId.current);
+          setUser(null);
+          setProfile(null);
+          setStudentProfile(null);
+          setOfflineRestored(false);
+          setStage("auth");
+          return;
+        }
+        setUser(verifiedUser);
+        const currentProfile = await service.myProfile();
+        if (!active) return;
+        setProfile(currentProfile);
+        setOfflineRestored(false);
+        if (!currentProfile) {
+          setGlobalError("Reconnect and sign in again to verify your student profile.");
+          setStage("auth");
+        } else if (!currentProfile.studentId) {
+          setStage("studentId");
+        } else {
+          setStage("resolvingProfile");
+        }
+      } catch (error) {
+        if (!active) return;
+        setOfflineRestored(false);
+        setGlobalError(errorMessage(error, "Couldn't verify your account after reconnecting."));
+        setStage("auth");
+      }
+    })();
+    return () => { active = false; };
+  }, [online, offlineRestored, service]);
+
+  useEffect(() => {
     if (!supabase) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_OUT") return;
+      clearOfflineProfile(activeUserId.current);
+      activeUserId.current = null;
       setUser(null);
       setProfile(null);
       setStudentProfile(null);
@@ -569,6 +781,7 @@ function App() {
 
   const openProfileSchedule = useCallback(async (resolved: Profile) => {
     if (!service) return;
+    if (user) persistOfflineProfile(user, resolved);
     setStudentProfile(resolved);
     setProgramme(null);
     setUsingProgramme(false);
@@ -789,6 +1002,10 @@ function App() {
     setWeekIndex(index);
     setDayIndex(0);
     if (eventsByWeek[calendar.weeks[index]?.number]) return;
+    if (!navigator.onLine) {
+      setGlobalError("No saved timetable for that week. Reconnect to load it.");
+      return;
+    }
     if (studentProfile && !usingProgramme) void loadProfileSchedule(studentProfile, index);
     else if (programme) void loadSchedule(programme, index);
   };
@@ -844,6 +1061,10 @@ function App() {
 
   const loadDeadlines = useCallback(async () => {
     if (!service || !moduleKeys.length) { setDeadlines([]); return; }
+    if (!navigator.onLine) {
+      setDeadlinesUnavailable(true);
+      return;
+    }
     try {
       const rows = await service.deadlines(moduleKeys);
       setDeadlines(rows);
@@ -854,16 +1075,16 @@ function App() {
       setDeadlinesUnavailable(true);
       setGlobalError(errorMessage(error, "Couldn't load deadlines."));
     }
-  }, [service, moduleKeys.join("|")]);
+  }, [service, moduleKeys.join("|"), online]);
 
   useEffect(() => { void loadDeadlines(); }, [loadDeadlines]);
 
   useEffect(() => {
-    if (page !== "account" || !service) return;
+    if (page !== "account" || !service || !navigator.onLine) return;
     void service.hiddenAuthorCount().then(setHiddenAuthorCount).catch((error: unknown) => {
       setGlobalError(errorMessage(error, "Couldn't load hidden deadline authors."));
     });
-  }, [page, service]);
+  }, [page, service, online]);
 
   const saveDeadline = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1019,7 +1240,8 @@ function App() {
     if (!service) return;
     try {
       await service.signOut();
-      if (user) localStorage.removeItem(`dcu-timetable:programme:${user.id}`);
+      clearOfflineProfile(user?.id ?? activeUserId.current);
+      activeUserId.current = null;
       setUser(null);
       setProfile(null);
       setStudentProfile(null);
@@ -1034,6 +1256,18 @@ function App() {
       setAuthPassword("");
     } catch (error) {
       setGlobalError(errorMessage(error, "Couldn't sign out."));
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!service) return;
+    try {
+      await service.deleteAccount();
+      clearOfflineProfile(user?.id ?? activeUserId.current);
+      activeUserId.current = null;
+      await signOut();
+    } catch (error) {
+      setGlobalError(errorMessage(error, "Couldn't delete your account."));
     }
   };
 
@@ -1091,6 +1325,10 @@ function App() {
     setDayIndex(Math.min(dublinWeekday(new Date()), 4));
     const weekNumber = calendar.weeks[selected]?.number;
     if (weekNumber == null || eventsByWeek[weekNumber]) return;
+    if (!navigator.onLine) {
+      setGlobalError("No saved timetable for today. Reconnect to load it.");
+      return;
+    }
     if (studentProfile && !usingProgramme) void loadProfileSchedule(studentProfile, selected);
     else if (programme) void loadSchedule(programme, selected);
   };
@@ -1290,7 +1528,7 @@ function App() {
           <div className="page-heading"><div><p className="eyebrow">Your student profile</p><h1>Account</h1><p className="subheading">Manage your sign-in and timetable preferences.</p></div></div>
           <div className="account-grid">
             <section className="panel"><div className="panel-header"><h2>Profile details</h2></div><div className="group-sections"><div className="group-section"><div className="group-heading"><strong>Name</strong><small>{name}</small></div></div><div className="group-section"><div className="group-heading"><strong>Email</strong><small>{user?.email}</small></div></div><div className="group-section"><div className="group-heading"><strong>Student number</strong><small>{profile?.studentId ?? "Not set"}</small></div></div><div className="group-section"><div className="group-heading"><strong>Your public ID</strong>{profile?.pi ? <button className="button small" onClick={() => void copyPublicId()}>{piCopied ? "Copied" : "Copy ID"}</button> : <small>Not assigned</small>}</div>{profile?.pi && <code className="public-id">{profile.pi}</code>}<small className="form-hint">Share with someone making you a trusted reporter. This ID is not a password.</small></div>{studentProfile && <div className="group-section"><div className="group-heading"><strong>Allocated group</strong><small>{studentProfile.group ? `${studentProfile.group}${studentProfile.subgroup ? ` · ${studentProfile.subgroup}` : ""}` : "Not matched"}</small></div><small className="form-hint">{studentProfile.workshop ? `Workshop ${studentProfile.workshop}` : ""}{studentProfile.drawing ? ` · Drawing ${studentProfile.drawing}` : ""}</small></div>}<div className="group-section"><div className="group-heading"><strong>Timetable</strong><small>{studentProfile?.group && !usingProgramme ? "Year 1 Engineering · profile schedule" : programme?.name ?? "Not selected"}</small></div><button className="button small" onClick={changeProgramme}>Browse public programmes</button></div></div></section>
-            <section className="panel"><div className="panel-header"><h2>Preferences &amp; help</h2></div><div className="group-sections"><div className="group-section"><div className="group-heading"><strong>Appearance</strong></div><div className="appearance-options" role="group" aria-label="Appearance"><button className={appearance === "system" ? "selected" : ""} onClick={() => setAppearance("system")}>System</button><button className={appearance === "light" ? "selected" : ""} onClick={() => setAppearance("light")}>Light</button><button className={appearance === "dark" ? "selected" : ""} onClick={() => setAppearance("dark")}>Dark</button></div></div><div className="group-section"><div className="group-heading"><strong>Privacy &amp; legal</strong></div><div className="account-links"><a href={APP_LINKS.privacy} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal(APP_LINKS.privacy); }}>Privacy policy <span aria-hidden="true">↗</span></a><a href={APP_LINKS.terms} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal(APP_LINKS.terms); }}>Terms of use <span aria-hidden="true">↗</span></a><a href={APP_LINKS.support} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal(APP_LINKS.support); }}>Help and contact <span aria-hidden="true">↗</span></a></div></div><div className="group-section"><div className="group-heading"><strong>Hidden deadline authors</strong><small>{hiddenAuthorCount}</small></div><p className="form-hint">Deadlines from these authors are hidden from your list.</p><button className="button small" disabled={!hiddenAuthorCount} onClick={() => void clearHiddenAuthors()}>Unhide all authors</button></div><button className="button" style={{ width: "100%", marginBottom: 9 }} onClick={() => void signOut()}>Sign out</button><button className="button danger" style={{ width: "100%" }} onClick={() => { if (window.confirm("Delete your student account? This cannot be undone.")) void service?.deleteAccount().then(() => void signOut()).catch((error: unknown) => setGlobalError(errorMessage(error, "Couldn't delete your account."))); }}>Delete account</button><small className="form-hint">An independent student project. Not affiliated with or endorsed by Dublin City University.</small></div></section>
+            <section className="panel"><div className="panel-header"><h2>Preferences &amp; help</h2></div><div className="group-sections"><div className="group-section"><div className="group-heading"><strong>Appearance</strong></div><div className="appearance-options" role="group" aria-label="Appearance"><button className={appearance === "system" ? "selected" : ""} onClick={() => setAppearance("system")}>System</button><button className={appearance === "light" ? "selected" : ""} onClick={() => setAppearance("light")}>Light</button><button className={appearance === "dark" ? "selected" : ""} onClick={() => setAppearance("dark")}>Dark</button></div></div><div className="group-section"><div className="group-heading"><strong>Privacy &amp; legal</strong></div><div className="account-links"><a href={APP_LINKS.privacy} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal(APP_LINKS.privacy); }}>Privacy policy <span aria-hidden="true">↗</span></a><a href={APP_LINKS.terms} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal(APP_LINKS.terms); }}>Terms of use <span aria-hidden="true">↗</span></a><a href={APP_LINKS.support} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal(APP_LINKS.support); }}>Help and contact <span aria-hidden="true">↗</span></a></div></div><div className="group-section"><div className="group-heading"><strong>Hidden deadline authors</strong><small>{hiddenAuthorCount}</small></div><p className="form-hint">Deadlines from these authors are hidden from your list.</p><button className="button small" disabled={!hiddenAuthorCount} onClick={() => void clearHiddenAuthors()}>Unhide all authors</button></div><button className="button" style={{ width: "100%", marginBottom: 9 }} onClick={() => void signOut()}>Sign out</button><button className="button danger" style={{ width: "100%" }} onClick={() => { if (window.confirm("Delete your student account? This cannot be undone.")) void deleteAccount(); }}>Delete account</button><small className="form-hint">An independent student project. Not affiliated with or endorsed by Dublin City University.</small></div></section>
           </div>
         </>}
       </div>
