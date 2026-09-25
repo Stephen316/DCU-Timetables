@@ -98,6 +98,8 @@ h1 { margin-bottom: 5px; color: var(--ink); font-size: clamp(25px, 3vw, 32px); l
 .class-row { position: relative; display: grid; grid-template-columns: 62px 3px minmax(0,1fr) auto; gap: 12px; align-items: stretch; width: 100%; margin-top: 9px; padding: 13px 12px; border: 1px solid #edf0f5; border-radius: 9px; background: #fff; color: inherit; text-align: left; transition: .18s ease; }
 .class-row:hover { border-color: #d2d8ec; box-shadow: 0 6px 16px rgba(35,49,85,.055); transform: translateY(-1px); }
 .class-row.clash { border-color: #f2d4ad; background: #fffcf6; }
+.class-row.deadline { border-color: #cdd5fb; background: #fafaff; }
+.class-row.test { border-color: #edc3c8; background: #fff9fa; }
 .class-row.cancelled { border-color: #f0c8cb; background: #fff9f9; }
 .class-time { padding-top: 2px; color: #59657d; font-size: 11px; font-weight: 700; line-height: 1.55; white-space: nowrap; }
 .class-time small { display: block; color: #9aa3b5; font-size: 10px; font-weight: 500; }
