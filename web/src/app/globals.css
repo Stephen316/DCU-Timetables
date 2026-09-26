@@ -196,27 +196,39 @@ label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px
    it never moves the thing you were about to click. */
 .combo { position: relative; }
 .row > .combo { flex: 1; margin-bottom: 0; min-width: 0; }
-.combo input { text-overflow: ellipsis; }
-.combo-list {
+/* The closed box: looks like the other fields, but is a button that opens the list. */
+.combo-trigger {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 6px 9px; background: var(--surface);
+}
+.combo-trigger:hover { background: var(--surface); border-color: var(--muted); }
+.combo-trigger[aria-expanded="true"] { border-color: var(--muted); }
+.combo-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Drawn, like .chev: a glyph caret renders unevenly in the system font. */
+.combo-caret { width: 6px; height: 6px; flex: none; margin: 0 2px 3px 0; border-right: 1.5px solid var(--muted);
+               border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); }
+.combo-caret.open { margin: 3px 2px 0 0; transform: rotate(-135deg); }
+.combo-pop {
   position: absolute;
   z-index: 20;
   top: 100%;
   left: 0;
   /* At least as wide as the box, and wider when a title needs it: a module list squeezed
-     to the width of its input wrapped every title one word per line. */
+     to the width of its box wrapped every title one word per line. */
   min-width: 100%;
   width: max-content;
   max-width: min(560px, 92vw);
-  margin: 4px 0 0;
+  margin-top: 4px;
   padding: 4px;
-  list-style: none;
-  max-height: 300px;
-  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+.combo-search { position: relative; margin-bottom: 4px; }
+.combo-search input { padding-left: 28px; background: var(--bg); }
+.combo-search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--dim); pointer-events: none; }
+.combo-list { margin: 0; padding: 0; list-style: none; max-height: 300px; overflow-y: auto; }
 /* Code in a fixed column so titles line up; the hint on its own line under the title, so the
    two can never collide however narrow the panel gets. */
 .combo-opt {
