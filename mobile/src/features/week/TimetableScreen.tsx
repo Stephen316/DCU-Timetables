@@ -156,12 +156,6 @@ export function TimetableScreen() {
         ) : null}
       </View>
 
-      {/* Disabled at each end of the year rather than silently doing nothing. */}
-      <View style={[styles.weekBar, { borderTopColor: theme.separator }]}>
-        <IconButton icon="back" label="Previous week" disabled={!model.canStep(-1)} onPress={() => model.stepIndex(-1)} />
-        <IconButton icon="forward" label="Next week" disabled={!model.canStep(1)} onPress={() => model.stepIndex(1)} />
-      </View>
-
       <ActionSheet visible={sheet === 'menu'} onClose={() => setSheet(null)} actions={menu} />
       {shell && !shell.groupsAssigned ? (
         <GroupsSheet visible={sheet === 'groups'} onClose={() => setSheet(null)} programme={shell.programme} source={shell.source} />
@@ -177,5 +171,4 @@ const styles = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.xs, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   titleBlock: { flex: 1, alignItems: 'center' },
   subtitle: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-  weekBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: Space.s, borderTopWidth: StyleSheet.hairlineWidth },
 });
