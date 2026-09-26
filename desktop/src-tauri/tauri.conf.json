@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DCU Timetable",
+  "version": "0.1.0",
+  "identifier": "ie.dcu.timetable.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "title": "DCU Timetable", "width": 1280, "height": 820, "minWidth": 760, "minHeight": 580 }],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost https://*.supabase.co https://scientia-eu-v4-api-d1-03.azurewebsites.net"
+    }
+  },
+  "bundle": { "active": true, "targets": ["app", "dmg", "msi", "nsis"] }
+}

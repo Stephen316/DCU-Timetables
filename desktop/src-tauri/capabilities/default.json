@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Student timetable window may reach only the public timetable service.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://scientia-eu-v4-api-d1-03.azurewebsites.net/api/**" }]
+    },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://stephen316.github.io/DCU-Timetables/**" }]
+    }
+  ]
+}

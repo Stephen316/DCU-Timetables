@@ -3,7 +3,8 @@
 An iPhone app to help DCU students keep track of all their modules, classes, and
 deadlines — built on DCU's live public timetable API. React Native with Expo, in
 [`mobile/`](mobile); the home-screen widgets are SwiftUI, in
-[`mobile/targets/widgets`](mobile/targets/widgets). The admin console is in [`web/`](web).
+[`mobile/targets/widgets`](mobile/targets/widgets). The Windows and macOS student app
+is in [`desktop/`](desktop), and the admin console is in [`web/`](web).
 
 ## What it does
 
@@ -25,6 +26,15 @@ deliberately swappable (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)). Eve
 shared between students goes through Supabase ([`supabase/`](supabase)).
 
 ## Getting started
+
+### Desktop (Windows / macOS)
+
+The student desktop app is in [`desktop/`](desktop/README.md). It is separate from the
+Next.js admin console in `web/` and does not replace the React Native iPhone app. Configure a
+public Supabase URL and anon key, then run `npm ci && npm run tauri dev` from `desktop/`.
+See its README for prerequisites, builds and limitations.
+
+### iPhone (React Native)
 
 Requires Node 22+.
 
@@ -122,7 +132,8 @@ scripts/ci.sh mobile   # app: type-check, lint, 278 unit tests, and a full bundl
 ```
 
 On push to `main` and on pull requests, `.github/workflows/web.yml` and `mobile.yml` run
-the same script, each only when its own files change.
+the same script, each only when its own files change. Desktop checks and native builds
+run separately in `.github/workflows/desktop.yml`.
 
 ## Docs
 
