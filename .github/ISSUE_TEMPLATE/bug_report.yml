@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in the app, widgets or console isn't working
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. For a security problem, don't file it here — see
+        [SECURITY.md](https://github.com/Stephen316/DCU-Timetables/blob/main/.github/SECURITY.md).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - iPhone app
+        - Home-screen widget
+        - Admin console
+        - Timetable data (wrong or missing classes)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the week view
+        2. Swipe to next week
+        3. ...
+  - type: input
+    id: programme
+    attributes:
+      label: Programme and year
+      description: For timetable problems — e.g. "CASE3". Don't include your student number.
+  - type: input
+    id: version
+    attributes:
+      label: iPhone and iOS version
+      description: iOS version is in the Settings app → General → About. e.g. "iPhone 15, iOS 18.2"
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here. Crop out anything personal.

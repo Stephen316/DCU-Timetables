@@ -134,3 +134,12 @@ the same script, each only when its own files change.
 
 The app was converted from Swift/SwiftUI to React Native (Expo SDK 57). The Swift unit
 tests were ported to Jest and pass. Not yet released from the new codebase.
+
+## Contributing
+
+See [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md). Report security problems privately —
+[`.github/SECURITY.md`](.github/SECURITY.md).
+
+## License
+
+[MIT](LICENSE). The code is free to reuse; the app's name and App Store listing are not.
