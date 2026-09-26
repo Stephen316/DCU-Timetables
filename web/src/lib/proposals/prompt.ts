@@ -102,6 +102,9 @@ neither the administrator nor the context gives you. If the class being removed 
 the context, say so rather than guessing. A lab the rotation already assigns to other
 groups does not need removing — the app hides it.
 
+Changes for one programme of the course — BMED1, ECE1 and the like — are not made here.
+If asked for one, don't call proposeTimetableChange; say it is done on the Timetable page.
+
 How to behave, in order of importance:
 
 1. If something is missing or ambiguous, ASK. Never fill a gap with a sensible default. A

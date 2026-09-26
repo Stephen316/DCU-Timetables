@@ -43,7 +43,7 @@ export default async function TimetablePage({ searchParams }: {
     <>
       <div className="head">
         <h1>Timetable</h1>
-        <p>DCU&rsquo;s classes for a programme, with removals and additions for a group or everyone. Phones pick changes up when the app opens.</p>
+        <p>DCU&rsquo;s classes for a programme, with removals and additions for a lab group, one of its programmes, or everyone. Phones pick changes up when the app opens.</p>
       </div>
       {error && <p className="err">{error.message}</p>}
       {failed && <p className="err">{failed}</p>}
@@ -56,6 +56,7 @@ export default async function TimetablePage({ searchParams }: {
         classes={found}
         changes={changes}
         groups={groups}
+        programmeGroups={programme.covers.map((c) => ({ code: c.code, name: c.name }))}
       />
     </>
   );
