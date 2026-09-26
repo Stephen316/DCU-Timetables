@@ -6,9 +6,9 @@ import { checkProvenance, checkRule, splitSource, type SplitRule } from "@/lib/p
 import { validateRotation, type RotationSession } from "@/lib/extraction/rotation";
 import type { Proposal } from "@/lib/proposals/types";
 
-/// Every table saved anywhere, so one read for one module can be used for another without
-/// uploading it again. The Saved list shows what is live for the selection; this shows
-/// everything, with what each one covers.
+/// Every table saved on any course or module, so one read for one module can be used for
+/// another without uploading or describing it again. The Saved list shows what applies to
+/// the selection; this offers everything, with what each one covers.
 ///
 /// Only the current version of each exists: saving replaces, and nothing older is kept.
 
@@ -162,7 +162,6 @@ export async function reuseSplit(from: { module: string; activity: string }, sco
       }))
       .sort((a, b) => a.from.localeCompare(b.from)),
   };
-
   const source = splitSource(from.module, from.activity, rule.ranges);
 
   const same = from.module === scope.module;
@@ -170,7 +169,8 @@ export async function reuseSplit(from: { module: string; activity: string }, sco
   return {
     ok: true,
     reply: same
-      ? `Loaded the saved ${from.module} ${from.activity} split onto the panel. ${source.replace(/^[^:]+: /, "")}.`
+      ? `Loaded the saved ${from.module} ${from.activity} split onto the panel: ${source.replace(/^[^:]+: /, "")}. ` +
+        `Tell me what to change and I'll propose again.`
       : `Copied the ${from.module} ${from.activity} split to ${scope.module || "?"}${title ? ` (${title})` : ""}: ` +
         `${source.replace(/^[^:]+: /, "")}. Tell me what differs and I'll propose again.`,
     proposal: {

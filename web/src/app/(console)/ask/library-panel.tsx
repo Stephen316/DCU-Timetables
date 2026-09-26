@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { listLibrary, reuseRotation, reuseSplit, type LibraryEntry, type Reused } from "./library";
 import { moduleFor, programmeFor } from "@/lib/proposals/courses";
+import { Combobox } from "../combobox";
 import { Spinner } from "../spinner";
 
-/// Every saved table, searchable, with what each covers — so a rotation read once for
-/// EEG1001 can be opened again while EEG1004 is selected, or a split copied to a sister
-/// module, without uploading or describing it again. Reusing puts it on the panel as a
-/// proposal; nothing is saved until that is accepted.
+/// Every table saved on any course or module, in one dropdown, so a rotation read while
+/// EEG1001 was selected can be opened from EEG1004, or a split copied to a sister module,
+/// without uploading or describing it again. Choosing one shows what it covers; using it
+/// puts it on the panel as a proposal for the current selection, and nothing is saved until
+/// that is accepted.
 export function LibraryPanel({ programme, module, refresh, disabled, onReuse }: {
   programme: string; module: string; refresh: number; disabled: boolean;
   onReuse: (r: Extract<Reused, { ok: true }>) => void;
@@ -16,8 +18,8 @@ export function LibraryPanel({ programme, module, refresh, disabled, onReuse }: 
   const [entries, setEntries] = useState<LibraryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState("");
-  const [working, setWorking] = useState<string | null>(null);
+  const [chosen, setChosen] = useState("");
+  const [working, setWorking] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -29,17 +31,11 @@ export function LibraryPanel({ programme, module, refresh, disabled, onReuse }: 
     return () => { current = false; };
   }, [refresh]);
 
-  // What the selection makes relevant goes first; within that, newest first.
-  const shown = useMemo(() => {
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    return (entries ?? [])
-      .filter((e) => words.every((w) => haystack(e).includes(w)))
-      .sort((a, b) => Number(covers(b, programme, module)) - Number(covers(a, programme, module))
-        || b.savedAt.localeCompare(a.savedAt));
-  }, [entries, query, programme, module]);
+  const sorted = [...(entries ?? [])].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  const entry = sorted.find((e) => keyOf(e) === chosen);
 
-  async function reuse(key: string, run: () => Promise<Reused>) {
-    setWorking(key);
+  async function use(run: () => Promise<Reused>) {
+    setWorking(true);
     setError(null);
     try {
       const r = await run();
@@ -48,183 +44,179 @@ export function LibraryPanel({ programme, module, refresh, disabled, onReuse }: 
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setWorking(null);
+      setWorking(false);
     }
   }
 
   const scope = { programme, module };
-  const relevant = shown.filter((e) => covers(e, programme, module)).length;
 
   return (
     <section className="saved" aria-labelledby="library-heading">
       <div className="saved-head">
         <h2 id="library-heading">Reuse a saved table</h2>
-        <span className="dim">
-          {entries && `${shown.length} of ${entries.length}${module && relevant ? ` · ${relevant} cover ${module}` : ""}`}
-        </span>
+        <span className="dim">{entries && `${entries.length} saved, every course and module`}</span>
         {loading && <Spinner />}
       </div>
 
-      <div className="field">
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+      {entries && entries.length === 0 ? (
+        <p className="dim" style={{ fontSize: 13 }}>Nothing saved yet. A rotation, split or class list appears here once accepted.</p>
+      ) : (
+        <Combobox
+          id="reuse"
+          label="Saved table"
           placeholder="Search by module, course, activity or title…"
-          aria-label="Search saved tables"
+          value={chosen}
+          disabled={disabled || !entries}
+          options={sorted.map(option)}
+          onChange={(v) => { setChosen(v); setError(null); }}
         />
-      </div>
+      )}
 
       {error && <p className="err">{error}</p>}
-      {entries && entries.length === 0 && (
-        <p className="dim" style={{ fontSize: 13 }}>Nothing saved yet. A rotation, split or class list appears here once accepted.</p>
-      )}
-      {entries && entries.length > 0 && shown.length === 0 && (
-        <p className="dim" style={{ fontSize: 13 }}>Nothing matches &ldquo;{query}&rdquo;.</p>
-      )}
 
-      {shown.map((e) => {
-        if (e.kind === "rotation") {
-          const key = `rotation:${e.programme}`;
-          const here = e.modules.find((m) => m.code === module);
-          const same = e.programme === programme;
-          return (
-            <Row
-              key={key}
-              title="Lab rotation"
-              meta={`${nameOf(e.programme)}${e.title ? ` · ${e.title}` : ""} · ${e.total} sessions · v${e.version} · ${when(e.savedAt)}`}
-              chips={e.modules.map((m) => ({ label: m.code, on: m.code === module }))}
-              action={same ? "Open to correct" : `Copy to ${programme || "?"}`}
-              working={working === key}
-              disabled={disabled || !programme || working !== null}
-              onAction={() => reuse(key, () => reuseRotation(e.programme, scope))}
-            >
-              {module && same && (
-                <p className="dim" style={{ fontSize: 12, margin: "8px 0" }}>
-                  {here
-                    ? `Already applies to ${module}: ${here.sessions} session${here.sessions === 1 ? "" : "s"}. Open it to correct any of them — it is saved again as one rotation for the whole course.`
-                    : `Has no sessions for ${module}.`}
+      {entry && (
+        <div className="saved-entry">
+          <div className="saved-body" style={{ borderTop: "none" }}>
+            {entry.kind === "rotation" && (() => {
+              const same = entry.programme === programme;
+              const here = entry.modules.find((m) => m.code === module);
+              return (
+                <>
+                  <h2>
+                    Lab rotation <span className="dim">{nameOf(entry.programme)}{entry.title ? ` · ${entry.title}` : ""}</span>
+                  </h2>
+                  <p className="dim" style={{ fontSize: 12 }}>
+                    {entry.total} sessions · v{entry.version} · saved {when(entry.savedAt)}.{" "}
+                    {module && (here
+                      ? `Covers ${module}: ${here.sessions} session${here.sessions === 1 ? "" : "s"}.`
+                      : `Has no sessions for ${module}.`)}
+                    {" "}A rotation is one table for the whole course, saved again as a new version.
+                  </p>
+                  <table>
+                    <thead><tr><th>Module</th><th>Title</th><th>Sessions</th><th>Under</th></tr></thead>
+                    <tbody>
+                      {entry.modules.map((m) => (
+                        <tr key={m.code} className={m.code === module ? "on" : undefined}>
+                          <td className="mono">{m.code}</td>
+                          <td>{moduleFor(m.code)?.title ?? <span className="dim">—</span>}</td>
+                          <td>{m.sessions}</td>
+                          <td>{m.activities.join(", ") || <span className="dim">—</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <Use
+                    label={same ? "Open to correct" : `Copy to ${programme || "?"}`}
+                    working={working} disabled={disabled || !programme}
+                    onClick={() => use(() => reuseRotation(entry.programme, scope))}
+                  />
+                </>
+              );
+            })()}
+
+            {entry.kind === "split" && (() => {
+              const same = entry.module === module;
+              return (
+                <>
+                  <h2>
+                    {entry.module} · {entry.activity} split{" "}
+                    <span className="dim">{moduleFor(entry.module)?.title}</span>
+                  </h2>
+                  <p className="dim" style={{ fontSize: 12 }}>
+                    {entry.programmes.map(nameOf).join(", ") || "No course"} · {entry.ranges.length} band
+                    {entry.ranges.length === 1 ? "" : "s"} · saved {when(entry.savedAt)}.
+                  </p>
+                  <table>
+                    <thead><tr><th>Surnames</th><th>Day</th><th>Time</th><th>Room</th></tr></thead>
+                    <tbody>
+                      {entry.ranges.map((r, i) => (
+                        <tr key={i}>
+                          <td className="mono">{r.from}–{r.to}</td><td>{r.day}</td>
+                          <td className="mono">{r.start}–{r.end}</td><td>{r.room ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {entry.note && <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>{entry.note}</p>}
+                  <Use
+                    label={!module ? "Pick a module to copy it to" : same ? "Open to correct" : `Copy to ${module}`}
+                    working={working} disabled={disabled || !module}
+                    onClick={() => use(() => reuseSplit({ module: entry.module, activity: entry.activity }, scope))}
+                  />
+                </>
+              );
+            })()}
+
+            {entry.kind === "classList" && (
+              <>
+                <h2>Class list <span className="dim">{nameOf(entry.programme)}</span></h2>
+                <p className="dim" style={{ fontSize: 12 }}>
+                  {entry.members} students · {entry.groups} group{entry.groups === 1 ? "" : "s"} · v{entry.version} ·
+                  saved {when(entry.savedAt)}.
                 </p>
-              )}
-              <table>
-                <thead><tr><th>Module</th><th>Title</th><th>Sessions</th><th>Under</th></tr></thead>
-                <tbody>
-                  {e.modules.map((m) => (
-                    <tr key={m.code}>
-                      <td className="mono">{m.code}</td>
-                      <td>{moduleFor(m.code)?.title ?? <span className="dim">—</span>}</td>
-                      <td>{m.sessions}</td>
-                      <td>{m.activities.join(", ") || <span className="dim">—</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Row>
-          );
-        }
-
-        if (e.kind === "split") {
-          const key = `split:${e.module}:${e.activity}`;
-          const same = e.module === module;
-          return (
-            <Row
-              key={key}
-              title={`${e.module} · ${e.activity} split`}
-              meta={`${moduleFor(e.module)?.title ?? ""}${e.programmes.length ? ` · ${e.programmes.map(nameOf).join(", ")}` : ""} · ${e.ranges.length} band${e.ranges.length === 1 ? "" : "s"} · ${when(e.savedAt)}`}
-              chips={[{ label: e.module, on: same }]}
-              action={!module ? "Pick a module to copy to" : same ? "Open to correct" : `Copy to ${module}`}
-              working={working === key}
-              disabled={disabled || !module || working !== null}
-              onAction={() => reuse(key, () => reuseSplit({ module: e.module, activity: e.activity }, scope))}
-            >
-              <table>
-                <thead><tr><th>Surnames</th><th>Day</th><th>Time</th><th>Room</th></tr></thead>
-                <tbody>
-                  {e.ranges.map((r, i) => (
-                    <tr key={i}>
-                      <td className="mono">{r.from}–{r.to}</td><td>{r.day}</td>
-                      <td className="mono">{r.start}–{r.end}</td><td>{r.room ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {e.note && <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>{e.note}</p>}
-            </Row>
-          );
-        }
-
-        return (
-          <Row
-            key={`classList:${e.programme}`}
-            title="Class list"
-            meta={`${nameOf(e.programme)} · ${e.members} students · ${e.groups} group${e.groups === 1 ? "" : "s"} · v${e.version} · ${when(e.savedAt)}`}
-            chips={[{ label: e.programme, on: e.programme === programme }]}
-          >
-            <p className="dim" style={{ fontSize: 12, margin: "8px 0 0" }}>
-              Can&rsquo;t be reopened or copied: names are saved only as keys, so there is nothing
-              to put back on the panel. Attach the file again to change it.
-            </p>
-          </Row>
-        );
-      })}
+                <p className="dim" style={{ fontSize: 12, margin: 0 }}>
+                  Can&rsquo;t be reopened or copied: names are saved only as keys, so there is nothing
+                  to put back on the panel. Attach the file again to change it.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
 
-function Row({ title, meta, chips, action, working, disabled, onAction, children }: {
-  title: string; meta: string; chips: { label: string; on: boolean }[];
-  action?: string; working?: boolean; disabled?: boolean; onAction?: () => void;
-  children: React.ReactNode;
+function Use({ label, working, disabled, onClick }: {
+  label: string; working: boolean; disabled: boolean; onClick: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="saved-entry">
-      <div className="saved-row">
-        <button type="button" className="saved-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-          <span className={open ? "chev open" : "chev"} aria-hidden="true" />
-          <span className="saved-title">{title}</span>
-          <span className="dim">{meta}</span>
-        </button>
-        {action && (
-          <button type="button" className="saved-delete" disabled={disabled} onClick={onAction}>
-            {working ? <><Spinner /> Loading…</> : action}
-          </button>
-        )}
-      </div>
-      <div className="chips">
-        {chips.map((c) => <span key={c.label} className={c.on ? "chip on" : "chip"}>{c.label}</span>)}
-      </div>
-      {open && <div className="saved-body">{children}</div>}
+    <div className="row" style={{ marginTop: 12 }}>
+      <button type="button" className="primary" disabled={disabled || working} onClick={onClick}>
+        {working ? <><Spinner /> Loading…</> : label}
+      </button>
     </div>
   );
 }
 
-/// Whether an entry is about the current selection: a rotation or class list for the
-/// programme, a rotation with sessions for the module, a split of the module.
-function covers(e: LibraryEntry, programme: string, module: string): boolean {
-  if (e.kind === "rotation") return e.programme === programme && (!module || e.modules.some((m) => m.code === module));
-  if (e.kind === "split") return !!module && e.module === module;
-  return e.programme === programme;
+function keyOf(e: LibraryEntry): string {
+  return e.kind === "split" ? `split:${e.module}:${e.activity}` : `${e.kind}:${e.programme}`;
 }
 
-/// Everything a search can match: codes, DCU's titles and search words, course names and
-/// the codes they cover, activities, and the document's own title.
-function haystack(e: LibraryEntry): string {
+/// One line in the dropdown: the module or course it belongs to, what it is, and what it
+/// covers. Searchable by every code and title it touches, so "EEG1004" finds the rotation
+/// that includes it and "maths" finds a split of Engineering Mathematics.
+function option(e: LibraryEntry) {
   const course = (key: string) => {
     const p = programmeFor(key);
     return [key, p?.name, ...(p?.covers ?? []).flatMap((c) => [c.code, c.name, c.cao])].join(" ");
   };
   const mod = (code: string) => {
     const m = moduleFor(code);
-    return [code, m?.title, m?.aka].join(" ");
+    return [code, m?.title, m?.aka].filter(Boolean).join(" ");
   };
-  const parts =
-    e.kind === "rotation"
-      ? ["rotation lab", course(e.programme), e.title, ...e.modules.flatMap((m) => [mod(m.code), ...m.activities])]
-      : e.kind === "split"
-        ? ["split", mod(e.module), e.activity, e.note, ...e.programmes.map(course)]
-        : ["class list roster", course(e.programme), e.title];
-  return parts.filter(Boolean).join(" ").toLowerCase();
+  if (e.kind === "rotation") {
+    return {
+      value: keyOf(e), code: e.programme,
+      label: `Lab rotation${e.title ? ` — ${e.title}` : ""}`,
+      hint: `${e.modules.map((m) => m.code).join(", ")} · ${e.total} sessions · ${when(e.savedAt)}`,
+      keywords: ["rotation lab", course(e.programme), ...e.modules.flatMap((m) => [mod(m.code), ...m.activities])].join(" "),
+    };
+  }
+  if (e.kind === "split") {
+    return {
+      value: keyOf(e), code: e.module,
+      label: `${e.activity} split — ${moduleFor(e.module)?.title ?? e.module}`,
+      hint: `${e.programmes.join(", ")} · ${e.ranges.length} band${e.ranges.length === 1 ? "" : "s"} · ${when(e.savedAt)}`,
+      keywords: ["split", mod(e.module), e.note ?? "", ...e.programmes.map(course)].join(" "),
+    };
+  }
+  return {
+    value: keyOf(e), code: e.programme,
+    label: `Class list — ${nameOf(e.programme)}`,
+    hint: `${e.members} students · ${e.groups} groups · ${when(e.savedAt)}`,
+    keywords: ["class list roster", course(e.programme), e.title ?? ""].join(" "),
+  };
 }
 
 function nameOf(key: string): string {

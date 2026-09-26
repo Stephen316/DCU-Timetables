@@ -9,6 +9,9 @@ export type ComboOption = {
   hint?: string;
   /// Matched by the search but not shown.
   keywords?: string;
+  /// Shown in the code column and the box in place of `value`, for options whose value is a
+  /// key nobody should have to read.
+  code?: string;
 };
 
 /// A select you can type into. Every word typed must appear somewhere in the option — its
@@ -35,13 +38,14 @@ export function Combobox({
   const listId = useId();
   const listRef = useRef<HTMLUListElement>(null);
   const selected = options.find((o) => o.value === value);
-  const describe = (o: ComboOption) => `${o.value} — ${o.label}`;
+  const codeOf = (o: ComboOption) => o.code ?? o.value;
+  const describe = (o: ComboOption) => `${codeOf(o)} — ${o.label}`;
 
   const matches = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     if (!words.length) return options;
     return options.filter((o) => {
-      const haystack = `${o.value} ${o.label} ${o.hint ?? ""} ${o.keywords ?? ""}`.toLowerCase();
+      const haystack = `${codeOf(o)} ${o.label} ${o.hint ?? ""} ${o.keywords ?? ""}`.toLowerCase();
       return words.every((w) => haystack.includes(w));
     });
   }, [query, options]);
@@ -112,7 +116,7 @@ export function Combobox({
               onMouseDown={(e) => { e.preventDefault(); choose(o); }}
               onMouseEnter={() => setActive(i)}
             >
-              <span className="mono">{o.value}</span>
+              <span className="mono">{codeOf(o)}</span>
               <span className="combo-label">{o.label}</span>
               {o.hint && <span className="combo-hint">{o.hint}</span>}
             </li>

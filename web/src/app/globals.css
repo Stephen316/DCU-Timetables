@@ -305,10 +305,8 @@ button.send { display: inline-flex; align-items: center; gap: 6px; min-width: 84
 .saved-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
 .saved-head h2 { margin: 0; }
 .saved-head .dim { font-size: 13px; }
-.chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 8px 30px; }
-.chip { font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim);
-        border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
-.chip.on { color: var(--text); border-color: var(--muted); }
+/* The selected module's row in a reused table's summary. */
+.saved-body tr.on td { color: var(--text); font-weight: 500; }
 
 .unlock-btn { display: inline-flex; align-items: center; gap: 6px; }
 
