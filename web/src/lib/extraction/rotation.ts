@@ -94,6 +94,40 @@ export const rotationSchema = {
   required: ["sessions"],
 };
 
+/// The rows the reader emitted for cells the document leaves empty, found by checking them
+/// against the OCR text rather than by asking the model.
+///
+/// Mistral emits some blank and "N/A" cells as sessions with `groups: null` — 14 on the
+/// 2026/27 engineering rotation, all of them empty on the page — and null is also how it
+/// marks a cell it could not read. Telling it not to (see transcribe.ts) cost real sessions.
+/// But the model reads only this text, so the text settles it: on each dated row, count the
+/// cells that hold anything besides the date, week and day, and compare with the sessions
+/// that have groups. Equal means every filled cell is accounted for and the nulls are blanks.
+/// Anything else — a count that differs, a date the text doesn't have, or the same date on
+/// two rows — keeps the null rows, and the warning with them.
+export function blankInSource(sessions: RotationSession[], text: string): Set<RotationSession> {
+  const filled = new Map<string, number>();
+  for (const line of text.split("\n")) {
+    if (!line.trim().startsWith("|")) continue;
+    const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+    const d = cells.map((c) => c.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)).find(Boolean);
+    if (!d) continue;
+    const date = `${d[3]}-${d[2].padStart(2, "0")}-${d[1].padStart(2, "0")}`;
+    const n = cells.filter((c) =>
+      c && c !== d[0] && !/^\d+$/.test(c) && !/^(mon|tue|wed|thu|fri|sat|sun)\b/i.test(c) && !/^n\/?a$/i.test(c),
+    ).length;
+    filled.set(date, filled.has(date) ? -1 : n);
+  }
+
+  const blank = new Set<RotationSession>();
+  for (const s of sessions) {
+    if (s.groups?.length || !s.date) continue;
+    const withGroups = sessions.filter((o) => o.date === s.date && o.groups?.length).length;
+    if (filled.get(s.date) === withGroups) blank.add(s);
+  }
+  return blank;
+}
+
 export type Finding = {
   level: "error" | "warn" | "info";
   message: string;
@@ -112,10 +146,9 @@ export function validateRotation(sessions: RotationSession[]): Finding[] {
   // Illegible cells. Not an error — this is the model correctly declining to guess — but
   // every one needs a human before it can go live.
   //
-  // Rows whose only gap is `groups` are gathered into one finding. Mistral emits one for
-  // every blank cell in the document — 14 on the engineering rotation — with groups null,
-  // which is also how it marks an illegible cell, so they cannot be told apart and dropped.
-  // One line listing them keeps them in view without burying a real problem among them.
+  // Rows whose only gap is `groups` are gathered into one finding. Blank cells the reader
+  // emitted are gone by now (blankInSource), so what is left here is a null the OCR text
+  // could not account for — most likely a cell that could not be read.
   const noGroups: number[] = [];
   sessions.forEach((s, i) => {
     const missing = Object.entries(s)
@@ -131,7 +164,8 @@ export function validateRotation(sessions: RotationSession[]): Finding[] {
       level: "warn",
       message:
         `${noGroups.length} row${noGroups.length === 1 ? " has" : "s have"} no groups (row ` +
-        `${noGroups.join(", ")}) — blank cells, or cells that could not be read. A session ` +
+        `${noGroups.join(", ")}) that the document's own text doesn't show as blank — most ` +
+        `likely cells that could not be read. A session ` +
         `with no groups reaches no one and is not saved; check the document if any should ` +
         `have one.`,
     });
