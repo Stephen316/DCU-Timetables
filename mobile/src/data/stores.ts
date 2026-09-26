@@ -6,7 +6,7 @@ import {
 } from '../core/deadline';
 import { AccountProfile, makeAccountProfile, parseRole } from '../core/identity';
 import { isoSeconds, parseISO } from '../core/time';
-import { PostgREST, rows, ServiceError, SupabaseREST, userFacing } from './rest';
+import { notSignedIn, PostgREST, rows, ServiceError, SupabaseREST, userFacing } from './rest';
 import { SignedInUser } from './session';
 import { PrefKey, Prefs } from './storage';
 
@@ -427,7 +427,7 @@ export class SupabaseProfileStore implements ProfileStore {
 
   async myProfile(): Promise<AccountProfile | null> {
     const uid = this.rest.session.userID;
-    if (!uid) throw userFacing("You're not signed in.");
+    if (!uid) throw notSignedIn();
     const json = await this.rest.json('GET', '/rest/v1/profiles', SupabaseProfileStore.describe, {
       query: [['select', 'id,role,pi,display_name,banned_until,student_id'], ['id', `eq.${uid}`]],
     });
@@ -446,7 +446,7 @@ export class SupabaseProfileStore implements ProfileStore {
   }
 
   async setStudentID(number: string): Promise<void> {
-    if (!this.rest.session.userID) throw userFacing("You're not signed in.");
+    if (!this.rest.session.userID) throw notSignedIn();
     const response = await this.rest.request('POST', '/rest/v1/rpc/set_student_id', {
       body: { p_student_id: number },
     });

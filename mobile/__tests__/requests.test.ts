@@ -3,7 +3,7 @@ import { makeDeadline } from '../src/core/deadline';
 import { SupabaseAuthService } from '../src/data/auth';
 import { SupabaseAllocationStore, SupabaseLabRotationStore, SupabaseTimetableChangeStore } from '../src/data/courseData';
 import { DCUAPIClient } from '../src/data/dcuApi';
-import { SupabaseREST } from '../src/data/rest';
+import { errorMessage, isNotSignedIn, SupabaseREST } from '../src/data/rest';
 import { SupabaseSession } from '../src/data/session';
 import {
   SupabaseCancellationStore, SupabaseDeadlineStore, SupabaseProfileStore, SupabaseVerdictStore,
@@ -163,6 +163,25 @@ describe('Supabase requests', () => {
     await expect(new SupabaseProfileStore(await signedInREST(fn)).setStudentID('A12345678'))
       .rejects.toThrow('Your student ID is already set — ask an admin to change it');
     expect(calls[0]).toMatchObject({ url: 'https://proj.supabase.co/rest/v1/rpc/set_student_id', body: { p_student_id: 'A12345678' } });
+  });
+
+  // The ID screen sends a student back to sign-in on exactly this error, rather than
+  // showing a message no button on it can fix — so it has to be told apart from a refusal.
+  test('without a session the profile store says so, recognisably, and sends nothing', async () => {
+    const { calls, fn } = fakeFetch();
+    const store = new SupabaseProfileStore(await anonREST(fn));
+    const onSave = await store.setStudentID('A12345678').catch((e: unknown) => e);
+    const onRead = await store.myProfile().catch((e: unknown) => e);
+    expect(isNotSignedIn(onSave)).toBe(true);
+    expect(isNotSignedIn(onRead)).toBe(true);
+    expect(errorMessage(onSave, 'fallback')).toBe("You're not signed in.");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("the database's refusal is not mistaken for a lost session", async () => {
+    const { fn } = fakeFetch(() => ({ status: 400, body: { message: 'your student ID is already set — ask an admin to change it' } }));
+    const error = await new SupabaseProfileStore(await signedInREST(fn)).setStudentID('A12345678').catch((e: unknown) => e);
+    expect(isNotSignedIn(error)).toBe(false);
   });
 
   test('allocation lookups use the bytea literal and the RPC', async () => {

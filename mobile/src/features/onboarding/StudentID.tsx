@@ -1,61 +1,83 @@
-import { BarcodeScanningResult, CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera';
-import { File } from 'expo-file-system';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import {
+  AccessibilityInfo, ActivityIndicator, Animated, Easing, Linking, Platform, Pressable, StyleSheet, Text, TextInput,
+  useWindowDimensions, View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StudentNumber } from '../../core/identity';
-import { errorMessage } from '../../data/rest';
+import { errorMessage, isNotSignedIn } from '../../data/rest';
 import { useServices } from '../../state/hooks';
-import {
-  ActionRow, BarButton, BottomCard, Icon, ListScroll, PrimaryButton, Row, SecondaryButton, Section, Sheet, Txt,
-} from '../../ui/components';
+import { ActionRow, BarButton, ListScroll, PrimaryButton, Row, SecondaryButton, Section, Sheet, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 
 /** The guide frame's width as a share of the screen's. */
 const GUIDE_WIDTH_FRACTION = 0.88;
 /** ID-1, the size of every bank and student card: 85.6 × 54 mm. */
 const CARD_ASPECT = 85.6 / 54;
+/**
+ * A live read counts once this many frames agree. The barcode has no check character, so
+ * one frame caught mid-blur could hand over a wrong number that still has the right shape —
+ * and it's saved without a second look. Three frames is a tenth of a second on a card held still.
+ */
+const LIVE_AGREEMENT = 3;
+/** How long the shutter waits for the live scanner before saying it couldn't read the card. */
+const SHUTTER_WINDOW_MS = 2000;
+/** Long enough to see the tick land before the next screen replaces this one. */
+const CONFIRMATION_HOLD_MS = 1100;
 
 type CameraStatus = 'starting' | 'running' | 'unavailable' | 'denied';
 type Problem = 'notACard' | 'unreadable';
+/** The number on its way to the server, and whether it has arrived. */
+type Confirmation = { number: string; saved: boolean };
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Between signing in and the timetable: the student's number, read from the barcode on
  * their card. "See other options" lets them type it instead.
  *
- * The number is set once — after that only an admin can change it — so a read is shown
- * back to be checked before anything is saved. The photo is read on the phone and deleted;
- * only the number is sent.
+ * A number is saved the moment it's read or entered, and `SavedOverlay` confirms it over
+ * the camera. There's no "is this right?" step, and the number can be set only once —
+ * after that only an admin can change it — so a misread is stopped before it gets here:
+ * `StudentNumber.fromBarcode` refuses anything not shaped like a card's barcode, and a
+ * read counts only once `LIVE_AGREEMENT` frames agree.
+ *
+ * Every read comes from the live scanner, the shutter's included. On iOS, expo-camera can
+ * read a still photo for QR codes only (`scanFromURLAsync` uses a QR-only detector), so a
+ * photo of the card could never be decoded; the shutter instead waits for the live scanner
+ * and says so when nothing comes. No photo is taken, so none is ever stored.
  */
 export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) => void; onSignOut: () => void }) {
   const { profiles } = useServices();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
-  const camera = useRef<CameraView>(null);
+  const reduceMotion = useReduceMotion();
 
   /** The server is asked first: a reinstall or a second phone already has a number there. */
   const [checking, setChecking] = useState(true);
   const [cameraReady, setCameraReady] = useState(false);
   const [mountFailed, setMountFailed] = useState(false);
+  /** The shutter was pressed and is waiting on the live scanner. */
   const [capturing, setCapturing] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
-  /** A card's number, once one has been read. */
-  const [read, setRead] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [showingOptions, setShowingOptions] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  /**
-   * A live read counts once the same number comes back twice running. The barcode has no
-   * check character, so one frame caught mid-blur could hand over a plausible wrong number.
-   */
-  const lastLiveRead = useRef<string | null>(null);
-  /** The same as `read`, for callbacks that run before the next render. */
-  const readRef = useRef<string | null>(null);
-  const saved = useRef(false);
+
+  /** The number the last frames agreed on, and how many of them. */
+  const liveRead = useRef<{ number: string; frames: number } | null>(null);
+  /** A number is being saved — for callbacks that run before the next render. */
+  const busy = useRef(false);
+  const finished = useRef(false);
+  const shutterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The shutter's window saw a Code 39 barcode that wasn't a student card's. */
+  const sawOtherBarcode = useRef(false);
+  /** A typed number, saved once the sheet has gone so the confirmation plays in view. */
+  const typed = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,107 +85,127 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
       .myProfile()
       .then((profile) => {
         if (!cancelled && profile?.studentID) {
-          saved.current = true;
+          finished.current = true;
           onSaved(profile.studentID);
         }
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        // Signed in on this phone, but with no session to act as. Nothing can be saved
+        // without one, so back to sign-in rather than a scan whose save can only fail.
+        if (!cancelled && isNotSignedIn(error)) onSignOut();
+      })
       .finally(() => !cancelled && setChecking(false));
     return () => {
       cancelled = true;
     };
-  }, [profiles, onSaved]);
+  }, [profiles, onSaved, onSignOut]);
 
   useEffect(() => {
     if (!checking && permission && !permission.granted && permission.canAskAgain) void requestPermission();
   }, [checking, permission, requestPermission]);
+
+  useEffect(() => () => {
+    if (shutterTimer.current) clearTimeout(shutterTimer.current);
+  }, []);
 
   const status: CameraStatus =
     mountFailed ? 'unavailable'
       : permission && !permission.granted && !permission.canAskAgain ? 'denied'
         : cameraReady ? 'running'
           : 'starting';
-  const scanning = !checking && permission?.granted === true && !mountFailed && read === null && !showingOptions;
+  const scanning = !checking && permission?.granted === true && !mountFailed && confirmation === null && !showingOptions;
   /** The card outline, while there's a camera to line a card up in and nothing read yet. */
-  const showsGhost = !checking && permission !== null && read === null && (status === 'starting' || status === 'running');
+  const showsGhost = !checking && permission !== null && confirmation === null && (status === 'starting' || status === 'running');
 
-  const deliver = (number: string) => {
-    if (readRef.current !== null) return;
-    readRef.current = number;
-    setRead(number);
-    setProblem(null);
-    setSaveError(null);
-    setConfirming(true);
-    if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const endShutter = () => {
+    if (shutterTimer.current) clearTimeout(shutterTimer.current);
+    shutterTimer.current = null;
+    setCapturing(false);
   };
 
-  /** Back to lining up a card, after a read was turned down or a sheet closed. */
+  /** Back to lining up a card, after a failed save or a sheet closed. */
   const resume = () => {
-    if (saved.current) return;
-    readRef.current = null;
-    setRead(null);
+    if (finished.current) return;
+    busy.current = false;
+    liveRead.current = null;
     setProblem(null);
-    lastLiveRead.current = null;
+  };
+
+  /** Shows the confirmation at once, then saves; the tick lands when the server has it. */
+  const save = async (number: string) => {
+    if (busy.current) return;
+    busy.current = true;
+    endShutter();
+    setProblem(null);
+    setSaveError(null);
+    setConfirmation({ number, saved: false });
+    try {
+      await profiles.setStudentID(number);
+      setConfirmation({ number, saved: true });
+      if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await wait(CONFIRMATION_HOLD_MS);
+      finished.current = true;
+      onSaved(number);
+    } catch (error) {
+      if (isNotSignedIn(error)) {
+        onSignOut();
+        return;
+      }
+      setConfirmation(null);
+      setSaveError(errorMessage(error, "Couldn't reach the server. Check your connection and try again."));
+      resume();
+    }
   };
 
   const onBarcode = (result: BarcodeScanningResult) => {
-    if (readRef.current !== null) return;
+    if (busy.current) return;
     const number = StudentNumber.fromBarcode(result.data);
-    if (number === null) return;
-    if (number === lastLiveRead.current) deliver(number);
-    else lastLiveRead.current = number;
+    if (number === null) {
+      sawOtherBarcode.current = true;
+      return;
+    }
+    const frames = liveRead.current?.number === number ? liveRead.current.frames + 1 : 1;
+    liveRead.current = { number, frames };
+    if (frames >= LIVE_AGREEMENT) void save(number);
   };
 
-  const capture = async () => {
-    if (status !== 'running' || capturing || readRef.current !== null || !camera.current) return;
-    setCapturing(true);
+  const capture = () => {
+    if (status !== 'running' || capturing || busy.current) return;
+    if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setProblem(null);
-    let uri: string | null = null;
-    try {
-      // No flash: that's the glare on the laminate the instructions ask them to avoid.
-      const photo = await camera.current.takePictureAsync({ quality: 0.9, shutterSound: false });
-      uri = photo.uri;
-      const results = await scanFromURLAsync(photo.uri, ['code39']);
-      const number = results.map((r) => StudentNumber.fromBarcode(r.data)).find((n): n is string => n !== null);
-      if (readRef.current !== null) return; // a live read got there first
-      if (number) deliver(number);
-      else setProblem(results.length > 0 ? 'notACard' : 'unreadable');
-    } catch {
-      setProblem('unreadable');
-    } finally {
+    setSaveError(null);
+    sawOtherBarcode.current = false;
+    setCapturing(true);
+    shutterTimer.current = setTimeout(() => {
+      shutterTimer.current = null;
       setCapturing(false);
-      // The photo is only ever read here; it doesn't outlive the read.
-      if (uri && Platform.OS !== 'web') {
-        try {
-          new File(uri).delete();
-        } catch {
-          // Already gone.
-        }
-      }
-    }
+      if (!busy.current) setProblem(sawOtherBarcode.current ? 'notACard' : 'unreadable');
+    }, SHUTTER_WINDOW_MS);
   };
 
-  const save = async (number: string) => {
-    if (saving) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await profiles.setStudentID(number);
-      saved.current = true;
-      setConfirming(false);
-      setShowingOptions(false);
-      onSaved(number);
-    } catch (error) {
-      setSaveError(errorMessage(error, "Couldn't reach the server. Check your connection and try again."));
-    } finally {
-      setSaving(false);
-    }
+  const saveTyped = (number: string) => {
+    // Started any sooner, the confirmation plays out underneath the sheet as it slides
+    // away. It waits for the sheet to go (`onDismissed`, iOS), with a fallback for where
+    // that callback doesn't come.
+    typed.current = number;
+    setShowingOptions(false);
+    setTimeout(runTyped, 700);
+  };
+
+  const runTyped = () => {
+    const number = typed.current;
+    typed.current = null;
+    if (number) void save(number);
   };
 
   // The guide's place on the full screen, a little above the middle to leave room for the shutter.
   const guideW = width * GUIDE_WIDTH_FRACTION;
   const guideH = guideW / CARD_ASPECT;
   const guide = { x: (width - guideW) / 2, y: height * 0.42 - guideH / 2, w: guideW, h: guideH };
+  const message = saveError
+    ?? (problem === 'notACard' ? "That barcode isn't from a DCU student card."
+      : problem === 'unreadable' ? "Couldn't read the barcode. Hold the card still in the frame, tilted away from the light."
+        : null);
 
   return (
     <View style={styles.screen}>
@@ -171,11 +213,10 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
       <StatusBar style="light" hidden />
       {!checking && permission?.granted ? (
         <CameraView
-          ref={camera}
           style={StyleSheet.absoluteFill}
           facing="back"
           autofocus="on"
-          active={scanning || capturing}
+          active={scanning}
           barcodeScannerSettings={{ barcodeTypes: ['code39'] }}
           onBarcodeScanned={scanning ? onBarcode : undefined}
           onCameraReady={() => setCameraReady(true)}
@@ -190,29 +231,30 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
         <Txt type="subheadline" color="rgba(255,255,255,0.8)" style={styles.center}>Avoid reflections, and centre the card in the frame.</Txt>
       </View>
 
-      <View style={[styles.frameMessage, { left: guide.x, top: guide.y, width: guide.w, height: guide.h }]}>
-        {checking || (status === 'starting' && permission === null) ? <ActivityIndicator color="#FFFFFF" /> : null}
-        {!checking && status === 'unavailable' ? (
-          <Txt type="subheadline" color="#FFFFFF" style={styles.center}>{"There's no camera to use here. Type your student number instead."}</Txt>
-        ) : null}
-        {!checking && status === 'denied' ? (
-          <Txt type="subheadline" color="#FFFFFF" style={styles.center}>Camera access is off for DCU Timetable. Turn it on in Settings, or type your student number instead.</Txt>
-        ) : null}
-      </View>
+      {confirmation === null ? (
+        <View style={[styles.frameMessage, { left: guide.x, top: guide.y, width: guide.w, height: guide.h }]}>
+          {checking || (status === 'starting' && permission === null) ? <ActivityIndicator color="#FFFFFF" /> : null}
+          {!checking && status === 'unavailable' ? (
+            <Txt type="subheadline" color="#FFFFFF" style={styles.center}>{"There's no camera to use here. Type your student number instead."}</Txt>
+          ) : null}
+          {!checking && status === 'denied' ? (
+            <Txt type="subheadline" color="#FFFFFF" style={styles.center}>Camera access is off for DCU Timetable. Turn it on in Settings, or type your student number instead.</Txt>
+          ) : null}
+        </View>
+      ) : null}
 
-      <View style={[styles.controls, { top: guide.y + guide.h, paddingBottom: Math.max(insets.bottom, Space.s) }]}>
-        {problem ? (
-          <Txt type="footnote" color="#FFFFFF" style={styles.center}>
-            {problem === 'notACard' ? "That barcode isn't from a DCU student card." : "Couldn't read the barcode. Tilt the card away from the light and try again."}
-          </Txt>
-        ) : <View />}
+      <View
+        pointerEvents={confirmation === null ? 'auto' : 'none'}
+        style={[styles.controls, { top: guide.y + guide.h, paddingBottom: Math.max(insets.bottom, Space.s), opacity: confirmation === null ? 1 : 0.4 }]}
+      >
+        {message ? <Txt type="footnote" color="#FFFFFF" style={styles.center}>{message}</Txt> : <View />}
         {status === 'denied' ? (
           <SecondaryButton title="Open Settings" onPress={() => void Linking.openSettings()} />
         ) : status === 'unavailable' ? (
           <SecondaryButton title="Type your student number" onPress={() => setShowingOptions(true)} />
         ) : (
           <Pressable
-            onPress={() => void capture()}
+            onPress={capture}
             disabled={checking || status !== 'running' || capturing}
             accessibilityRole="button"
             accessibilityLabel="Take photo"
@@ -222,35 +264,38 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
             {capturing ? <ActivityIndicator color="#000000" style={StyleSheet.absoluteFill} /> : null}
           </Pressable>
         )}
-        <Pressable onPress={() => { setSaveError(null); setShowingOptions(true); }} accessibilityRole="button" style={styles.options}>
+        <Pressable onPress={() => { setSaveError(null); endShutter(); setShowingOptions(true); }} accessibilityRole="button" style={styles.options}>
           <Txt type="footnote" color="rgba(255,255,255,0.8)">See other options</Txt>
         </Pressable>
       </View>
 
-      <NumberConfirmation
-        visible={confirming && read !== null}
-        number={read ?? ''}
-        saving={saving}
-        error={saveError}
-        onSave={() => read && void save(read)}
-        onRetake={() => {
-          setConfirming(false);
-          resume();
-        }}
-      />
+      {confirmation ? (
+        <SavedOverlay guide={guide} number={confirmation.number} saved={confirmation.saved} reduceMotion={reduceMotion} />
+      ) : null}
+
       <OtherOptions
         visible={showingOptions}
-        saving={saving}
-        error={saveError}
-        onSave={(n) => void save(n)}
+        onSave={saveTyped}
         onSignOut={onSignOut}
         onClose={() => {
           setShowingOptions(false);
           resume();
         }}
+        onDismissed={runTyped}
       />
     </View>
   );
+}
+
+/** The system's Reduce Motion setting, kept current. */
+function useReduceMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduce);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+    return () => subscription.remove();
+  }, []);
+  return reduce;
 }
 
 type Box = { x: number; y: number; w: number; h: number };
@@ -337,37 +382,79 @@ function GuideOverlay({ guide }: { guide: { x: number; y: number; w: number; h: 
 }
 
 /**
- * "Is this your student number?" — asked of every number read from a card, because it
- * can't be changed afterwards without an admin. Stays up to show a failed save.
+ * The translucent confirmation over the camera: a ring that turns while the number is sent,
+ * then closes and a tick springs in when the server has it, with the number underneath so
+ * the student sees what was saved.
  */
-function NumberConfirmation({
-  visible, number, saving, error, onSave, onRetake,
-}: { visible: boolean; number: string; saving: boolean; error: string | null; onSave: () => void; onRetake: () => void }) {
-  const theme = useTheme();
+function SavedOverlay({ guide, number, saved, reduceMotion }: { guide: Box; number: string; saved: boolean; reduceMotion: boolean }) {
+  const [appear] = useState(() => new Animated.Value(0));
+  const [spin] = useState(() => new Animated.Value(0));
+  const [tick] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    Animated.spring(appear, { toValue: 1, speed: 16, bounciness: reduceMotion ? 0 : 8, useNativeDriver: true }).start();
+    const turning = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
+    turning.start();
+    return () => turning.stop();
+  }, [appear, spin, reduceMotion]);
+
+  useEffect(() => {
+    if (saved) Animated.spring(tick, { toValue: 1, speed: 14, bounciness: reduceMotion ? 0 : 12, useNativeDriver: true }).start();
+  }, [saved, tick, reduceMotion]);
+
+  const badge = 84;
+  const ring = { width: badge, height: badge, borderRadius: badge / 2 };
   return (
-    <BottomCard visible={visible} onClose={onRetake} dismissable={!saving}>
-      <View style={styles.confirm}>
-        <Icon name="idCard" size={30} color={theme.accent} />
-        <Txt type="headline" style={styles.center}>Is this your student number?</Txt>
-        <Txt type="largeTitle" style={[styles.center, styles.mono]}>{number}</Txt>
-        <Txt type="subheadline" color={theme.inkSecondary} style={styles.center}>{"Check it against your card. Once it's saved, only an admin can change it."}</Txt>
-        {error ? <Txt type="footnote" color={theme.inkSecondary} style={styles.center}>{error}</Txt> : null}
-      </View>
-      <View style={styles.buttons}>
-        <PrimaryButton title="Save" busy={saving} onPress={onSave} />
-        <SecondaryButton title="Retake" disabled={saving} onPress={onRetake} />
-      </View>
-    </BottomCard>
+    <View
+      pointerEvents="none"
+      accessibilityLiveRegion="polite"
+      style={[styles.savedArea, { left: guide.x, top: guide.y, width: guide.w, height: guide.h }]}
+    >
+      <Animated.View
+        accessible
+        accessibilityLabel={saved ? `Student number ${number} saved` : `Saving student number ${number}`}
+        style={[styles.savedCard, {
+          opacity: appear,
+          transform: [{ scale: reduceMotion ? 1 : appear.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }],
+        }]}
+      >
+        <View style={ring}>
+          <View style={[StyleSheet.absoluteFill, ring, styles.ringTrack]} />
+          <Animated.View
+            style={[StyleSheet.absoluteFill, ring, styles.ringArc, {
+              opacity: saved ? 0 : 1,
+              transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }],
+            }]}
+          />
+          <Animated.View style={[StyleSheet.absoluteFill, ring, styles.ringClosed, { opacity: tick }]} />
+          <View style={[StyleSheet.absoluteFill, styles.tickHolder]}>
+            <Animated.View
+              style={[styles.tick, {
+                width: badge * 0.24, height: badge * 0.44, opacity: tick,
+                transform: [{ rotate: '45deg' }, { scale: tick }],
+              }]}
+            />
+          </View>
+        </View>
+        <View style={styles.savedText}>
+          <Txt type="pageTitle" color="#FFFFFF" style={[styles.center, styles.mono]}>{number}</Txt>
+          <Txt type="subheadline" color="rgba(255,255,255,0.8)" style={styles.center}>{saved ? 'Student number saved' : 'Saving…'}</Txt>
+        </View>
+      </Animated.View>
+    </View>
   );
 }
 
 /**
  * Typing the number instead, for a card that won't scan, a camera that isn't allowed, or
  * no card to hand. And the way out, for someone who signed in with the wrong account.
+ *
+ * Save closes the sheet and hands the number back, so the confirmation plays on the camera
+ * screen like a scanned one, and a failure is reported there too.
  */
 function OtherOptions({
-  visible, saving, error, onSave, onSignOut, onClose,
-}: { visible: boolean; saving: boolean; error: string | null; onSave: (number: string) => void; onSignOut: () => void; onClose: () => void }) {
+  visible, onSave, onSignOut, onClose, onDismissed,
+}: { visible: boolean; onSave: (number: string) => void; onSignOut: () => void; onClose: () => void; onDismissed: () => void }) {
   const theme = useTheme();
   const [entry, setEntry] = useState('');
   const number = StudentNumber.fromTyped(entry);
@@ -382,8 +469,8 @@ function OtherOptions({
       visible={visible}
       title="Other options"
       onClose={onClose}
-      dismissable={!saving}
-      left={<BarButton title="Cancel" onPress={onClose} disabled={saving} />}
+      onDismissed={onDismissed}
+      left={<BarButton title="Cancel" onPress={onClose} />}
     >
       <ListScroll>
         <Section header="Enter your student number">
@@ -397,23 +484,18 @@ function OtherOptions({
               autoCorrect={false}
               keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'default'}
               returnKeyType="done"
-              onSubmitEditing={() => number && !saving && onSave(number)}
+              onSubmitEditing={() => number && onSave(number)}
               style={[styles.input, styles.mono, { color: theme.ink }]}
               accessibilityLabel="Student number"
             />
             <Txt type="caption" color={theme.inkSecondary}>{caption}</Txt>
           </Row>
         </Section>
-        {error ? (
-          <Section>
-            <Row><Txt type="callout" color={theme.inkSecondary}>{error}</Txt></Row>
-          </Section>
-        ) : null}
         <Section bare>
-          <PrimaryButton title="Save" busy={saving} disabled={number === null} onPress={() => number && onSave(number)} />
+          <PrimaryButton title="Save" disabled={number === null} onPress={() => number && onSave(number)} />
         </Section>
         <Section>
-          <ActionRow title="Sign out" icon="signOut" destructive disabled={saving} onPress={onSignOut} />
+          <ActionRow title="Sign out" icon="signOut" destructive onPress={onSignOut} />
         </Section>
       </ListScroll>
     </Sheet>
@@ -447,8 +529,20 @@ const styles = StyleSheet.create({
   ghostLine: { position: 'absolute', backgroundColor: '#FFFFFF' },
   ghostBarcode: { position: 'absolute', flexDirection: 'row' },
   corner: { position: 'absolute', borderColor: '#FFFFFF' },
-  confirm: { alignItems: 'center', gap: Space.m },
-  buttons: { gap: Space.s },
+  savedArea: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  // Translucent rather than blurred: a blur needs expo-blur, a native module, and so a new
+  // store build instead of an over-the-air update.
+  savedCard: {
+    alignItems: 'center', gap: Space.l, paddingHorizontal: Space.xxl, paddingVertical: Space.xl, borderRadius: 28,
+    backgroundColor: 'rgba(24,24,30,0.62)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.22)',
+  },
+  ringTrack: { borderWidth: 5, borderColor: 'rgba(255,255,255,0.25)' },
+  ringArc: { borderWidth: 5, borderColor: 'transparent', borderTopColor: '#FFFFFF', borderRightColor: '#FFFFFF' },
+  ringClosed: { borderWidth: 5, borderColor: '#FFFFFF' },
+  tickHolder: { alignItems: 'center', justifyContent: 'center' },
+  // The classic tick: two sides of a box, turned 45°, nudged up to sit in the ring's centre.
+  tick: { borderRightWidth: 6, borderBottomWidth: 6, borderColor: '#FFFFFF', marginTop: -8, borderRadius: 2 },
+  savedText: { alignItems: 'center', gap: Space.xs },
   input: { fontSize: 17, minHeight: 40 },
   mono: { fontVariant: ['tabular-nums'], letterSpacing: 1 },
 });

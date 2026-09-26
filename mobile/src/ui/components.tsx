@@ -410,11 +410,13 @@ export function EmptyState({
  * full screen elsewhere.
  */
 export function Sheet({
-  visible, title, onClose, left, right, children, dismissable = true,
+  visible, title, onClose, onDismissed, left, right, children, dismissable = true,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
+  /** Once it has finished sliding away (iOS), for work that should happen in view. */
+  onDismissed?: () => void;
   left?: ReactNode;
   right?: ReactNode;
   children: ReactNode;
@@ -429,6 +431,7 @@ export function Sheet({
       animationType="slide"
       presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
       onRequestClose={() => dismissable && onClose()}
+      onDismiss={onDismissed}
     >
       <View style={[styles.fill, { backgroundColor: theme.canvas, paddingTop: Platform.OS === 'ios' ? 0 : insets.top }]}>
         <View style={[styles.sheetBar, { borderBottomColor: theme.separator }]}>
