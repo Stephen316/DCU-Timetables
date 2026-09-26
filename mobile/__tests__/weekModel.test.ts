@@ -86,6 +86,25 @@ describe('Week model', () => {
     expect(m.canStep(1)).toBe(false);
   });
 
+  test('swiping the day view past Friday lands on next Monday, and back from Monday on last Friday', async () => {
+    // Wednesday, so a week change that fell back to the default day would land there.
+    jest.useFakeTimers({ now: at(2026, 9, 23, 9), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
+    const { model } = await setup([lectureWed, nextWeek]);
+    const m = model();
+    await m.start();
+    await settle();
+    m.setDay(1, 4);
+    expect([m.weekIndex, m.dayIndex]).toEqual([1, 4]);
+    m.setDay(2, 0);
+    await settle();
+    // The chosen Monday, not the default day a new week would open on.
+    expect([m.weekLabel, m.dayIndex]).toEqual(['Week 3', 0]);
+    expect(m.eventsByDayForWeekIndex(2)[0].events.map((e) => e.id)).toEqual(['next']);
+    m.setDay(1, 4);
+    await settle();
+    expect([m.weekLabel, m.dayIndex]).toEqual(['Week 2', 4]);
+  });
+
   test('hidden groups leave the timetable and the clash check, but not the module list', async () => {
     jest.useFakeTimers({ now: at(2026, 9, 23, 8), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
     const { model } = await setup([lectureWed, labA, labB]);

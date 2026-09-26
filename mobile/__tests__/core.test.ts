@@ -1,4 +1,4 @@
-import { Attendance, LecturerDirectory, lecturerDisplayName, lecturerInitials, makeLecturer, PagerDragState, PagerIndex } from '../src/core/misc';
+import { Attendance, LecturerDirectory, lecturerDisplayName, lecturerInitials, makeLecturer, PagerDragState, PagerIndex, WeekdayIndex } from '../src/core/misc';
 import { GroupCatalog } from '../src/core/groupCatalog';
 import { groupKeyOf } from '../src/core/timetableEvent';
 import { parseActivityCode } from '../src/core/activityCode';
@@ -471,6 +471,13 @@ describe('Pagers', () => {
     expect(PagerIndex.step(0, -1, 5, 'wrapping')).toBe(4);
     expect(PagerIndex.step(4, 1, 5, 'wrapping')).toBe(0);
     expect(PagerIndex.canStep(0, -1, 5, 'wrapping')).toBe(true);
+  });
+  test('the day pager runs Friday into the next Monday and back', () => {
+    const friday = WeekdayIndex.flat(3, 4);
+    expect(WeekdayIndex.split(friday + 1)).toEqual({ week: 4, day: 0 });
+    expect(WeekdayIndex.split(WeekdayIndex.flat(4, 0) - 1)).toEqual({ week: 3, day: 4 });
+    expect(PagerIndex.resolve(-1, weeks * 5, 'clamped')).toBeNull();
+    expect(PagerIndex.resolve(weeks * 5, weeks * 5, 'clamped')).toBeNull();
   });
   test('an empty pager asks for nothing', () => {
     for (const bounds of ['clamped', 'wrapping'] as const) {

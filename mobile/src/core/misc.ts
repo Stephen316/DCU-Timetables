@@ -100,8 +100,8 @@ export const Attendance = {
 // MARK: - Pagers
 
 /**
- * What a pager does when a swipe would run off the end: the day pager wraps (Friday →
- * Monday), the week pager stops at the ends of the academic year.
+ * What a pager does when a swipe would run off the end: wrap round to the other end, or
+ * stop there. The week and day pagers both stop at the ends of the academic year.
  */
 export type PagerBounds = 'wrapping' | 'clamped';
 
@@ -124,6 +124,23 @@ export const PagerIndex = {
   canStep(index: number, delta: number, count: number, bounds: PagerBounds): boolean {
     if (count <= 0) return false;
     return PagerIndex.step(index, delta, count, bounds) !== index;
+  },
+};
+
+/**
+ * The day pager runs through every weekday of the year as one sequence, so a swipe past
+ * Friday lands on the next week's Monday and one before Monday on the previous Friday.
+ */
+export const WeekdayIndex = {
+  daysPerWeek: 5,
+
+  flat(week: number, day: number): number {
+    return week * WeekdayIndex.daysPerWeek + day;
+  },
+
+  split(index: number): { week: number; day: number } {
+    const n = WeekdayIndex.daysPerWeek;
+    return { week: Math.floor(index / n), day: ((index % n) + n) % n };
   },
 };
 

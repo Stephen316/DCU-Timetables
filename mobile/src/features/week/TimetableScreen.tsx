@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addDays, isSameDay, startOfDay } from '../../core/time';
+import { WeekdayIndex } from '../../core/misc';
 import { TimetableEvent } from '../../core/timetableEvent';
 import { PrefKey } from '../../data/storage';
 import { useAppEvent, useModel, useNow, usePrefBool, usePrefJSON } from '../../state/hooks';
@@ -58,9 +59,6 @@ export function TimetableScreen() {
 
   const open = (event: TimetableEvent) => router.push({ pathname: '/class/[id]', params: { id: event.id } });
 
-  const weekDays = model.weekStart
-    ? Array.from({ length: 5 }, (_, i) => addDays(startOfDay(model.weekStart!), i))
-    : [];
   const skippedSet = new Set(skipped);
 
   const menu: SheetAction[] = [
@@ -100,16 +98,23 @@ export function TimetableScreen() {
     );
   } else {
     body = (
+      // Every weekday of the year in one run, so Friday swipes on to the next week's Monday.
       <Pager
-        count={Math.max(weekDays.length, 1)}
-        index={model.dayIndex}
-        onIndexChange={(i) => model.setDayIndex(i)}
+        count={Math.max(model.weeks.length * WeekdayIndex.daysPerWeek, 1)}
+        index={WeekdayIndex.flat(model.weekIndex, model.dayIndex)}
+        bounds="clamped"
+        onIndexChange={(i) => {
+          const { week, day } = WeekdayIndex.split(i);
+          model.setDay(week, day);
+        }}
         renderPage={(i) => {
-          const day = weekDays[i] ?? null;
+          const { week, day: offset } = WeekdayIndex.split(i);
+          const firstDay = model.weeks[week]?.firstDay;
+          const day = firstDay ? addDays(startOfDay(firstDay), offset) : null;
           return (
             <DayPage
               day={day}
-              events={day ? model.eventsByDay.find((d) => isSameDay(d.day, day))?.events ?? [] : []}
+              events={day ? model.eventsByDayForWeekIndex(week).find((d) => isSameDay(d.day, day))?.events ?? [] : []}
               now={now}
               clashingIDs={model.clashingIDs}
               highlight={(e) => model.highlight(e)}

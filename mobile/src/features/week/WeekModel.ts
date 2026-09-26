@@ -212,6 +212,15 @@ export class WeekModel extends Observable {
     this.changed();
   }
 
+  /** Moves the day view to a day in any week, keeping that day rather than the default. */
+  setDay(weekIndex: number, dayIndex: number): void {
+    if (weekIndex === this.weekIndex) return this.setDayIndex(dayIndex);
+    this.weekIndex = weekIndex;
+    this.dayIndex = dayIndex;
+    this.changed();
+    void this.loadCurrentWeek(false);
+  }
+
   /**
    * Opens the day view on today — or tomorrow from 6pm, or Monday at the weekend. Friday
    * evening and the weekend want Monday of the *next* week, so this can move the week as
@@ -252,7 +261,7 @@ export class WeekModel extends Observable {
    * Idempotent: already-loaded weeks only refresh their labels. Neighbours are fetched so a
    * drag has real content to show.
    */
-  async loadCurrentWeek(): Promise<void> {
+  async loadCurrentWeek(resetDay = true): Promise<void> {
     if (!this.started) return;
     const week = this.currentWeek;
     if (!week) return;
@@ -261,7 +270,7 @@ export class WeekModel extends Observable {
     this.weekStart = week.firstDay;
     this.errorText = null;
     this.applyFilter();
-    if (moved) this.resetToDefaultDay();
+    if (moved && resetDay) this.resetToDefaultDay();
 
     if (!this.rawByWeekNumber.has(week.number)) {
       this.isLoading = true;
