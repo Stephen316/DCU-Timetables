@@ -54,7 +54,14 @@ export async function findByPI(pi: string) {
   return { profile: match };
 }
 
-/// Ends this browser's session. The code is asked for again on the next visit.
+/// Closes the console in this browser. It stays signed in, so the code opens it again.
+export async function lock() {
+  const supabase = await supabaseServer();
+  await supabase.rpc("lock_console_session");
+  redirect("/unlock");
+}
+
+/// Ends this browser's session. It needs the email sign-in before the code works here again.
 export async function signOut() {
   const supabase = await supabaseServer();
   await supabase.auth.signOut({ scope: "local" });

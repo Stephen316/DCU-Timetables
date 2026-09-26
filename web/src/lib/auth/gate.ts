@@ -1,42 +1,37 @@
 import "server-only";
-import { headers } from "next/headers";
+import { supabaseServer } from "@/lib/supabase/server";
 
-/// The console opens with a 4-digit code and nothing else. Behind it, the server signs in
-/// as the admin account using credentials held only in its environment — you never type
-/// them, and a browser never receives them. The code decides whether the session the
-/// server opened is handed to the browser. See supabase/phase15_console_code.sql for the
-/// limits that make four digits defensible.
-
-export function consoleCredentials(): { email: string; password: string } | null {
-  const email = process.env.CONSOLE_ADMIN_EMAIL?.trim();
-  const password = process.env.CONSOLE_ADMIN_PASSWORD;
-  return email && password ? { email, password } : null;
-}
-
-/// Which address a guess came from, for the per-IP limit.
+/// Two ways into the console (supabase/phase22_remembered_console.sql):
 ///
-/// On Vercel, `x-real-ip` is set by the platform from the connection itself and cannot be
-/// supplied by the client, which is what makes it usable for a limit. `x-forwarded-for`
-/// is the fallback for other hosts; its first entry is the client.
+///   * Email and password, once per browser. Supabase's session cookie then remembers the
+///     browser for 30 days, and signing in this way opens the console straight away.
+///   * The four-digit code, on a remembered browser. A right code opens the console there
+///     for 12 hours, or until Lock; five wrong ones sign the browser out.
 ///
-/// IPv6 is cut to its /64. One home connection holds 2^64 addresses, so counting them
-/// singly would hand anyone on IPv6 unlimited tries.
-export async function clientIpKey(): Promise<string> {
-  const h = await headers();
-  const raw = (h.get("x-real-ip") ?? h.get("x-forwarded-for")?.split(",")[0] ?? "").trim();
-  return ipKey(raw);
-}
+/// Whether this browser is open is the database's answer, not a cookie's. The unlock
+/// belongs to the Supabase session, and only the database knows whether it has been
+/// locked, has run out, or was ended by wrong codes.
+export type ConsoleStatus = {
+  unlocked: boolean;
+  /// Signed in with email within 30 days, so the code may be tried here.
+  remembered: boolean;
+  hasCode: boolean;
+  attemptsLeft: number;
+};
 
-export function ipKey(raw: string): string {
-  const ip = raw.replace(/^::ffff:/i, "");
-  if (!ip) return "unknown";
-  if (!ip.includes(":")) return ip;
-  // Expand "::" so the first four groups are the real first four.
-  const [head, tail = ""] = ip.split("::");
-  const left = head ? head.split(":") : [];
-  const right = ip.includes("::") && tail ? tail.split(":") : [];
-  const groups = ip.includes("::")
-    ? [...left, ...Array(8 - left.length - right.length).fill("0"), ...right]
-    : ip.split(":");
-  return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, "")).join(":")}::/64`;
+/// Null when this browser holds no admin session at all. Ask only after `currentProfile()`
+/// has found an admin: without a session the database refuses the question outright.
+export async function consoleStatus(): Promise<ConsoleStatus | null> {
+  const db = await supabaseServer();
+  const { data, error } = await db.rpc("console_session_status").maybeSingle<{
+    unlocked: boolean; remembered: boolean; has_code: boolean; attempts_left: number;
+  }>();
+  if (error) throw new Error(`Could not check whether the console is open: ${error.message}`);
+  if (!data) return null;
+  return {
+    unlocked: data.unlocked,
+    remembered: data.remembered,
+    hasCode: data.has_code,
+    attemptsLeft: data.attempts_left,
+  };
 }

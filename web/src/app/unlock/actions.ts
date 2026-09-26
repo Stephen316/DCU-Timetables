@@ -1,32 +1,73 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
+import type { AuthError } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { clientIpKey, consoleCredentials } from "@/lib/auth/gate";
+import { supabaseServer } from "@/lib/supabase/server";
 
-export type UnlockState = { error?: string; attemptsLeft?: number } | null;
+/// `email` comes back so a wrong password doesn't also clear the address: React resets a form
+/// after its action runs.
+export type UnlockState = { error?: string; attemptsLeft?: number; email?: string } | null;
 
 type Cookie = { name: string; value: string; options?: Record<string, unknown> };
 
-/// Signs the server in as the console account, asks the database whether the code is right
-/// for this IP, and only then gives the browser the session.
-///
-/// The session is opened into a jar held here, not into the response. A wrong code signs
-/// that session out again and nothing reaches the browser; only a right one copies the
-/// jar's cookies across.
-export async function unlock(_prev: UnlockState, form: FormData): Promise<UnlockState> {
+/// The four-digit code, on a browser that has signed in with email in the last 30 days.
+/// The database counts the tries against this browser's session and ends it at five.
+export async function enterCode(_prev: UnlockState, form: FormData): Promise<UnlockState> {
   const code = String(form.get("code") ?? "").trim();
   // Not a guess at all, so not counted.
   if (!/^[0-9]{4}$/.test(code)) return { error: "Enter the four digits." };
 
-  const credentials = consoleCredentials();
-  if (!credentials) {
-    return {
-      error: "The console isn't set up: CONSOLE_ADMIN_EMAIL and CONSOLE_ADMIN_PASSWORD are missing " +
-        "from this server's environment.",
-    };
+  const db = await supabaseServer();
+  const { data, error } = await db
+    .rpc("enter_console_code", { p_code: code })
+    .maybeSingle<{ status: string; attempts_left: number }>();
+
+  if (error) {
+    // No admin session left to try it against — ended elsewhere, or no longer an admin.
+    // Anything else is the check failing, which is no reason to sign anyone out.
+    if (error.code === "42501" || error.message.includes("not allowed")) {
+      await db.auth.signOut({ scope: "local" });
+      redirect("/unlock");
+    }
+    return { error: `Couldn't check the code (${error.message}).` };
   }
+
+  switch (data?.status) {
+    case "ok":
+      redirect("/review");
+    case "wrong": {
+      const left = data.attempts_left;
+      return {
+        error: `Wrong code. ${left} ${left === 1 ? "try" : "tries"} left before this browser is signed out.`,
+        attemptsLeft: left,
+      };
+    }
+    // The database has already ended the session; this clears its cookies.
+    case "signed_out":
+      await db.auth.signOut({ scope: "local" });
+      redirect("/unlock?ended=codes");
+    case "expired":
+      await db.auth.signOut({ scope: "local" });
+      redirect("/unlock?ended=expired");
+    case "no_code":
+      redirect("/unlock?email");
+    default:
+      return { error: "Couldn't check the code." };
+  }
+}
+
+/// Email and password: the way in on a new browser, after five wrong codes, or when the
+/// code is forgotten. It opens the console without the code.
+///
+/// The new session is opened into a jar held here, not into the response. Only once the
+/// database has agreed it is an admin's does the browser get it — a student who tries
+/// their own account here leaves with nothing stored.
+export async function signInWithEmail(_prev: UnlockState, form: FormData): Promise<UnlockState> {
+  const email = String(form.get("email") ?? "").trim();
+  const password = String(form.get("password") ?? "");
+  if (!email || !password) return { error: "Enter your email and password.", email };
 
   const jar = new Map<string, Cookie>();
   const db = createServerClient(
@@ -40,50 +81,39 @@ export async function unlock(_prev: UnlockState, form: FormData): Promise<Unlock
     },
   );
 
-  const { error: signInError } = await db.auth.signInWithPassword(credentials);
-  if (signInError) {
-    return { error: `The console's account couldn't sign in (${signInError.message}). Check CONSOLE_ADMIN_EMAIL and CONSOLE_ADMIN_PASSWORD.` };
-  }
+  const { error: signInError } = await db.auth.signInWithPassword({ email, password });
+  if (signInError) return { error: signInMessage(signInError), email };
 
-  const { data, error } = await db
-    .rpc("check_console_code", { p_code: code, p_ip: await clientIpKey() })
-    .maybeSingle<{ status: string; attempts_left: number }>();
-
-  if (!error && data?.status === "ok") {
-    const store = await cookies();
-    for (const c of jar.values()) store.set(c.name, c.value, c.options);
-    redirect("/review");
-  }
-
-  // Anything but a right code: the session the server opened is ended, not handed over.
-  await db.auth.signOut({ scope: "local" });
-
-  if (error) {
+  const { data: opened, error } = await db.rpc("open_console_session");
+  if (error || opened !== true) {
+    await db.auth.signOut({ scope: "local" });
     return {
-      error: error.message.includes("not allowed")
-        ? "The console's account isn't an admin."
-        : `Couldn't check the code (${error.message}).`,
+      error: error?.message.includes("not allowed")
+        ? "That account isn't a console admin."
+        : `Signed in, but couldn't open the console (${error?.message ?? "try again"}).`,
+      email,
     };
   }
-  switch (data?.status) {
-    case "wrong":
-      return {
-        error: data.attempts_left > 0
-          ? `Wrong code. ${data.attempts_left} ${data.attempts_left === 1 ? "try" : "tries"} left from this network.`
-          : "Wrong code. This network is locked for 24 hours.",
-        attemptsLeft: data.attempts_left,
-      };
-    case "ip_locked":
-      return { error: "Too many wrong codes from this network. Try again in 24 hours, or from another network.", attemptsLeft: 0 };
-    case "locked":
-      return {
-        error: "The console is locked after too many wrong codes. Unlock it in the Supabase SQL editor: " +
-          "select private.unlock_console();",
-        attemptsLeft: 0,
-      };
-    case "no_code":
-      return { error: "No code has been set. In the Supabase SQL editor: select private.set_console_code('1234');" };
+
+  // Whatever session this browser held before is ended, not left behind — but only now,
+  // so a mistyped password doesn't cost a remembered browser.
+  const previous = await supabaseServer();
+  await previous.auth.signOut({ scope: "local" });
+
+  const store = await cookies();
+  for (const c of jar.values()) store.set(c.name, c.value, c.options);
+  redirect("/review");
+}
+
+function signInMessage(error: AuthError): string {
+  switch (error.code) {
+    case "invalid_credentials":
+      return "Wrong email or password.";
+    case "email_not_confirmed":
+      return "That email hasn't been confirmed yet. Use the link Supabase sent to it.";
+    case "over_request_rate_limit":
+      return "Too many sign-ins. Wait a few minutes, then try again.";
     default:
-      return { error: "Couldn't check the code." };
+      return `Couldn't sign in (${error.message}).`;
   }
 }

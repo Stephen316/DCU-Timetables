@@ -1,13 +1,12 @@
 "use client";
 
 import { useActionState, useRef } from "react";
-import { unlock, type UnlockState } from "./actions";
+import { enterCode, signInWithEmail, type UnlockState } from "./actions";
 import { Spinner } from "../(console)/spinner";
 
-export function UnlockForm() {
-  const [state, action, pending] = useActionState<UnlockState, FormData>(unlock, null);
+export function CodeForm() {
+  const [state, action, pending] = useActionState<UnlockState, FormData>(enterCode, null);
   const form = useRef<HTMLFormElement>(null);
-  const locked = state?.attemptsLeft === 0;
 
   return (
     <form ref={form} action={action}>
@@ -24,7 +23,7 @@ export function UnlockForm() {
           autoComplete="off"
           autoFocus
           required
-          disabled={pending || locked}
+          disabled={pending}
           // Four digits is the whole code, so the fourth submits it.
           onChange={(e) => {
             e.target.value = e.target.value.replace(/\D/g, "");
@@ -32,10 +31,41 @@ export function UnlockForm() {
           }}
         />
       </div>
-      <button className="primary unlock-btn" type="submit" disabled={pending || locked}>
+      <button className="primary unlock-btn" type="submit" disabled={pending}>
         {pending ? <><Spinner /> Checking</> : "Open console"}
       </button>
       {state?.error && <p className="err">{state.error}</p>}
+      <p className="dim lock-alt">
+        <a href="/unlock?email">Sign in with email instead</a>
+      </p>
+    </form>
+  );
+}
+
+export function EmailForm({ codeInstead }: { codeInstead: boolean }) {
+  const [state, action, pending] = useActionState<UnlockState, FormData>(signInWithEmail, null);
+
+  return (
+    <form action={action}>
+      <div className="field">
+        <label htmlFor="email">Email</label>
+        <input id="email" name="email" type="email" autoComplete="username" required
+               defaultValue={state?.email} autoFocus={!state?.email} disabled={pending} />
+      </div>
+      <div className="field">
+        <label htmlFor="password">Password</label>
+        <input id="password" name="password" type="password" autoComplete="current-password" required
+               autoFocus={!!state?.email} disabled={pending} />
+      </div>
+      <button className="primary unlock-btn" type="submit" disabled={pending}>
+        {pending ? <><Spinner /> Signing in</> : "Sign in"}
+      </button>
+      {state?.error && <p className="err">{state.error}</p>}
+      {codeInstead && (
+        <p className="dim lock-alt">
+          <a href="/unlock">Use the code instead</a>
+        </p>
+      )}
     </form>
   );
 }

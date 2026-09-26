@@ -1,50 +1,57 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { CodeForm } from "./code-form";
-import { lockEverywhere } from "./actions";
+import { signOutEverywhere } from "./actions";
 
 export default async function SecurityPage() {
   const db = await supabaseServer();
   const { data } = await db.rpc("console_code_status").maybeSingle<{
-    has_code: boolean; locked: boolean; wrong_today: number;
+    has_code: boolean; wrong_today: number;
   }>();
 
   return (
     <>
       <div className="head">
         <h1>Security</h1>
-        <p>The console opens with a four-digit code. There is no other sign-in.</p>
+        <p>
+          A browser signs in once with email and password. After that it asks only for the
+          four-digit code.
+        </p>
       </div>
 
       <p className="dim" style={{ marginBottom: 20 }}>
-        Wrong codes in the last 24 hours: <span className="mono">{data?.wrong_today ?? 0}</span> of the 10 that
-        lock the console for everyone.
+        Wrong codes in the last 24 hours: <span className="mono">{data?.wrong_today ?? 0}</span>.
+        Five in one browser sign it out.
       </p>
 
-      <h2 style={{ marginTop: 8 }}>Change the code</h2>
+      <h2 style={{ marginTop: 8 }}>{data?.has_code === false ? "Set the code" : "Change the code"}</h2>
       <CodeForm />
 
-      <h2 style={{ marginTop: 28 }}>Lock every browser</h2>
+      <h2 style={{ marginTop: 28 }}>Sign out every browser</h2>
       <p className="dim" style={{ marginBottom: 12 }}>
-        Closes the console everywhere it is open, including here. Use it if a device is lost or
-        the code may have been seen — then change the code.
+        Ends the console in every browser that has opened it, including this one. Each needs the
+        email sign-in again. The app stays signed in. Use it if a device is lost or the code may
+        have been seen, then change the code.
       </p>
-      <form action={lockEverywhere}>
-        <button type="submit" className="danger">Lock every browser</button>
+      <form action={signOutEverywhere}>
+        <button type="submit" className="danger">Sign out every browser</button>
       </form>
 
       <h2 style={{ marginTop: 28 }}>How the code is protected</h2>
       <ul className="dim" style={{ fontSize: 13, lineHeight: 1.7, paddingLeft: 18 }}>
-        <li>Three wrong codes from one network lock that network for 24 hours.</li>
         <li>
-          Ten wrong codes in 24 hours from all networks together lock the console for everyone.
-          Without this, someone with many addresses could try all 10,000 codes.
+          The code can only be tried in a browser that has signed in with an admin&apos;s email
+          and password. Nobody else gets a single guess.
         </li>
+        <li>Five wrong codes sign that browser out.</li>
         <li>
-          To unlock after that, or if the code is forgotten, run in the Supabase SQL editor:{" "}
-          <span className="mono">select private.unlock_console();</span> or{" "}
-          <span className="mono">select private.set_console_code(&apos;1234&apos;);</span>
+          A browser is remembered for 30 days from its email sign-in. A right code opens it for
+          12 hours, or until Lock.
         </li>
-        <li>A browser that has entered the code stays open until you press Lock.</li>
+        <li>Forgotten the code? Sign in with email, then change it here.</li>
+        <li>
+          The code locks these pages, not the account. Anyone who can copy this browser&apos;s
+          cookies doesn&apos;t need it, so sign out on a computer that isn&apos;t yours.
+        </li>
       </ul>
     </>
   );
