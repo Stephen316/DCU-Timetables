@@ -12,7 +12,17 @@ export function usePagerDrag(): PagerDragState {
   return useContext(PagerDragContext);
 }
 
-const COMMIT_FRACTION = 0.22;
+/**
+ * How far a drag has to go before it turns the page, and how far a finger moves before
+ * the pager takes it from the rows. `easy` also turns on a quick flick, however short.
+ */
+const SWIPE = {
+  standard: { commitFraction: 0.22, startDistance: 12, flickVelocity: Infinity },
+  easy: { commitFraction: 0.12, startDistance: 8, flickVelocity: 0.35 },
+} as const;
+
+/** A flick shorter than this is a wobble, not a swipe. */
+const MIN_FLICK_DISTANCE = 20;
 
 /**
  * A horizontally paged container whose content **tracks the finger**. Three pages are kept
@@ -20,27 +30,28 @@ const COMMIT_FRACTION = 0.22;
  * neighbour and can be abandoned. On release the offset animates to the page edge and the
  * index is committed, which is what makes wrapping (Fri → Mon) possible.
  *
- * `bounds` decides the ends: the day pager wraps within its week; the week pager stops,
- * because scrolling back from week 1 and landing in week 52 is a teleport, not a scroll.
+ * `bounds` decides the ends. Both the day and week pagers stop, because scrolling back
+ * from week 1 and landing in week 52 is a teleport, not a scroll.
  */
 export function Pager({
-  count, index, onIndexChange, bounds = 'wrapping', renderPage,
+  count, index, onIndexChange, bounds = 'wrapping', swipe = 'standard', renderPage,
 }: {
   count: number;
   index: number;
   onIndexChange: (index: number) => void;
   bounds?: PagerBounds;
+  swipe?: keyof typeof SWIPE;
   renderPage: (index: number) => ReactNode;
 }) {
   const [width, setWidth] = useState(0);
   const [drag] = useState(() => new Animated.Value(0));
   const [dragState] = useState(() => new PagerDragState());
   /** The latest props, for the gesture handlers, which outlive a render. */
-  const live = useRef({ index, count, bounds, width, onIndexChange });
+  const live = useRef({ index, count, bounds, width, onIndexChange, swipe });
   const committing = useRef(false);
 
   useLayoutEffect(() => {
-    live.current = { index, count, bounds, width, onIndexChange };
+    live.current = { index, count, bounds, width, onIndexChange, swipe };
   });
 
   // The new centre page is already rendered by the time this runs, so resetting the offset
@@ -58,11 +69,14 @@ export function Pager({
     const settle = () => {
       Animated.timing(drag, { toValue: 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
     };
-    const finish = (dx: number, dy: number) => {
+    const finish = (dx: number, dy: number, vx: number) => {
       dragState.end();
-      const { index: i, count: n, bounds: b, width: w } = live.current;
+      const { index: i, count: n, bounds: b, width: w, swipe: kind } = live.current;
       if (Math.abs(dx) <= Math.abs(dy) || w === 0) return settle();
-      const step = dx < -w * COMMIT_FRACTION ? 1 : dx > w * COMMIT_FRACTION ? -1 : 0;
+      const { commitFraction, flickVelocity } = SWIPE[kind];
+      const flicked = Math.abs(vx) >= flickVelocity && Math.abs(dx) >= MIN_FLICK_DISTANCE && Math.sign(vx) === Math.sign(dx);
+      const far = Math.abs(dx) > w * commitFraction;
+      const step = far || flicked ? (dx < 0 ? 1 : -1) : 0;
       const destination = step === 0 ? null : PagerIndex.resolve(i + step, n, b);
       if (destination === null) return settle();
       committing.current = true;
@@ -76,14 +90,14 @@ export function Pager({
       // Only decisively horizontal drags, so each page's own vertical scrolling still works.
       // The capture phase takes it from the rows, so a swipe that starts on one isn't a tap.
       onMoveShouldSetPanResponderCapture: (_, g) =>
-        !committing.current && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy),
+        !committing.current && Math.abs(g.dx) > SWIPE[live.current.swipe].startDistance && Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderGrant: () => dragState.begin(),
       onPanResponderMove: (_, g) => {
         // Past the last page the content resists rather than freezing, so the gesture
         // reads as "there is nothing here", not as a dropped touch.
         drag.setValue(isBlocked(g.dx) ? g.dx * 0.25 : g.dx);
       },
-      onPanResponderRelease: (_, g) => finish(g.dx, g.dy),
+      onPanResponderRelease: (_, g) => finish(g.dx, g.dy, g.vx),
       onPanResponderTerminate: () => {
         dragState.end();
         settle();

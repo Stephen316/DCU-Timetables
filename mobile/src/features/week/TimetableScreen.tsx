@@ -103,6 +103,7 @@ export function TimetableScreen() {
         count={Math.max(model.weeks.length * WeekdayIndex.daysPerWeek, 1)}
         index={WeekdayIndex.flat(model.weekIndex, model.dayIndex)}
         bounds="clamped"
+        swipe="easy"
         onIndexChange={(i) => {
           const { week, day } = WeekdayIndex.split(i);
           model.setDay(week, day);
