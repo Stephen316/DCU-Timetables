@@ -10,8 +10,6 @@ import { useRoot, useWeekModel } from '../../state/root';
 import { ActionSheet, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 import { AccountSheet } from '../account/AccountSheet';
-import { GroupsSheet } from '../groups/GroupsSheet';
-import { LabsSheet } from '../labs/LabsSheet';
 import { DayPage } from './DayPage';
 import { Pager } from './Pager';
 import { WeekGridView } from './WeekGrid';
@@ -27,7 +25,7 @@ export function TimetableScreen() {
   const [showsCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
   const [hiddenGroups] = usePrefJSON<string[]>(PrefKey.hiddenGroups, []);
   const [skipped] = usePrefJSON<string[]>(PrefKey.skipped, []);
-  const [sheet, setSheet] = useState<'menu' | 'groups' | 'labs' | 'account' | null>(null);
+  const [sheet, setSheet] = useState<'menu' | 'account' | null>(null);
 
   useEffect(() => {
     void model.start();
@@ -66,12 +64,6 @@ export function TimetableScreen() {
   const skippedSet = new Set(skipped);
 
   const menu: SheetAction[] = [
-    ...(!shell?.groupsAssigned
-      ? [
-          { label: 'Select groups', icon: 'groups' as const, onPress: () => setSheet('groups') },
-          ...(model.hasEngineeringLabs ? [{ label: 'Engineering labs', icon: 'labs' as const, onPress: () => setSheet('labs') }] : []),
-        ]
-      : []),
     { label: 'Account', icon: 'account', onPress: () => setSheet('account') },
     { label: 'Sign out', icon: 'swap', onPress: signOut },
   ];
@@ -157,10 +149,6 @@ export function TimetableScreen() {
       </View>
 
       <ActionSheet visible={sheet === 'menu'} onClose={() => setSheet(null)} actions={menu} />
-      {shell && !shell.groupsAssigned ? (
-        <GroupsSheet visible={sheet === 'groups'} onClose={() => setSheet(null)} programme={shell.programme} source={shell.source} />
-      ) : null}
-      <LabsSheet visible={sheet === 'labs'} onClose={() => setSheet(null)} />
       <AccountSheet visible={sheet === 'account'} onClose={() => setSheet(null)} />
     </View>
   );
