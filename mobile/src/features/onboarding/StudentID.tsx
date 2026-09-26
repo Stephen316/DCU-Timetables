@@ -3,7 +3,7 @@ import { File } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StudentNumber } from '../../core/identity';
 import { errorMessage } from '../../data/rest';
@@ -84,6 +84,8 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
         : cameraReady ? 'running'
           : 'starting';
   const scanning = !checking && permission?.granted === true && !mountFailed && read === null && !showingOptions;
+  /** The card outline, while there's a camera to line a card up in and nothing read yet. */
+  const showsGhost = !checking && permission !== null && read === null && (status === 'starting' || status === 'running');
 
   const deliver = (number: string) => {
     if (readRef.current !== null) return;
@@ -181,6 +183,7 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
         />
       ) : null}
       <GuideOverlay guide={guide} />
+      {showsGhost ? <CardGhost guide={guide} /> : null}
 
       <View style={[styles.instructions, { top: insets.top, height: Math.max(0, guide.y - insets.top) }]}>
         <Txt type="title3" color="#FFFFFF" style={styles.center}>Take a photo of your student ID</Txt>
@@ -246,6 +249,68 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
           resume();
         }}
       />
+    </View>
+  );
+}
+
+type Box = { x: number; y: number; w: number; h: number };
+
+/**
+ * Where things sit on a DCU student card, as fractions of its width and height — measured
+ * from photos of three cards. Rough on purpose: enough to show which way up the card goes
+ * and where the barcode should land, not a copy of the card.
+ */
+const CARD_LAYOUT = {
+  photo: { x: 0.71, y: 0.1, w: 0.21, h: 0.41 },
+  swoosh: { x: 0.15, y: 0.07, w: 0.4, h: 0.44 },
+  innerSwoosh: { x: 0.22, y: 0.13, w: 0.3, h: 0.34 },
+  wordmark: { x: 0.2, y: 0.27, w: 0.34, h: 0.22 },
+  lines: [
+    { x: 0.055, y: 0.515, w: 0.27, h: 0.045 }, // name
+    { x: 0.055, y: 0.585, w: 0.46, h: 0.045 }, // student number
+    { x: 0.055, y: 0.655, w: 0.5, h: 0.045 }, // qualification
+    { x: 0.045, y: 0.925, w: 0.33, h: 0.04 }, // expiry date
+    { x: 0.475, y: 0.93, w: 0.22, h: 0.035 }, // the number under the barcode
+  ],
+  barcode: { x: 0.15, y: 0.735, w: 0.73, h: 0.16 },
+} satisfies Record<string, Box | Box[]>;
+
+/** Bar and space widths, alternating from a bar: a fixed made-up pattern that reads as a barcode. */
+const GHOST_BARS = Array.from({ length: 91 }, (_, i) => ((i * 7 + 3) % 5 < 2 ? 3 : 1));
+
+/**
+ * A faint outline of a student card inside the guide: the photo top right, the logo, the
+ * text lines, and the barcode along the bottom. Drawn on the screen only; the camera never
+ * sees it, so it can't be read as a barcode.
+ */
+function CardGhost({ guide }: { guide: Box }) {
+  const place = (b: Box) => ({ left: b.x * guide.w, top: b.y * guide.h, width: b.w * guide.w, height: b.h * guide.h });
+  const { photo, swoosh, innerSwoosh, wordmark, lines, barcode } = CARD_LAYOUT;
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[styles.ghost, { left: guide.x, top: guide.y, width: guide.w, height: guide.h }]}
+    >
+      <View style={[styles.ghostPhoto, place(photo)]}>
+        <View style={[styles.ghostHead, { width: photo.w * guide.w * 0.36, height: photo.w * guide.w * 0.36 }]} />
+        <View style={[styles.ghostShoulders, { width: photo.w * guide.w * 0.72, height: photo.h * guide.h * 0.3 }]} />
+      </View>
+      {/* The logo's swoosh: two arcs leaning over the letters. */}
+      <View style={[styles.ghostArc, place(swoosh), { borderRadius: swoosh.w * guide.w, borderTopWidth: 3 }]} />
+      <View style={[styles.ghostArc, place(innerSwoosh), { borderRadius: innerSwoosh.w * guide.w, borderTopWidth: 2 }]} />
+      <View style={[styles.ghostWordmark, place(wordmark)]}>
+        <Text allowFontScaling={false} style={[styles.ghostLetters, { fontSize: wordmark.h * guide.h * 0.95 }]}>DCU</Text>
+      </View>
+      {lines.map((line, i) => (
+        <View key={i} style={[styles.ghostLine, place(line), { borderRadius: (line.h * guide.h) / 2 }]} />
+      ))}
+      <View style={[styles.ghostBarcode, place(barcode)]}>
+        {GHOST_BARS.map((units, i) => (
+          <View key={i} style={{ flex: units, backgroundColor: i % 2 === 0 ? '#FFFFFF' : 'transparent' }} />
+        ))}
+      </View>
     </View>
   );
 }
@@ -365,6 +430,22 @@ const styles = StyleSheet.create({
   shutterFill: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#FFFFFF' },
   options: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.l },
   guideEdge: { position: 'absolute', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
+  // Low enough that the real card shows through it once it's lined up.
+  ghost: { position: 'absolute', opacity: 0.22 },
+  ghostPhoto: {
+    position: 'absolute', borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 4, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'flex-end', gap: 2,
+  },
+  ghostHead: { borderRadius: 999, backgroundColor: '#FFFFFF' },
+  ghostShoulders: { borderTopLeftRadius: 999, borderTopRightRadius: 999, backgroundColor: '#FFFFFF' },
+  ghostArc: { position: 'absolute', borderColor: '#FFFFFF', transform: [{ rotate: '-14deg' }] },
+  ghostWordmark: { position: 'absolute', justifyContent: 'center' },
+  ghostLetters: {
+    color: '#FFFFFF', fontWeight: '700', letterSpacing: 2,
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia, serif' }),
+  },
+  ghostLine: { position: 'absolute', backgroundColor: '#FFFFFF' },
+  ghostBarcode: { position: 'absolute', flexDirection: 'row' },
   corner: { position: 'absolute', borderColor: '#FFFFFF' },
   confirm: { alignItems: 'center', gap: Space.m },
   buttons: { gap: Space.s },
