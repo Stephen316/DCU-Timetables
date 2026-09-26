@@ -1,10 +1,10 @@
 "use server";
 
 import { currentProfile, supabaseServer } from "@/lib/supabase/server";
-import { modulesFor } from "@/lib/proposals/courses";
 
-/// What is live in the database for one programme and module — the "Saved" list under the
-/// chat. Read-only, and read as the signed-in admin, so RLS applies as everywhere else.
+/// What applies to one programme and module — the "Saved" list under the chat. Nothing
+/// without both: every table for every module is offered by the reuse dropdown instead
+/// (library.ts). Read-only, and read as the signed-in admin, so RLS applies as everywhere else.
 ///
 /// A class list comes back as counts per group and subgroup, never as names: the names are
 /// reduced to keys when saved, and nothing here could show them if it tried.
@@ -24,7 +24,7 @@ export type SavedView = {
   rotation: {
     title: string | null; version: number; savedAt: string;
     total: number;              // every session in the rotation
-    sessions: SavedSession[];   // those for the selected module, or all of them
+    sessions: SavedSession[];   // those for the selected module
   } | null;
   splits: {
     module: string; activity: string; note: string | null; savedAt: string;
@@ -40,21 +40,17 @@ export async function listSaved(programme: string, module: string):
   Promise<{ ok: true; view: SavedView } | { ok: false; error: string }> {
   const profile = await currentProfile();
   if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
-  if (!programme) return { ok: true, view: { rotation: null, splits: [], classList: null } };
+  if (!programme || !module) return { ok: true, view: { rotation: null, splits: [], classList: null } };
 
   const db = await supabaseServer();
-  // With no module chosen, the splits of every module in the programme.
-  const modules = module ? [module] : modulesFor(programme).map((m) => m.code);
 
   const [rot, splits, roster] = await Promise.all([
     db.from("lab_rotations")
       .select("title, version, created_at, lab_rotation_sessions(week, date, day, start_time, end_time, module, activity, groups, room)")
       .eq("course_key", programme).maybeSingle(),
-    modules.length
-      ? db.from("module_splits")
-          .select("module_key, activity, note, created_at, module_split_ranges(from_letter, to_letter, day, start_time, end_time, room, label)")
-          .in("module_key", modules).order("module_key").order("activity")
-      : Promise.resolve({ data: [], error: null }),
+    db.from("module_splits")
+      .select("module_key, activity, note, created_at, module_split_ranges(from_letter, to_letter, day, start_time, end_time, room, label)")
+      .eq("module_key", module).order("activity"),
     db.from("rosters").select("title, version, members, created_at").eq("course_key", programme).maybeSingle(),
   ]);
   const failed = rot.error ?? splits.error ?? roster.error;
@@ -72,7 +68,7 @@ export async function listSaved(programme: string, module: string):
     rotation = {
       title: rot.data.title, version: rot.data.version, savedAt: rot.data.created_at,
       total: all.length,
-      sessions: module ? all.filter((s) => s.module === module) : all,
+      sessions: all.filter((s) => s.module === module),
     };
   }
 

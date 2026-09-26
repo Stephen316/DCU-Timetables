@@ -5,8 +5,11 @@ import { deleteSaved, listSaved, type SavedTarget, type SavedView } from "./save
 import { moduleFor, programmeFor } from "@/lib/proposals/courses";
 import { Spinner } from "../spinner";
 
-/// What is already live for the selected programme and module, under the chat. Each entry
-/// opens to show what was saved — the thing a new proposal would replace.
+/// What applies to the selected course and module, under the chat: the course's rotation if
+/// it has sessions for the module, the module's splits, and the course's class list. Nothing
+/// until a module is picked — tables for anything else are offered under "Reuse a saved
+/// table" instead. Each entry opens to show what was saved — the thing a new proposal
+/// would replace.
 export function SavedPanel({ programme, module, refresh }: { programme: string; module: string; refresh: number }) {
   const [view, setView] = useState<SavedView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -16,6 +19,7 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
 
   useEffect(() => {
     let current = true;
+    if (!module) { setView(null); setError(null); return; }
     setLoading(true);
     setError(null);
     listSaved(programme, module)
@@ -45,11 +49,11 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
     }
   }
 
-  const scope = module
-    ? `${module}${moduleFor(module) ? ` · ${moduleFor(module)!.title}` : ""}`
-    : programmeFor(programme)?.name ?? programme;
   const programmeName = programmeFor(programme)?.name ?? programme;
-  const empty = view && !view.rotation && view.splits.length === 0 && !view.classList;
+  const scope = module ? `${programmeName} · ${module}${moduleFor(module) ? ` · ${moduleFor(module)!.title}` : ""}` : programmeName;
+  // A rotation with no sessions for the module does not apply to it.
+  const rotation = view?.rotation?.sessions.length ? view.rotation : null;
+  const empty = view && !rotation && view.splits.length === 0 && !view.classList;
 
   return (
     <section className="saved" aria-labelledby="saved-heading">
@@ -60,44 +64,42 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
       </div>
 
       {error && <p className="err">{error}</p>}
-      {empty && !loading && (
+      {!module && (
+        <p className="dim" style={{ fontSize: 13 }}>Pick a module to see what is saved for it.</p>
+      )}
+      {module && empty && !loading && (
         <p className="dim" style={{ fontSize: 13 }}>
-          Nothing saved for {module ? "this module" : "this programme"} yet.
+          Nothing saved for {module} yet. A table saved for another module can be used here
+          from &ldquo;Reuse a saved table&rdquo;.
         </p>
       )}
 
-      {view?.rotation && (
+      {module && rotation && (
         <Entry
           title="Lab rotation"
-          meta={`${module ? `${view.rotation.sessions.length} of ${view.rotation.total}` : view.rotation.total} sessions · v${view.rotation.version} · ${when(view.rotation.savedAt)}`}
+          meta={`${rotation.sessions.length} of ${rotation.total} sessions · v${rotation.version} · ${when(rotation.savedAt)}`}
           deleting={deleting === "rotation"}
           onDelete={() => remove("rotation", { kind: "rotation", programme },
-            `Delete the lab rotation for ${programmeName}? All ${view.rotation!.total} sessions go, across every module — not only ${module || "the one shown"}. This can't be undone.`)}
+            `Delete the lab rotation for ${programmeName}? All ${rotation.total} sessions go, across every module — not only ${module}. This can't be undone.`)}
         >
-          {view.rotation.sessions.length === 0 ? (
-            <p className="dim" style={{ fontSize: 13 }}>
-              The programme&rsquo;s rotation has no sessions for {module}.
-            </p>
-          ) : (
-            <div className="saved-scroll">
-              <table>
-                <thead><tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Module</th><th>Activity</th><th>Groups</th></tr></thead>
-                <tbody>
-                  {view.rotation.sessions.map((s, i) => (
-                    <tr key={i}>
-                      <td>{s.week ?? "—"}</td><td className="mono">{s.date ?? "—"}</td><td>{s.day ?? "—"}</td>
-                      <td className="mono">{s.start && s.end ? `${s.start}–${s.end}` : "—"}</td>
-                      <td className="mono">{s.module ?? "—"}</td><td>{s.activity ?? "—"}</td><td>{s.groups.join(" ")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="saved-scroll">
+            <table>
+              <thead><tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Module</th><th>Activity</th><th>Groups</th></tr></thead>
+              <tbody>
+                {rotation.sessions.map((s, i) => (
+                  <tr key={i}>
+                    <td>{s.week ?? "—"}</td><td className="mono">{s.date ?? "—"}</td><td>{s.day ?? "—"}</td>
+                    <td className="mono">{s.start && s.end ? `${s.start}–${s.end}` : "—"}</td>
+                    <td className="mono">{s.module ?? "—"}</td><td>{s.activity ?? "—"}</td><td>{s.groups.join(" ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Entry>
       )}
 
-      {view?.splits.map((sp) => (
+      {module && view?.splits.map((sp) => (
         <Entry
           key={`${sp.module}-${sp.activity}`}
           title={`${sp.module} · ${sp.activity} split`}
@@ -121,7 +123,7 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
         </Entry>
       ))}
 
-      {view?.classList && (
+      {module && view?.classList && (
         <Entry
           title="Class list"
           meta={`${view.classList.members} students · v${view.classList.version} · ${when(view.classList.savedAt)}`}
