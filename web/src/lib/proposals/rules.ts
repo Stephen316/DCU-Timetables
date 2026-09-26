@@ -153,6 +153,17 @@ export function bandFor(surname: string, rule: SplitRule): SplitRange | null {
 /// and never inside a longer number, so the 1 in "EEG1001" is not an 11. The cost is a
 /// false alarm when someone confirms with "yes" to a question the model asked, which the
 /// source avoids by including the model's own turns: a time it asked about is on the record.
+/// A saved split written out as words, to stand as the source of a copy of it. The
+/// provenance check asks that every day, hour and room was said somewhere; for a copy they
+/// were said by the saved split. Hours lose their leading zero because the check looks for
+/// "9", and in "09" the 9 has a digit in front of it.
+export function splitSource(module: string, activity: string, ranges: SplitRange[]): string {
+  const hour = (t: string) => t.replace(/^0/, "");
+  return `Reused the ${module} ${activity} split: ` + ranges
+    .map((r) => `${r.from}–${r.to} ${r.day} ${hour(r.start)}–${hour(r.end)}${r.room ? ` ${r.room}` : ""}`)
+    .join("; ");
+}
+
 export function checkProvenance(rule: SplitRule, source: string): RuleProblem[] {
   const text = source.toLowerCase();
   const problems: RuleProblem[] = [];

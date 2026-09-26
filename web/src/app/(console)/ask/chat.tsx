@@ -9,6 +9,8 @@ import { csvField, ROSTER_HEADER } from "@/lib/roster/parse";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/upload";
 import { Spinner } from "../spinner";
 import { SavedPanel } from "./saved-panel";
+import { LibraryPanel } from "./library-panel";
+import type { Reused } from "./library";
 import { describeChange, weekday } from "@/lib/changes/change";
 
 /// What the transcript shows. The attachment and proposal number are display only — the
@@ -191,6 +193,18 @@ export function Ask() {
     setNotice(null);
     setDraft("");
     choose(null);
+  }
+
+  /// A saved table, back on the panel as a proposal. A rotation becomes the document the
+  /// next messages correct, as an upload does; a split goes into the transcript in words, so
+  /// a follow-up about it reaches the model with the split in its history.
+  function reuse(r: Extract<Reused, { ok: true }>) {
+    const no = ++counter.current;
+    const isDoc = r.proposal.kind === "roster" || r.proposal.kind === "rotation";
+    setItems((all) => [...all, { no, proposal: r.proposal, status: "open", doc: isDoc ? no : undefined }]);
+    setTurns((t) => [...t, { role: "model", text: r.reply, proposalNos: [no] }]);
+    setLast(null);
+    setNotice(null);
   }
 
   function update(no: number, change: Partial<Item>) {
@@ -403,6 +417,7 @@ export function Ask() {
         )}
 
         <SavedPanel programme={programme} module={moduleKey} refresh={refresh} />
+        <LibraryPanel programme={programme} module={moduleKey} refresh={refresh} disabled={busy} onReuse={reuse} />
       </div>
 
       <div className="ask-panel">

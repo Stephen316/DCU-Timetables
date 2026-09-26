@@ -21,6 +21,10 @@ export type RotationSession = {
   /// The column heading the session sits under: "Workshop", "Drawing" or "Lab".
   activity: string | null;
   groups: string[] | null;
+  /// Never read from a document — the schema has no room. Present only on a session loaded
+  /// back from the database that had one, and absent otherwise, so re-saving a reused
+  /// rotation keeps it and the "Unreadable" check never sees a missing room as a gap.
+  room?: string;
 };
 
 /// The vocabularies a document is allowed to draw from.

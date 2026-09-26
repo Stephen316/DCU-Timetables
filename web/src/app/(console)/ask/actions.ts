@@ -422,6 +422,7 @@ function documentFrom(raw: string): DocProposal | null {
       week: Number.isInteger(s?.week) ? s.week : null, date: str(s?.date), day: str(s?.day),
       start: str(s?.start), end: str(s?.end), module: str(s?.module), activity: str(s?.activity),
       groups: Array.isArray(s?.groups) ? s.groups.filter((g: unknown) => typeof g === "string") : null,
+      ...(str(s?.room) ? { room: str(s.room)! } : {}),
     }));
     return { kind: "rotation", scope, courseKey: String(p.courseKey ?? ""), title: str(p.title), sessions, log, findings: [] };
   }
