@@ -5,7 +5,7 @@
 //
 // Also what a note typed with an upload goes through when the table was read directly.
 
-import { post, textOf, withRetry } from "./api";
+import { historyMessages, post, textOf, withRetry } from "./api";
 import { toJsonSchema } from "@/lib/extraction/json-schema";
 import { csvField } from "@/lib/roster/parse";
 import type { Op } from "@/lib/corrections/apply";
@@ -94,7 +94,7 @@ export async function correctTable(opts: {
       { role: "system", content: SYSTEM },
       // The conversation since the upload, for "do the same for row 70". The table itself
       // is only ever the current version, sent once.
-      ...history.slice(-8).map((t) => ({ role: t.role === "model" ? "assistant" : "user", content: t.text })),
+      ...historyMessages(history.slice(-8)),
       { role: "user", content: `The ${what}:\n${table}\n\nMy message:\n${message.trim()}` },
     ],
     response_format: {

@@ -55,6 +55,17 @@ export async function ocr(key: string, file: Attachment) {
   };
 }
 
+/// The conversation as chat messages. A turn where the model only put a proposal on the
+/// panel has no words, and Mistral rejects an assistant message with neither content nor
+/// tool calls, so it stands in for them. The stand-in names no values on purpose: the
+/// history is also where a proposal's room or times are checked for, and the model's own
+/// guess must not vouch for itself.
+export function historyMessages(history: { role: "user" | "model"; text: string }[]) {
+  return history.map((t) => t.role === "model"
+    ? { role: "assistant", content: t.text.trim() || "(I put a proposal on the panel for you to review.)" }
+    : { role: "user", content: t.text });
+}
+
 /// Message content is a string for most models and an array of chunks for some. Only the
 /// text chunks are wanted either way.
 export function textOf(content: unknown): string {

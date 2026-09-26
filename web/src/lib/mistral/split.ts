@@ -2,7 +2,7 @@
 // schema, because "ask when something is missing" needs the model to be able to answer in
 // prose instead of filling every field.
 
-import { post, textOf, withRetry } from "./api";
+import { historyMessages, post, textOf, withRetry } from "./api";
 import { CHANGE_TOOL, SPLIT_TOOL, SYSTEM } from "@/lib/proposals/prompt";
 import { toJsonSchema } from "@/lib/extraction/json-schema";
 import type { SplitRule } from "@/lib/proposals/rules";
@@ -35,7 +35,7 @@ export async function interpretMessage(opts: {
     messages: [
       { role: "system", content: SYSTEM },
       ...(context ? [{ role: "system", content: context }] : []),
-      ...history.map((t) => ({ role: t.role === "model" ? "assistant" : "user", content: t.text })),
+      ...historyMessages(history),
       { role: "user", content: text },
     ],
     tools: [SPLIT_TOOL, CHANGE_TOOL].map((t) => ({
