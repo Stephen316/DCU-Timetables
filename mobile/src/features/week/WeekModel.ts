@@ -1,7 +1,7 @@
 import { CancellationRules, CancellationStatus } from '../../core/cancellation';
 import { ClassHighlight, Deadline, DeadlineRules } from '../../core/deadline';
 import { PagerBounds, PagerIndex } from '../../core/misc';
-import { LabRotations, TimetableAudience, TimetableChange, TimetableChanges } from '../../core/profile';
+import { TimetableAudience, TimetableChange, TimetableChanges } from '../../core/profile';
 import { campusName, parsedLocations } from '../../core/roomLocation';
 import { ClashDetector, DefaultDay } from '../../core/schedule';
 import { addDays, startOfDay } from '../../core/time';
@@ -9,7 +9,6 @@ import { groupKeyOf as groupKey, TeachingWeek, TimetableCategory, TimetableEvent
 import { errorMessage } from '../../data/rest';
 import { Services } from '../../data/services';
 import { TimetableSource } from '../../data/dcuApi';
-import { currentRotation } from '../../data/timetable';
 import { WidgetSnapshotPublisher } from '../../data/widgets';
 import { Observable } from '../../state/hooks';
 
@@ -37,7 +36,6 @@ export class WeekModel extends Observable {
   isLoading = false;
   errorText: string | null = null;
   weekLabel = '';
-  hasEngineeringLabs = false;
   /** Monday of the week being shown, so the day view can lay out Mon–Fri. */
   weekStart: Date | null = null;
   /** Position in `weeks`. */
@@ -61,7 +59,6 @@ export class WeekModel extends Observable {
   private knownStatuses = new Map<string, CancellationStatus>();
   private rawByWeekNumber = new Map<number, TimetableEvent[]>();
   private changes: TimetableChange[];
-  private readonly engLabModules: Set<string>;
   private started = false;
 
   constructor(
@@ -74,8 +71,6 @@ export class WeekModel extends Observable {
   ) {
     super();
     this.changes = audience ? services.changeCache.changes(audience.courseKey) : [];
-    const rotation = currentRotation(services.rotationCache);
-    this.engLabModules = rotation ? LabRotations.moduleCodes(rotation) : new Set();
   }
 
   // MARK: - Reports and deadlines
@@ -348,10 +343,6 @@ export class WeekModel extends Observable {
     const current = week ? filtered.get(week.number) ?? [] : [];
     this.events = current;
     this.clashingIDs = ClashDetector.clashingEventIDs(current);
-    if (this.engLabModules.size > 0) {
-      this.hasEngineeringLabs = [...this.rawByWeekNumber.values()].some((list) =>
-        list.some((e) => this.engLabModules.has(e.activity.moduleCode ?? '')));
-    }
     this.changed();
   }
 }
