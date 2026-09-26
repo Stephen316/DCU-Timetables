@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { verifyDeadline } from "../actions";
+import { Spinner } from "../spinner";
 
 const dateFormat = new Intl.DateTimeFormat("en-IE", {
   weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
@@ -15,6 +16,7 @@ export function ReviewRow({
   confirmations: number;
 }) {
   const [pending, start] = useTransition();
+  const [decision, setDecision] = useState<"verified" | "rejected" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const due = new Date(deadline.due_at);
@@ -24,6 +26,8 @@ export function ReviewRow({
   const satInClass = deadline.kind === "quiz" || deadline.kind === "exam";
 
   function decide(status: "verified" | "rejected") {
+    if (status === "rejected" && !window.confirm(`Reject "${deadline.title}"? It leaves every student's view. This can't be undone.`)) return;
+    setDecision(status);
     start(async () => {
       const result = await verifyDeadline(deadline.id, status);
       setError(result.error ?? null);
@@ -44,8 +48,12 @@ export function ReviewRow({
       <td className={satInClass ? "tag warn" : "dim"}>{deadline.kind}</td>
       <td className="right dim">{confirmations}</td>
       <td className="right" style={{ whiteSpace: "nowrap" }}>
-        <button onClick={() => decide("verified")} disabled={pending}>Verify</button>{" "}
-        <button className="danger" onClick={() => decide("rejected")} disabled={pending}>Reject</button>
+        <button onClick={() => decide("verified")} disabled={pending}>
+          {pending && decision !== "rejected" ? <><Spinner /> Verifying</> : "Verify"}
+        </button>{" "}
+        <button className="danger" onClick={() => decide("rejected")} disabled={pending}>
+          {pending && decision === "rejected" ? <><Spinner /> Rejecting</> : "Reject"}
+        </button>
       </td>
     </tr>
   );
