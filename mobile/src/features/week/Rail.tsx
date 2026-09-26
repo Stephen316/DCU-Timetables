@@ -9,6 +9,10 @@ import { Space, useTheme } from '../../ui/theme';
  * start time set large beside it, so the left edge reads as a clock running down the day.
  * Free time is the rail carrying on, dashed. The class to head for is the one stop drawn in
  * the accent; classes already over shrink to a dot.
+ *
+ * Height is time: an hour of class or of free time takes `HOUR_HEIGHT`, so a three-hour lab
+ * is three times a lecture and a free hour is the same size as a lecture. A class whose
+ * text needs more room than its time gives (a half-hour tutorial, large text) grows to fit.
  */
 export type RailStop =
   | { kind: 'upcoming' }
@@ -33,16 +37,27 @@ const COLUMN = 28;
 const STOP_CENTRE = 12;
 const STOP = 11;
 const LINE = 2;
+/** Fits a one-hour class's title, type, room and lecturer. */
+const HOUR_HEIGHT = 120;
+const DASH = 3;
+const DASH_GAP = 4;
+const DASH_PERIOD = DASH + DASH_GAP;
+
+function heightFor(start: Date, end: Date): number {
+  return Math.max(0, (end.getTime() - start.getTime()) / 3_600_000) * HOUR_HEIGHT;
+}
 
 /**
  * One class on the rail. At the accessibility text sizes the times move above the content
  * instead of beside it, so the title keeps the full width.
  */
-export function RailRow({ start, end, stop, position, children }: {
+export function RailRow({ start, end, stop, position, divider = false, children }: {
   start: Date;
   end: Date;
   stop: RailStop;
   position: RailPosition;
+  /** A hairline above, where this class follows straight on from another. */
+  divider?: boolean;
   children: ReactNode;
 }) {
   const theme = useTheme();
@@ -52,7 +67,13 @@ export function RailRow({ start, end, stop, position, children }: {
   const stopY = Space.m + STOP_CENTRE;
 
   return (
-    <View style={styles.row}>
+    <View
+      style={[
+        styles.row,
+        { minHeight: heightFor(start, end) },
+        divider && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator },
+      ]}
+    >
       {/* The line through the row, and the stop on it. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <View
@@ -90,23 +111,27 @@ export function RailRow({ start, end, stop, position, children }: {
   );
 }
 
-/** Free time between two classes: the rail carries on, dashed, with nothing on it. */
+/**
+ * Free time between two classes: the rail carries on, dashed, over a darker band that runs
+ * the full width of the screen, so free time and class time can be told apart at a glance.
+ */
 export function RailGap({ start, end, label }: { start: Date; end: Date; label: string }) {
   const theme = useTheme();
   const stacked = useLargeText();
   const railX = (stacked ? 0 : GUTTER) + COLUMN / 2;
+  const height = heightFor(start, end);
   return (
     <View
-      style={styles.gap}
+      style={[styles.gap, { height, backgroundColor: theme.band }]}
       accessible
       accessibilityLabel={`${label}, ${formatTime(start)} to ${formatTime(end)}`}
     >
-      <View pointerEvents="none" style={[styles.dashes, { left: railX - LINE / 2 }]}>
-        {Array.from({ length: 30 }, (_, i) => (
+      <View pointerEvents="none" style={[styles.dashes, { left: Space.l + railX - LINE / 2 }]}>
+        {Array.from({ length: Math.ceil(height / DASH_PERIOD) }, (_, i) => (
           <View key={i} style={[styles.dash, { backgroundColor: theme.rail }]} />
         ))}
       </View>
-      <View style={{ width: (stacked ? 0 : GUTTER) + COLUMN }} />
+      <View style={{ width: Space.l + (stacked ? 0 : GUTTER) + COLUMN }} />
       <Txt type="footnote" color={theme.inkTertiary} style={styles.content}>{label}</Txt>
     </View>
   );
@@ -140,8 +165,9 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: Space.xs },
   stackedTimes: { flexDirection: 'row', alignItems: 'baseline', gap: Space.s },
   line: { position: 'absolute', width: LINE },
-  gap: { flexDirection: 'row', alignItems: 'center', paddingVertical: Space.l, paddingRight: Space.l, overflow: 'hidden' },
+  // Out past the day's left inset, so the band reaches the screen edge.
+  gap: { flexDirection: 'row', alignItems: 'center', marginLeft: -Space.l, paddingRight: Space.l, overflow: 'hidden' },
   dashes: { position: 'absolute', top: 0, bottom: 0, width: LINE, overflow: 'hidden' },
-  dash: { width: LINE, height: 3, marginBottom: 4 },
+  dash: { width: LINE, height: DASH, marginBottom: DASH_GAP },
   halo: { borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
 });
