@@ -22,6 +22,8 @@ export interface Palette {
   surface: string;
   /** One step up from a surface — sheets, a pressed row, a secondary button. */
   raised: string;
+  /** A step darker than `canvas`: free time on the day view. */
+  band: string;
   /** Hairlines between rows and on the week grid. */
   separator: string;
   /** The line down the day view. */
@@ -59,6 +61,7 @@ export const light: Palette = {
   canvas: '#EEE8D5',
   surface: '#FDF6E3',
   raised: '#DDD6C1',
+  band: '#E5DECA',
   separator: '#D3CBB7',
   rail: '#93A1A1',
   ink: '#073642',
@@ -76,6 +79,7 @@ export const dark: Palette = {
   canvas: '#212129',
   surface: '#323949',
   raised: '#3D3E51',
+  band: '#18181E',
   separator: '#40445A',
   rail: '#4C5265',
   ink: '#ECEDF3',

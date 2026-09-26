@@ -66,6 +66,7 @@ export function DayPage({
                 event={slot.event}
                 stop={stopFor(slot.event)}
                 index={i}
+                followsClass={slots[i - 1]?.kind === 'session'}
                 count={slots.length}
                 highlight={highlight(slot.event)}
                 isClashing={clashingIDs.has(slot.event.id)}
@@ -107,12 +108,14 @@ function DayHeading({ day, slots, now }: { day: Date | null; slots: DaySlot[]; n
 
 /** A class on the rail: tap to open its page. */
 function ClassStop({
-  event, stop, index, count, highlight, isClashing, isSkipped, now, onSelect,
+  event, stop, index, count, followsClass, highlight, isClashing, isSkipped, now, onSelect,
 }: {
   event: TimetableEvent;
   stop: RailStop;
   index: number;
   count: number;
+  /** Straight after another class, with no free time between to separate them. */
+  followsClass: boolean;
   highlight: ClassHighlight | null;
   isClashing: boolean;
   /** Marked "I won't attend". Dimmed rather than hidden — it's still on. */
@@ -158,7 +161,7 @@ function ClassStop({
       accessibilityHint="Opens the class"
       style={({ pressed }) => pressed && { backgroundColor: theme.raised }}
     >
-      <RailRow start={event.start} end={event.end} stop={stop} position={railPosition(index, count)}>
+      <RailRow start={event.start} end={event.end} stop={stop} position={railPosition(index, count)} divider={followsClass}>
         <View style={{ gap: Space.xxs, opacity: isSkipped ? 0.45 : stop.kind === 'past' ? 0.6 : 1 }}>
           {highlight ? (
             <Label icon={highlightIcon(highlight)} text={highlightReason(highlight)} type="status" color={highlightTint(highlight, theme)} />
