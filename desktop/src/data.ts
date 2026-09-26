@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import engineeringYear1Json from "../../ios/DCUTimetable/Resources/EngineeringYear1.json";
-import engineeringLabRotationJson from "../../ios/DCUTimetable/Resources/EngineeringLabRotation.json";
+import engineeringYear1Json from "../../mobile/assets/data/EngineeringYear1.json";
+import engineeringLabRotationJson from "../../mobile/assets/data/EngineeringLabRotation.json";
 import type {
   AccountProfile,
   ActivityCode,

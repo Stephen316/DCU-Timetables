@@ -1,0 +1,119 @@
+{
+  "expo": {
+    "name": "DCU Timetable",
+    "slug": "dcu-timetable",
+    "owner": "s.harcourt",
+    "scheme": "dcutimetable",
+    "version": "1.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c4f17bdd-0f1c-4ca7-960b-c7a034fbf0b9"
+    },
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.stephenh.dcutimetable",
+      "supportsTablet": false,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "CFBundleDisplayName": "DCU Timetable",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.stephenh.dcutimetable"
+        ]
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeName",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeUserID",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherUserContent",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          }
+        ],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "package": "com.stephenh.dcutimetable",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Reads the barcode on your student card to fill in your student number. The photo stays on your phone.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "@bacons/apple-targets",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "17.0"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c4f17bdd-0f1c-4ca7-960b-c7a034fbf0b9"
+      }
+    }
+  }
+}

@@ -27,7 +27,7 @@ Measured against the Engineering Year 1 list (`local-data/`, 207 students):
 - Scoping to the selected course shrinks the space further — the match runs against ~207
   rows, not the whole university.
 
-`DCUEmail` (`ios/DCUTimetable/Core/Models/DCUEmail.swift`) already derives this: it splits
+`parseDCUEmail` (`mobile/src/core/identity.ts`) already derives this: it splits
 the local part on dots, strips the trailing disambiguation digit, and exposes `givenName`,
 `familyName` and `displayName`.
 

@@ -4,9 +4,22 @@
     {
       "name": "console",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3100,
       "cwd": "web"
+    },
+    {
+      "name": "mobile",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "web"
+      ],
+      "port": 8081,
+      "cwd": "mobile"
     }
   ]
 }

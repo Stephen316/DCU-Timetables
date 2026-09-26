@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 
 // DCU's public MyTimetable API — the one the app reads — trimmed to what the console needs:
 // the teaching weeks, and one programme's classes for a week. A port of
-// ios/DCUTimetable/Data/DCUOpenAPI/DCUAPIClient.swift; docs/API.md has the endpoint notes.
+// mobile/src/data/dcuApi.ts; docs/API.md has the endpoint notes.
 //
 // Everything here is public, anonymous, and has no personal data in it.
 //
@@ -144,7 +144,7 @@ type EventDTO = {
 };
 
 /// "EEG1002[1]OC/L1/01 <2, 4, 6>" → "EEG1002[1]OC/L1/01". The same rule the app applies
-/// (ActivityCode.swift), so a code picked here matches a class on the phone.
+/// (mobile/src/core/activityCode.ts), so a code picked here matches a class on the phone.
 export function activityCode(name: string): string {
   return name.trim().split(/\s+/)[0].replace(/,+$/, "");
 }

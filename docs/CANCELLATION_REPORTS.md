@@ -20,7 +20,7 @@ Reporting is a toggle — a mistaken report can be withdrawn.
 ## Privacy
 
 Reports carry **no name, account or student number** — only a random UUID generated on first
-launch and kept in `UserDefaults`. It exists solely to stop one device flagging a class alone.
+launch and kept in the app's device storage. It exists solely to stop one device flagging a class alone.
 
 ## Supabase setup (one-off)
 
@@ -41,15 +41,11 @@ create policy "insert" on cancellation_reports for insert with check (true);
 create policy "delete" on cancellation_reports for delete using (true);
 ```
 
-3. Add `ios/DCUTimetable/Resources/supabase.local.json` (git-ignored by `*.local.json`):
+3. Give the app the project's URL and anon key as `EXPO_PUBLIC_SUPABASE_URL` and
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY` — in `mobile/.env.local` (git-ignored) for local runs, and
+   as EAS environment variables for cloud builds (see the README).
 
-```json
-{ "url": "https://YOUR-PROJECT.supabase.co", "anonKey": "YOUR-ANON-KEY" }
-```
-
-4. `xcodegen generate` so the file enters the target.
-
-Without that file the app falls back to `LocalCancellationStore` — reports stay on the
+Without them the app falls back to `LocalCancellationStore` — reports stay on the
 device, so nothing ever reaches 3. That's deliberate: better honest and inert than faking a
 crowd.
 

@@ -8,7 +8,7 @@ because they carry very different weight:
 | --- | --- | --- |
 | The university | time, date, room, delivery, module, activity code, weeks, staff | DCU's timetable API |
 | Other students | cancellation reports, deadlines | Supabase, shared |
-| This student | "I won't attend this" | `UserDefaults`, device-only |
+| This student | "I won't attend this" | on-device storage only |
 
 ## Deadlines
 
@@ -19,14 +19,14 @@ buckets by module code (falling back to the raw activity code when there isn't o
 - Anyone taking the module can add one: a title, a type, and a due date.
 - The list is soonest-first and **hides anything already past** — a board of last term's
   deadlines is noise.
-- A student can delete their own (swipe), identified by the same anonymous id the
+- A student can delete their own (the Delete button on their row), identified by the same anonymous id the
   cancellation reports use. Nobody is named anywhere.
 
 ## "I won't attend this"
 
 Deliberately **never uploaded**. Unlike a cancellation this is a private choice about one
 person's day, and syncing it would turn the app into an attendance record. It's a set of
-event keys in one `@AppStorage` blob, so every view updates the moment it changes.
+event keys in one saved value (`skippedEvents`), so every view updates the moment it changes.
 
 ## Lecturer photos
 
@@ -35,7 +35,7 @@ one directory or API, so no photo URL can be derived from a name. The page shows
 a coloured circle by default, which is honest rather than a broken image.
 
 A photo appears for any member of staff listed in an optional bundled
-`ios/DCUTimetable/Resources/lecturers.json`:
+`mobile/assets/data/lecturers.json` (committed as an empty list):
 
 ```json
 [
@@ -106,14 +106,14 @@ create policy "delete own" on cancellation_reports
   for delete using (auth.uid()::text = reporter_id);
 ```
 
-Without `supabase.local.json` the app falls back to `LocalDeadlineStore`: deadlines stay on
+Without the Supabase environment variables (see the README) the app falls back to `LocalDeadlineStore`: deadlines stay on
 the device, so you see your own and nobody else's. That's the honest failure, not a
 simulated crowd.
 
 ## How ownership is enforced
 
 Sign-in now keeps the student's Supabase **access and refresh tokens in the Keychain**
-(`SupabaseSession`), and every write to PostgREST is sent as that student rather than as the
+(`SupabaseSession`, through `expo-secure-store`), and every write to PostgREST is sent as that student rather than as the
 anonymous key. `auth.uid()` is therefore a real identity the database can check, which is
 what makes `delete own` above mean something — the app hiding the delete button is no longer
 the only thing standing in the way.
@@ -122,7 +122,7 @@ the only thing standing in the way.
   device.
 - The access token is refreshed automatically a minute before it expires; if the refresh
   token is dead the session is cleared and the student signs in again.
-- Nothing is stored in `UserDefaults` but the user id and address, neither of which is a
+- Nothing is stored in plain device storage but the user id and address, neither of which is a
   credential.
 - `reporterID` is the Supabase user id, so one vote per **account** rather than per install.
 

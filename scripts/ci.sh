@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 # The checks CI runs, runnable locally so a push is never the first time they run.
-# .github/workflows/web.yml and ios.yml call this same file, so a green run here means
+# .github/workflows/web.yml and mobile.yml call this same file, so a green run here means
 # the same commands pass there.
 #
-#   scripts/ci.sh          # web, then ios
+#   scripts/ci.sh          # web, then mobile
 #   scripts/ci.sh web      # production build of the console (type-checks every file)
-#   scripts/ci.sh ios      # xcodegen, then build and run the unit tests on a simulator
-#
-# SIMULATOR=<device name> overrides the iPhone the tests run on.
+#   scripts/ci.sh mobile   # the Expo app: type-check, lint, unit tests, and a full bundle
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,25 +23,23 @@ web() {
   npm run build
 }
 
-ios() {
-  cd "$root"
+mobile() {
   mkdir -p "$logs"
-  xcodegen generate --quiet
-  # The full log runs to tens of thousands of lines, so it goes to a file and only the
-  # verdict is printed. Status is taken from xcodebuild itself, not from a pipe.
-  local status=0
-  xcodebuild -project DCUTimetable.xcodeproj -scheme DCUTimetable \
-    -destination "platform=iOS Simulator,name=${SIMULATOR:-iPhone 17}" \
-    -derivedDataPath build/DerivedData \
-    test > "$logs/ios-test.log" 2>&1 || status=$?
-  grep -E "error:|✘|Test run with|\*\* (BUILD|TEST) (SUCCEEDED|FAILED)" "$logs/ios-test.log" | tail -40 || true
-  [ "$status" -eq 0 ] || echo "ios: xcodebuild exited $status — full log in build/ci/ios-test.log" >&2
-  return "$status"
+  cd "$root/mobile"
+  [ -d node_modules ] || npm ci
+  npx tsc --noEmit
+  npx eslint .
+  npx jest --ci
+  # Bundles every screen, the way a device build would: a missing module or a bad import
+  # fails here rather than in EAS. Offline, so it never needs Expo's servers.
+  EXPO_OFFLINE=1 npx expo export --platform web --output-dir "$logs/mobile-web" > "$logs/mobile-export.log" 2>&1 \
+    || { tail -40 "$logs/mobile-export.log" >&2; return 1; }
+  echo "mobile: bundle OK"
 }
 
 case "${1:-all}" in
   web) web ;;
-  ios) ios ;;
-  all) web; ios ;;
-  *) echo "usage: scripts/ci.sh [web|ios|all]" >&2; exit 2 ;;
+  mobile) mobile ;;
+  all) web; mobile ;;
+  *) echo "usage: scripts/ci.sh [web|mobile|all]" >&2; exit 2 ;;
 esac

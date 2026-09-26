@@ -1,7 +1,7 @@
 # DCU Timetable for Windows and macOS
 
 The student-facing React/Vite frontend runs inside Tauri 2. It lives alongside, rather
-than replacing, the SwiftUI iOS app and the Next.js admin console. The DCU timetable is
+than replacing, the React Native iPhone app and the Next.js admin console. The DCU timetable is
 public; student accounts and shared features use the **same Supabase project and RLS** as
 the iOS app. No admin/service-role key belongs in this frontend.
 
@@ -14,7 +14,7 @@ then:
 ```sh
 cd desktop
 cp .env.example .env.local
-# Fill VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY with the public iOS project's values.
+# Fill VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY with the public mobile project's values.
 npm ci
 npm run tauri dev
 ```
@@ -35,5 +35,5 @@ The Supabase Auth project's URL configuration must allow desktop confirmation li
 return to a web page where the student can then sign in. Do not place a service-role key,
 admin credentials, or student records in `.env.local` or the app bundle.
 
-The bundled engineering module/rotation files in `ios/DCUTimetable/Resources/` are
-shared with the desktop build, so changes to the iOS fixtures also affect desktop.
+The bundled engineering module/rotation files in `mobile/assets/data/` are
+shared with the desktop build, so changes to the mobile fixtures also affect desktop.

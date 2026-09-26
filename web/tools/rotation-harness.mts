@@ -32,7 +32,7 @@ const web = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const pdfPath = process.argv[2];
 if (!pdfPath) throw new Error('usage: npx tsx tools/rotation-harness.mts "<path to pdf>"');
-const truthPath = join(web, "..", "ios/DCUTimetable/Resources/EngineeringLabRotation.json");
+const truthPath = join(web, "..", "mobile/assets/data/EngineeringLabRotation.json");
 const truth: RotationSession[] = JSON.parse(readFileSync(truthPath, "utf8")).sessions;
 
 const env = readFileSync(join(web, ".env.local"), "utf8");

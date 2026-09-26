@@ -118,7 +118,7 @@ export function Editor(props: Props) {
 }
 
 // ---------------------------------------------------------------------------
-// The grid — days across, hours down, as the app draws it (WeekCalendarView.swift).
+// The grid — days across, hours down, as the app draws it (mobile/src/features/week/WeekGrid.tsx).
 
 function WeekGrid({ week, blocks, selected, dimmed, onSelect }: {
   week: Week; blocks: Block[]; selected: string | null; dimmed: boolean; onSelect: (id: string) => void;
@@ -222,7 +222,7 @@ function reaches(target: string | null, viewer: Viewer): boolean {
   return target === g || (g.includes(".") && target === g.split(".")[0]);
 }
 
-/// Side-by-side columns for classes that overlap, as WeekGrid.swift places them.
+/// Side-by-side columns for classes that overlap, as the app's WeekGrid places them (mobile/src/core/schedule.ts).
 function place(blocks: Block[]) {
   const sorted = [...blocks].sort((a, b) => a.start === b.start ? a.end.localeCompare(b.end) : a.start.localeCompare(b.start));
   const out: { block: Block; column: number; columns: number }[] = [];
@@ -551,7 +551,7 @@ function findingsOf(changes: TimetableChange[]): Finding[] {
 // ---------------------------------------------------------------------------
 
 /// The kind of class, from the letter DCU puts in the code (…OC/P1/02 is a practical) —
-/// the same letters ActivityCode.swift reads. The API's own event type says "On Campus"
+/// the same letters the app's activity-code parser reads (mobile/src/core/activityCode.ts). The API's own event type says "On Campus"
 /// for most of them, which isn't a kind.
 function kindLabel(code: string): string {
   const letter = code.split("/")[1]?.[0]?.toUpperCase();

@@ -1,0 +1,42 @@
+# Type-checks, lints, tests and bundles the Expo app, through the same script as a local
+# run: scripts/ci.sh mobile. Needs no secrets: without Supabase config the app builds with
+# its on-device fallbacks, and the bundle never calls the network.
+name: Mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - "scripts/ci.sh"
+      - ".github/workflows/mobile.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - "scripts/ci.sh"
+      - ".github/workflows/mobile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_NO_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      - run: scripts/ci.sh mobile

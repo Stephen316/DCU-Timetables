@@ -42,7 +42,7 @@ display). Getting these mixed up shifts labs by an hour — see `ProfileTimetabl
 ## Data — two files, two very different privacy levels
 
 ### 1. Rotation (bundled, no personal data)
-`ios/DCUTimetable/Resources/EngineeringLabRotation.json` — group letters × week × module ×
+`mobile/assets/data/EngineeringLabRotation.json` — group letters × week × module ×
 activity. Committed and shipped. Regenerate from the School's rotation PDF:
 
 ```

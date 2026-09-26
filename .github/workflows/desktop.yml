@@ -2,9 +2,9 @@ name: Desktop
 on:
   push:
     branches: [main]
-    paths: ["desktop/**", ".github/workflows/desktop.yml", "ios/DCUTimetable/Resources/Engineering*.json"]
+    paths: ["desktop/**", ".github/workflows/desktop.yml", "mobile/assets/data/Engineering*.json"]
   pull_request:
-    paths: ["desktop/**", ".github/workflows/desktop.yml", "ios/DCUTimetable/Resources/Engineering*.json"]
+    paths: ["desktop/**", ".github/workflows/desktop.yml", "mobile/assets/data/Engineering*.json"]
 
 permissions:
   contents: read
