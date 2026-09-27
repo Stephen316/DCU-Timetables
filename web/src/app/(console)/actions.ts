@@ -21,6 +21,32 @@ export async function verifyDeadline(id: string, status: "verified" | "rejected"
   const { error } = await supabase.rpc("verify_deadline", { deadline: id, new_status: status });
   if (error) return { error: error.message };
   revalidatePath("/review");
+  revalidatePath("/deadlines");
+  return {};
+}
+
+/// Confirm, block, unblock or remove one deadline. Confirming or blocking also closes its
+/// open reports, since either is the decision they were waiting on; removing deletes it,
+/// with its confirmations and reports, and keeps a copy in the audit log.
+export async function moderateDeadline(id: string, action: "confirm" | "block" | "unblock" | "remove") {
+  if (!(await consoleOpen())) return { error: LOCKED };
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("moderate_deadline", { p_deadline: id, p_action: action });
+  if (error) return { error: error.message };
+  revalidatePath("/review");
+  revalidatePath("/deadlines");
+  return {};
+}
+
+/// The same edit a poster makes from the app, without their limits: a blocked or past
+/// deadline can be corrected too. Moving the date or type clears the confirmations.
+export async function editDeadline(id: string, title: string, kind: string, due: string) {
+  if (!(await consoleOpen())) return { error: LOCKED };
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("edit_deadline", { p_deadline: id, p_title: title, p_kind: kind, p_due: due });
+  if (error) return { error: error.message };
+  revalidatePath("/review");
+  revalidatePath("/deadlines");
   return {};
 }
 
@@ -32,6 +58,7 @@ export async function resolveReports(id: string, action: "dismiss" | "remove") {
   const { error } = await supabase.rpc("resolve_deadline_reports", { p_deadline: id, p_action: action });
   if (error) return { error: error.message };
   revalidatePath("/review");
+  revalidatePath("/deadlines");
   return {};
 }
 

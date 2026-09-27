@@ -1,5 +1,6 @@
 import {
-  Deadline, deadlineBelongsTo, DeadlineReportReason, DeadlineSchedule, DeadlineSection, DeadlineStanding,
+  Deadline, deadlineBelongsTo, DeadlineKind, DeadlineReportReason, DeadlineRules, DeadlineSchedule, DeadlineSection,
+  DeadlineStanding,
 } from '../../core/deadline';
 import { errorMessage } from '../../data/rest';
 import { Services } from '../../data/services';
@@ -86,6 +87,28 @@ export class DeadlinesModel extends Observable {
       if (this.standing(deadline).confirmedByMe) await this.services.deadlines.unconfirm(deadline.id, this.reporterID);
       else await this.services.deadlines.confirm(deadline.id, this.reporterID);
     }, "Couldn't send that.");
+  }
+
+  /** "The details are wrong", or taking that back. The server withdraws a confirmation it replaces. */
+  toggleDispute(deadline: Deadline): Promise<void> {
+    if (this.isMine(deadline)) return Promise.resolve();
+    return this.act(async () => {
+      if (this.standing(deadline).disputedByMe) await this.services.deadlines.withdrawReport(deadline.id);
+      else await this.services.deadlines.report(deadline.id, 'wrong');
+    }, "Couldn't send that.");
+  }
+
+  async edit(deadline: Deadline, title: string, kind: DeadlineKind, due: Date): Promise<void> {
+    if (!this.isMine(deadline) || !DeadlineRules.isValid(title, due)) return;
+    await this.act(() => this.services.deadlines.edit(deadline.id, { title, kind, due }), "Couldn't save that change.");
+  }
+
+  /** Only this student sees the name. */
+  async rename(deadline: Deadline, label: string): Promise<void> {
+    await this.act(
+      () => this.services.deadlines.setLabel(deadline.id, DeadlineRules.labelToSave(deadline, label)),
+      "Couldn't rename that.",
+    );
   }
 
   async remove(deadline: Deadline): Promise<void> {

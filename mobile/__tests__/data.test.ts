@@ -588,6 +588,19 @@ describe('Device storage', () => {
     await store.withdraw(d.id, 'me');
     expect(await store.deadlinesForModule('M')).toHaveLength(0);
   });
+
+  test('the local deadline store keeps edits and names across a reload', async () => {
+    const prefs = newPrefs();
+    const due = new Date(Date.now() + 86_400_000);
+    const d = makeDeadline({ moduleKey: 'M', title: 'T', due, submitterID: 'me' });
+    await new LocalDeadlineStore(prefs).submit(d);
+    const later = new Date(due.getTime() + 3600_000);
+    await new LocalDeadlineStore(prefs).edit(d.id, { title: 'T2', kind: 'exam', due: later });
+    await new LocalDeadlineStore(prefs).setLabel(d.id, 'mine');
+    const [back] = await new LocalDeadlineStore(prefs).deadlinesForModule('M');
+    expect(back).toMatchObject({ title: 'T2', kind: 'exam', due: later, myLabel: 'mine', status: 'pending' });
+    expect(back.editedAt).toBeInstanceOf(Date);
+  });
 });
 
 describe('Widget snapshot', () => {
@@ -631,6 +644,11 @@ describe('Widget snapshot', () => {
     expect(snap.deadlines[0].isSatInClass).toBe(true);
     expect(snap.deadlines[0].symbol).toBe(deadlineSFSymbol('quiz'));
     expect(snap.deadlines[0].symbol).toBe('checklist');
+  });
+
+  test('a widget shows your own name for a deadline', () => {
+    const named = makeDeadline({ id: 'n', moduleKey: 'CA106', title: 'Lab n', due: t(25, 12), submitterID: 'someone', myLabel: 'the long one' });
+    expect(WidgetSnapshotPublisher.snapshot([], [named], clear, t(23, 8)).deadlines[0].title).toBe('the long one');
   });
 
   test('dates are whole-second ISO strings, which Swift decodes', () => {

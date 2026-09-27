@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import { CancellationStatus } from '../core/cancellation';
-import { Deadline, DeadlineKind, DeadlineRules, isSatInClass } from '../core/deadline';
+import { Deadline, DeadlineKind, DeadlineRules, displayTitle, isSatInClass } from '../core/deadline';
 import { parsedLocations } from '../core/roomLocation';
 import { isoSeconds } from '../core/time';
 import { TimetableEvent, moduleCodeOf, titleOf } from '../core/timetableEvent';
@@ -86,7 +86,7 @@ export const WidgetSnapshotPublisher = {
   widgetDeadline(deadline: Deadline): WidgetDeadline {
     return {
       id: deadline.id,
-      title: deadline.title,
+      title: displayTitle(deadline),
       code: deadline.moduleKey,
       due: isoSeconds(deadline.due),
       symbol: deadlineSFSymbol(deadline.kind),

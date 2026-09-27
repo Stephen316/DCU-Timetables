@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 import { CANCELLATION_NET_THRESHOLD, CANCELLATION_THRESHOLD, ReportStance, VERDICT_STATES, VerdictState } from '../../core/cancellation';
-import { CONFIRM_THRESHOLD, Deadline, deadlineKindLabel, isSatInClass } from '../../core/deadline';
+import { CONFIRM_THRESHOLD, Deadline, deadlineKindLabel, displayTitle, isSatInClass } from '../../core/deadline';
 import { Attendance, Lecturer, lecturerDisplayName, lecturerInitials } from '../../core/misc';
 import { locationDisplay } from '../../core/roomLocation';
 import { formatComplete, formatTime, formatWeekdayDayMonth } from '../../core/time';
@@ -71,7 +71,7 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
                   type="status"
                   color={deadlineTint(d.kind, theme)}
                 />
-                <Txt type="headline">{d.title}</Txt>
+                <Txt type="headline">{displayTitle(d)}</Txt>
                 <Txt type="caption" color={theme.inkSecondary}>{formatComplete(d.due)}</Txt>
               </Row>
             ))}
@@ -168,7 +168,7 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
 
         <Section
           header={`All ${model.moduleKey} dates`}
-          footer={`Shared with everyone taking this module. Confirm the ones you know are right — a deadline is flagged as confirmed once ${CONFIRM_THRESHOLD} people have vouched for it. You can only remove your own.`}
+          footer={`Shared with everyone taking this module. Confirm the ones you know are right — a deadline is flagged as confirmed once ${CONFIRM_THRESHOLD} people have vouched for it and more say it's right than wrong. You can only edit or remove your own, but you can give any of them a name only you see.`}
         >
           {model.isLoading && model.deadlines.length === 0 ? (
             <Row><ActivityIndicator color={theme.inkSecondary} /></Row>
@@ -184,6 +184,9 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
                 variant="module"
                 actions={{
                   onConfirm: () => void model.toggleConfirmation(d),
+                  onDispute: () => void model.toggleDispute(d),
+                  onEdit: (title, kind, due) => void model.editDeadline(d, title, kind, due),
+                  onRename: (label) => void model.renameDeadline(d, label),
                   onDelete: () => void model.removeDeadline(d),
                   onReport: (reason) => void model.reportDeadline(d, reason),
                   onHideAuthor: () => void model.hideAuthor(d),

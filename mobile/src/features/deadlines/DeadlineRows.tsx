@@ -2,18 +2,26 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
-  Deadline, deadlineCountdown, DEADLINE_KINDS, DEADLINE_REPORT_REASONS, DeadlineKind, deadlineKindLabel,
-  DeadlineReportReason, DeadlineRules, DeadlineStanding, reportReasonLabel,
+  ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
+  DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, displayTitle, LABEL_LIMIT, reportReasonLabel,
+  TITLE_LIMIT,
 } from '../../core/deadline';
 import { addDays, formatAbbreviated, formatWeekdayDayMonthTime, localDateString, formatTime } from '../../core/time';
 import {
-  ActionSheet, AdaptiveStack, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt, useLargeText,
+  ActionRow, ActionSheet, AdaptiveStack, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
+  useLargeText,
 } from '../../ui/components';
 import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
 import { Space, useTheme } from '../../ui/theme';
 
 export interface DeadlineActions {
   onConfirm: () => void;
+  /** "The details are wrong", or taking that back. */
+  onDispute: () => void;
+  /** The poster changing their own, for everyone. */
+  onEdit: (title: string, kind: DeadlineKind, due: Date) => void;
+  /** This student's own name for it. Blank goes back to the shared title. */
+  onRename: (label: string) => void;
   onDelete: () => void;
   onReport: (reason: DeadlineReportReason) => void;
   onHideAuthor: () => void;
@@ -28,7 +36,11 @@ export function DeadlineRow({
 }: { deadline: Deadline; standing: DeadlineStanding; isMine: boolean; variant: 'module' | 'schedule'; actions: DeadlineActions }) {
   const theme = useTheme();
   const large = useLargeText();
+  const [sheet, setSheet] = useState<'edit' | 'rename' | null>(null);
   const iconColor = variant === 'schedule' ? deadlineTint(deadline.kind, theme) : theme.inkSecondary;
+  const trust = deadlineTrust(deadline, standing);
+  const edited = deadline.editedAt ? ' · edited' : '';
+  const dispute = standing.disputeSummary;
   return (
     <Row>
       <View style={styles.rowBody}>
@@ -37,14 +49,16 @@ export function DeadlineRow({
             <Icon name={deadlineKindIcon(deadline.kind)} color={iconColor} />
           </View>
           <View style={styles.text}>
-            <Txt type={variant === 'schedule' ? 'headline' : 'body'}>{deadline.title}</Txt>
+            <Txt type={variant === 'schedule' ? 'headline' : 'body'}>{displayTitle(deadline)}</Txt>
+            {/* Your own name for it would otherwise hide what classmates are talking about. */}
+            {deadline.myLabel ? <Txt type="caption" color={theme.inkTertiary}>Shared as “{deadline.title}”</Txt> : null}
             {variant === 'schedule' ? (
               <>
                 <Txt type="caption" color={theme.inkSecondary}>{deadline.moduleKey} {deadlineKindLabel(deadline.kind).toLowerCase()}</Txt>
-                <Txt type="caption" color={theme.inkSecondary}>{formatWeekdayDayMonthTime(deadline.due)}</Txt>
+                <Txt type="caption" color={theme.inkSecondary}>{formatWeekdayDayMonthTime(deadline.due)}{edited}</Txt>
               </>
             ) : (
-              <Txt type="caption" color={theme.inkSecondary}>{deadlineKindLabel(deadline.kind)}, due {formatAbbreviated(deadline.due)}</Txt>
+              <Txt type="caption" color={theme.inkSecondary}>{deadlineKindLabel(deadline.kind)}, due {formatAbbreviated(deadline.due)}{edited}</Txt>
             )}
           </View>
           <Txt type="caption" color={theme.inkSecondary} style={styles.medium}>{deadlineCountdown(deadline.due)}</Txt>
@@ -52,39 +66,77 @@ export function DeadlineRow({
 
         {/* One unverified person's date is worth less than three people's, and the row says which. */}
         <AdaptiveStack style={large ? undefined : styles.indent}>
-          <Label
-            icon={standing.isConfirmed ? 'confirmed' : 'unconfirmed'}
-            text={standing.summary}
-            type="caption2"
-            color={standing.isConfirmed ? theme.tint.confirmed : theme.inkSecondary}
-            style={styles.text}
-          />
+          <View style={styles.text}>
+            {trust === 'verified' ? (
+              <Label icon="confirmed" text="Confirmed by a moderator" type="caption2" color={theme.tint.confirmed} />
+            ) : (
+              <Label
+                icon={trust === 'confirmed' ? 'confirmed' : 'unconfirmed'}
+                text={standing.summary}
+                type="caption2"
+                color={trust === 'confirmed' ? theme.tint.confirmed : theme.inkSecondary}
+              />
+            )}
+            {dispute ? (
+              <Label icon="warning" text={dispute} type="caption2" color={trust === 'disputed' ? theme.tint.off : theme.inkSecondary} />
+            ) : null}
+          </View>
           {isMine ? (
             // Swipe-to-delete on iOS; a visible button here, so it can be found without knowing to swipe.
-            <InlineAction title="Delete" tint={theme.destructive} onPress={actions.onDelete} />
+            <View style={styles.actions}>
+              <InlineAction title="Edit" onPress={() => setSheet('edit')} />
+              <InlineAction title="Delete" tint={theme.destructive} onPress={actions.onDelete} />
+            </View>
           ) : (
             <View style={styles.actions}>
-              <InlineAction
-                title={standing.confirmedByMe ? 'Confirmed' : 'This is right'}
-                tint={standing.confirmedByMe ? theme.tint.confirmed : theme.accent}
-                onPress={actions.onConfirm}
+              {standing.disputedByMe ? (
+                // Tapping takes it back, the way "Confirmed" does.
+                <InlineAction title="You said it's wrong" tint={theme.tint.off} onPress={actions.onDispute} />
+              ) : (
+                <InlineAction
+                  title={standing.confirmedByMe ? 'Confirmed' : 'This is right'}
+                  tint={standing.confirmedByMe ? theme.tint.confirmed : theme.accent}
+                  onPress={actions.onConfirm}
+                />
+              )}
+              <MoreMenu
+                deadline={deadline}
+                standing={standing}
+                actions={actions}
+                onRename={() => setSheet('rename')}
               />
-              <ModerationMenu deadline={deadline} onReport={actions.onReport} onHideAuthor={actions.onHideAuthor} />
             </View>
           )}
         </AdaptiveStack>
       </View>
+
+      {isMine ? (
+        <DeadlineForm
+          visible={sheet === 'edit'}
+          editing={{ deadline, standing }}
+          onClose={() => setSheet(null)}
+          onSubmit={actions.onEdit}
+        />
+      ) : (
+        <RenameSheet
+          visible={sheet === 'rename'}
+          deadline={deadline}
+          onClose={() => setSheet(null)}
+          onSave={actions.onRename}
+        />
+      )}
     </Row>
   );
 }
 
 /**
- * "…" on someone else's deadline: report it, or hide everything its author posts. Neither
- * shows who posted it; the server works that out.
+ * "…" on someone else's deadline: say it's wrong (or right after all), give it your own
+ * name, report it, or hide everything its author posts. None of it shows who posted it;
+ * the server works that out.
  */
-function ModerationMenu({
-  deadline, onReport, onHideAuthor,
-}: { deadline: Deadline; onReport: (reason: DeadlineReportReason) => void; onHideAuthor: () => void }) {
+function MoreMenu({
+  deadline, standing, actions, onRename,
+}: { deadline: Deadline; standing: DeadlineStanding; actions: DeadlineActions; onRename: () => void }) {
   const theme = useTheme();
   const [mode, setMode] = useState<'menu' | 'reasons' | 'hide' | null>(null);
   return (
@@ -92,7 +144,7 @@ function ModerationMenu({
       <Pressable
         onPress={() => setMode('menu')}
         accessibilityRole="button"
-        accessibilityLabel={`More for ${deadline.title}`}
+        accessibilityLabel={`More for ${displayTitle(deadline)}`}
         style={styles.moreButton}
       >
         <Icon name="more" size={20} color={theme.inkSecondary} />
@@ -101,6 +153,10 @@ function ModerationMenu({
         visible={mode === 'menu'}
         onClose={() => setMode(null)}
         actions={[
+          standing.disputedByMe
+            ? { label: "It's right after all", icon: 'confirmed', onPress: actions.onConfirm }
+            : { label: 'The date or details are wrong', icon: 'warning', onPress: actions.onDispute },
+          { label: deadline.myLabel ? 'Rename for me…' : 'Give it my own name…', icon: 'edit', onPress: onRename },
           { label: 'Report…', icon: 'flag', onPress: () => setMode('reasons') },
           { label: 'Hide posts from this person', icon: 'hide', destructive: true, onPress: () => setMode('hide') },
         ]}
@@ -109,64 +165,128 @@ function ModerationMenu({
         visible={mode === 'reasons'}
         onClose={() => setMode(null)}
         title="Why are you reporting this?"
-        message="It's hidden from you straight away, and an administrator reviews it within a day. The person who posted it isn't told who reported it."
-        actions={DEADLINE_REPORT_REASONS.map((reason) => ({ label: reportReasonLabel(reason), onPress: () => onReport(reason) }))}
+        message="It's hidden from you straight away, and an administrator reviews it within a day. The person who posted it isn't told who reported it. If only the date is wrong, say so from the menu instead — it stays up with a warning for everyone."
+        actions={ABUSE_REPORT_REASONS.map((reason) => ({ label: reportReasonLabel(reason), onPress: () => actions.onReport(reason) }))}
       />
       <ActionSheet
         visible={mode === 'hide'}
         onClose={() => setMode(null)}
         title="Hide posts from this person?"
         message="You won't see any deadline they share. You can show everyone again from Account."
-        actions={[{ label: 'Hide their posts', destructive: true, onPress: onHideAuthor }]}
+        actions={[{ label: 'Hide their posts', destructive: true, onPress: actions.onHideAuthor }]}
       />
     </>
   );
 }
 
-/** Adding a deadline. Kept to three fields — a title, what it is, and when it's due. */
-export function DeadlineForm({
-  visible, onClose, onSubmit,
-}: { visible: boolean; onClose: () => void; onSubmit: (title: string, kind: DeadlineKind, due: Date) => void }) {
+/** A name only this student sees. The shared title stays underneath it on the row. */
+function RenameSheet({
+  visible, deadline, onClose, onSave,
+}: { visible: boolean; deadline: Deadline; onClose: () => void; onSave: (label: string) => void }) {
   const theme = useTheme();
-  const [title, setTitle] = useState('');
-  const [kind, setKind] = useState<DeadlineKind>('assignment');
-  const [due, setDue] = useState(() => addDays(new Date(), 7));
-  const valid = DeadlineRules.isValid(title, due);
+  const [label, setLabel] = useState(displayTitle(deadline));
+  // Refilled each time it opens, so it starts from the name saved now.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setLabel(displayTitle(deadline));
+  }
 
-  const reset = () => {
-    setTitle('');
-    setKind('assignment');
-    setDue(addDays(new Date(), 7));
-  };
-  const close = () => {
+  const save = (value: string) => {
+    onSave(value);
     onClose();
-    reset();
   };
 
   return (
     <Sheet
       visible={visible}
-      title="Add a deadline"
-      onClose={close}
-      left={<BarButton title="Cancel" onPress={close} />}
+      title="Your name for it"
+      onClose={onClose}
+      left={<BarButton title="Cancel" onPress={onClose} />}
+      right={<BarButton title="Save" bold onPress={() => save(label)} />}
+    >
+      <ListScroll>
+        <Section footer={`Only you see this name, here and on your widgets. Everyone else still sees “${deadline.title}”.`}>
+          <Row>
+            <TextInput
+              value={label}
+              onChangeText={setLabel}
+              maxLength={LABEL_LIMIT}
+              placeholder={deadline.title}
+              placeholderTextColor={theme.inkTertiary}
+              style={[styles.input, { color: theme.ink }]}
+              accessibilityLabel="Your name for this deadline"
+              returnKeyType="done"
+              autoFocus
+              onSubmitEditing={() => save(label)}
+            />
+          </Row>
+        </Section>
+        {deadline.myLabel ? (
+          <Section>
+            <ActionRow title="Use the shared name" icon="undo" onPress={() => save('')} />
+          </Section>
+        ) : null}
+      </ListScroll>
+    </Sheet>
+  );
+}
+
+/**
+ * Adding a deadline, or the poster editing theirs. Kept to three fields — a title, what it
+ * is, and when it's due.
+ */
+export function DeadlineForm({
+  visible, onClose, onSubmit, editing,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (title: string, kind: DeadlineKind, due: Date) => void;
+  editing?: { deadline: Deadline; standing: DeadlineStanding };
+}) {
+  const theme = useTheme();
+  const initial = editing?.deadline;
+  const [title, setTitle] = useState('');
+  const [kind, setKind] = useState<DeadlineKind>('assignment');
+  const [due, setDue] = useState(() => addDays(new Date(), 7));
+  const valid = DeadlineRules.isValid(title, due);
+
+  // Filled in each time it opens, so an edit starts from what's saved now, not at first render.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setTitle(initial?.title ?? '');
+      setKind(initial?.kind ?? 'assignment');
+      setDue(initial?.due ?? addDays(new Date(), 7));
+    }
+  }
+
+  return (
+    <Sheet
+      visible={visible}
+      title={editing ? 'Edit deadline' : 'Add a deadline'}
+      onClose={onClose}
+      left={<BarButton title="Cancel" onPress={onClose} />}
       right={
         <BarButton
-          title="Add"
+          title={editing ? 'Save' : 'Add'}
           bold
           disabled={!valid}
           onPress={() => {
             onSubmit(title.trim(), kind, due);
-            close();
+            onClose();
           }}
         />
       }
     >
       <ListScroll>
-        <Section footer="Everyone taking this module will see this.">
+        <Section footer={editing ? editFooter(editing, kind, due) : 'Everyone taking this module will see this.'}>
           <Row>
             <TextInput
               value={title}
               onChangeText={setTitle}
+              maxLength={TITLE_LIMIT}
               placeholder="What's due?"
               placeholderTextColor={theme.inkTertiary}
               style={[styles.input, { color: theme.ink }]}
@@ -198,6 +318,20 @@ export function DeadlineForm({
       </ListScroll>
     </Sheet>
   );
+}
+
+/** What saving will cost, said before it's spent: other people's vouches, or a verification. */
+function editFooter({ deadline, standing }: { deadline: Deadline; standing: DeadlineStanding }, kind: DeadlineKind, due: Date): string {
+  const parts = ['Everyone taking this module sees the change.'];
+  // The poster's own vouch survives their edit, so it isn't counted as lost.
+  const others = standing.confirmCount - (standing.confirmedByMe ? 1 : 0);
+  if (others > 0 && DeadlineRules.editClearsConfirmations(deadline, kind, due)) {
+    parts.push(others === 1
+      ? "Changing the date or type clears the other person's confirmation — they vouched for the old one."
+      : `Changing the date or type clears the ${others} other confirmations — they vouched for the old one.`);
+  }
+  if (deadline.status === 'verified') parts.push('It goes back to waiting on a moderator.');
+  return parts.join(' ');
 }
 
 /** A date and time in the future: the system picker where there is one, typed on the web. */

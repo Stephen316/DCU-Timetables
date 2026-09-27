@@ -87,6 +87,9 @@ export function DeadlinesScreen() {
                 variant="schedule"
                 actions={{
                   onConfirm: () => void model.toggleConfirmation(d),
+                  onDispute: () => void model.toggleDispute(d),
+                  onEdit: (title, kind, due) => void model.edit(d, title, kind, due),
+                  onRename: (label) => void model.rename(d, label),
                   onDelete: () => void model.remove(d),
                   onReport: (reason) => void model.report(d, reason),
                   onHideAuthor: () => void model.hideAuthor(d),

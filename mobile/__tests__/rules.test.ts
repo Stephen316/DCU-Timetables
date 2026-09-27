@@ -2,7 +2,8 @@ import {
   CancellationRules, CancellationStatus, EventVerdict, makeReport, CANCELLATION_THRESHOLD,
 } from '../src/core/cancellation';
 import {
-  Deadline, deadlineBelongsTo, DeadlineRules, DeadlineSchedule, DeadlineStanding, makeDeadline, highlightReason,
+  Deadline, deadlineBelongsTo, DeadlineRules, DeadlineSchedule, DeadlineStanding, deadlineTrust, displayTitle,
+  makeDeadline, highlightReason, TITLE_LIMIT,
 } from '../src/core/deadline';
 import { groupKeyOf } from '../src/core/timetableEvent';
 import { at, event, utc } from './helpers';
@@ -371,6 +372,65 @@ describe('Deadlines', () => {
     expect(local.isMine).toBeNull();
     expect(deadlineBelongsTo(local, 'me')).toBe(true);
     expect(deadlineBelongsTo(local, 'someone-else')).toBe(false);
+  });
+  test('a title longer than the database takes is refused', () => {
+    const future = new Date(Date.now() + 3600_000);
+    expect(DeadlineRules.isValid('x'.repeat(TITLE_LIMIT), future)).toBe(true);
+    expect(DeadlineRules.isValid('x'.repeat(TITLE_LIMIT + 1), future)).toBe(false);
+    // Spaces the server trims don't count against it.
+    expect(DeadlineRules.isValid(`  ${'x'.repeat(TITLE_LIMIT)}  `, future)).toBe(true);
+  });
+});
+
+describe('Deadline agreement', () => {
+  const d = (fields: Partial<Parameters<typeof makeDeadline>[0]> = {}) =>
+    makeDeadline({ moduleKey: 'CA106', title: 'Quiz 2', due: at(2026, 10, 2, 9), kind: 'quiz', submitterID: 's', ...fields });
+
+  test('disputes hold a confirmation back only while they keep pace with it', () => {
+    expect(new DeadlineStanding(3, false, 0).isConfirmed).toBe(true);
+    expect(new DeadlineStanding(3, false, 2).isConfirmed).toBe(true);
+    expect(new DeadlineStanding(3, false, 3).isConfirmed).toBe(false);
+    expect(new DeadlineStanding(3, false, 3).isDisputed).toBe(true);
+    expect(new DeadlineStanding(4, false, 3).isDisputed).toBe(false);
+    // One voice against nobody is a dispute; nobody against nobody is not.
+    expect(new DeadlineStanding(0, false, 1).isDisputed).toBe(true);
+    expect(DeadlineStanding.none.isDisputed).toBe(false);
+  });
+
+  test('a dispute line appears only when someone disputes', () => {
+    expect(new DeadlineStanding(2, false).disputeSummary).toBeNull();
+    expect(new DeadlineStanding(2, false, 1).disputeSummary).toBe('1 person says the details are wrong');
+    expect(new DeadlineStanding(2, false, 4).disputeSummary).toBe('4 people say the details are wrong');
+  });
+
+  test("a moderator's confirmation outranks the crowd either way", () => {
+    expect(deadlineTrust(d({ status: 'verified' }), new DeadlineStanding(0, false, 5))).toBe('verified');
+    expect(deadlineTrust(d(), new DeadlineStanding(1, false, 2))).toBe('disputed');
+    expect(deadlineTrust(d(), new DeadlineStanding(3, false, 1))).toBe('confirmed');
+    expect(deadlineTrust(d(), new DeadlineStanding(2, false))).toBe('unconfirmed');
+  });
+
+  test('moving the date or the type clears the vouches; rewording does not', () => {
+    const quiz = d();
+    expect(DeadlineRules.editClearsConfirmations(quiz, 'quiz', at(2026, 10, 2, 9))).toBe(false);
+    expect(DeadlineRules.editClearsConfirmations(quiz, 'quiz', at(2026, 10, 2, 10))).toBe(true);
+    expect(DeadlineRules.editClearsConfirmations(quiz, 'exam', at(2026, 10, 2, 9))).toBe(true);
+  });
+
+  test('your own name replaces the title everywhere you see it', () => {
+    expect(displayTitle(d())).toBe('Quiz 2');
+    expect(displayTitle(d({ myLabel: 'memory quiz' }))).toBe('memory quiz');
+    const lab = event('CA106[1]OC/P1/01', at(2026, 10, 2, 9));
+    expect(DeadlineRules.highlight(lab, [d({ myLabel: 'memory quiz' })], CancellationStatus.none))
+      .toEqual({ kind: 'test', title: 'memory quiz' });
+  });
+
+  test('a blank name, or the shared title itself, saves as no name', () => {
+    const quiz = d();
+    expect(DeadlineRules.labelToSave(quiz, '   ')).toBeNull();
+    expect(DeadlineRules.labelToSave(quiz, ' Quiz 2 ')).toBeNull();
+    expect(DeadlineRules.labelToSave(quiz, ' memory quiz ')).toBe('memory quiz');
+    expect(DeadlineRules.labelToSave(quiz, 'x'.repeat(100))).toHaveLength(80);
   });
 });
 

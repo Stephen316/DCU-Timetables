@@ -164,6 +164,32 @@ submitter, whose submission auto-confirms) only decides when the row is **flagge
 point the question mark becomes a green seal. Vouches are de-duplicated by person, in the app
 and by the composite primary key.
 
+The other side is **The date or details are wrong**, in the row's "…" menu. It's a dispute,
+not a report: counted in the open ("2 people say the details are wrong"), and the row stays
+up for everyone, including whoever disputed it — a wrong date is exactly the one a class needs
+warning about. Each person holds one side at a time; the server withdraws your confirmation
+when you dispute, and your dispute when you confirm. The seal needs three vouches *and* more
+of them than disputes; once disputes catch up, the row carries the warning in orange instead.
+Only offensive, spam and "something else" reports hide a row (from the reporter at once, and
+from everyone at three).
+
+A moderator's confirmation — from a trusted student or the console — sits above both counts
+and reads **"Confirmed by a moderator"**, the same precedence a verdict has over cancellation
+reports.
+
+## Changing a deadline
+
+- **The poster edits their own** (title, type, due date). Moving the date or type clears
+  everyone else's confirmations, since they vouched for the old one; the form says how many
+  before you save. An edit to a moderator-confirmed deadline sends it back to waiting, and the
+  row is marked "edited". A blocked deadline can't be edited back into view.
+- **Anyone gives any deadline their own name** ("Give it my own name…"). Only they see it —
+  on the row, the class banner, the timetable outline and the widget — with the shared title
+  underneath. It's stored per account (`deadline_labels`), so it follows them to a new phone.
+- **The console** can edit, confirm, block, unblock or remove any deadline from its Deadlines
+  page. Blocking keeps the row, and a new deadline with the same title on the same day in the
+  same module arrives already blocked.
+
 ## Limits worth knowing
 
 - **A confirmed deadline is still only a claim by students.** Three people can agree and be

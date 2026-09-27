@@ -2,7 +2,7 @@ import {
   CancellationReport, CancellationTally, EventVerdict, isReportStance, VerdictState, VERDICT_STATES,
 } from '../core/cancellation';
 import {
-  Deadline, DeadlineConfirmation, DeadlineReportReason, DeadlineRules, DeadlineStanding, isDeadlineKind,
+  Deadline, DeadlineConfirmation, DeadlineKind, DeadlineReportReason, DeadlineRules, DeadlineStanding, isDeadlineKind,
 } from '../core/deadline';
 import { AccountProfile, makeAccountProfile, parseRole } from '../core/identity';
 import { isoSeconds, parseISO } from '../core/time';
@@ -125,14 +125,27 @@ export interface DeadlineStore {
   /** Every module on screen at once — the timetable needs them all to draw its borders. */
   deadlinesForModules(moduleKeys: string[]): Promise<Deadline[]>;
   submit(deadline: Deadline): Promise<void>;
+  /**
+   * The poster changing their own. The server clears the other confirmations when the date
+   * or type moves, and refuses anyone else's — or a deadline a moderator blocked.
+   */
+  edit(id: string, fields: { title: string; kind: DeadlineKind; due: Date }): Promise<void>;
+  /** This student's own name for a deadline; null goes back to the shared title. */
+  setLabel(id: string, label: string | null): Promise<void>;
   /** Only the submitter can remove one — enforced by RLS, not just by hiding the button. */
   withdraw(id: string, submitterID: string): Promise<void>;
   /** How many vouched for each deadline, and whether this person did — never who. */
   standings(ids: string[]): Promise<Map<string, DeadlineStanding>>;
   confirm(deadlineID: string, confirmerID: string): Promise<void>;
   unconfirm(deadlineID: string, confirmerID: string): Promise<void>;
-  /** Sends the deadline to the console's review queue and hides it from this student. */
+  /**
+   * Sends the deadline to the console's review queue. Any reason but `wrong` hides it from
+   * this student; `wrong` is a dispute, counted in the standings. Either takes back a
+   * confirmation.
+   */
   report(deadlineID: string, reason: DeadlineReportReason): Promise<void>;
+  /** Takes back this student's open report or dispute. */
+  withdrawReport(deadlineID: string): Promise<void>;
   /** Stops everything the deadline's author posts reaching this student. */
   hideAuthor(deadlineID: string): Promise<void>;
   /** How many people this student has hidden. A count, not a list. */
@@ -162,7 +175,7 @@ export class SupabaseDeadlineStore implements DeadlineStore {
   private async fetch(moduleFilter: string): Promise<Deadline[]> {
     const json = await this.rest.json('GET', '/rest/v1/module_deadlines_public', SupabaseDeadlineStore.describe, {
       query: [
-        ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at'],
+        ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label'],
         ['module_key', moduleFilter],
         ['due_at', `gte.${isoSeconds(DeadlineRules.horizon())}`],
         ['order', 'due_at.asc'],
@@ -181,6 +194,9 @@ export class SupabaseDeadlineStore implements DeadlineStore {
         submitterID: '',
         submittedAt: parseISO(r.submitted_at as string) ?? new Date(),
         isMine: r.is_mine === true,
+        status: r.status === 'verified' ? 'verified' : 'pending',
+        editedAt: typeof r.edited_at === 'string' ? parseISO(r.edited_at) : null,
+        myLabel: typeof r.my_label === 'string' && r.my_label.length > 0 ? r.my_label : null,
       }];
     });
   }
@@ -199,6 +215,14 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     });
   }
 
+  async edit(id: string, fields: { title: string; kind: DeadlineKind; due: Date }): Promise<void> {
+    await this.rpc('edit_deadline', { p_deadline: id, p_title: fields.title, p_kind: fields.kind, p_due: isoSeconds(fields.due) });
+  }
+
+  async setLabel(id: string, label: string | null): Promise<void> {
+    await this.rpc('set_deadline_label', { p_deadline: id, p_label: label ?? '' });
+  }
+
   async withdraw(id: string, submitterID: string): Promise<void> {
     await this.rest.json('DELETE', '/rest/v1/module_deadlines', SupabaseDeadlineStore.describe, {
       query: [['id', `eq.${id}`], ['submitter_id', `eq.${submitterID}`]],
@@ -209,11 +233,12 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     const result = new Map<string, DeadlineStanding>();
     if (ids.length === 0) return result;
     const json = await this.rest.json('GET', '/rest/v1/deadline_confirmation_tallies', SupabaseDeadlineStore.describe, {
-      query: [['select', 'deadline_id,confirm_count,mine'], ['deadline_id', PostgREST.inList(ids)]],
+      query: [['select', 'deadline_id,confirm_count,mine,dispute_count,disputed_by_me'], ['deadline_id', PostgREST.inList(ids)]],
     });
     for (const r of rows(json)) {
       if (typeof r.deadline_id === 'string' && typeof r.confirm_count === 'number') {
-        result.set(r.deadline_id, new DeadlineStanding(r.confirm_count, r.mine === true));
+        const disputes = typeof r.dispute_count === 'number' ? r.dispute_count : 0;
+        result.set(r.deadline_id, new DeadlineStanding(r.confirm_count, r.mine === true, disputes, r.disputed_by_me === true));
       }
     }
     return result;
@@ -235,6 +260,10 @@ export class SupabaseDeadlineStore implements DeadlineStore {
 
   async report(deadlineID: string, reason: DeadlineReportReason): Promise<void> {
     await this.rpc('report_deadline', { p_deadline: deadlineID, p_reason: reason });
+  }
+
+  async withdrawReport(deadlineID: string): Promise<void> {
+    await this.rpc('withdraw_deadline_report', { p_deadline: deadlineID });
   }
 
   async hideAuthor(deadlineID: string): Promise<void> {
@@ -263,15 +292,26 @@ export class LocalDeadlineStore implements DeadlineStore {
   constructor(private readonly prefs: Prefs) {}
 
   private load(): Deadline[] {
+    // Rows saved before status, edits and names existed have none of the three.
+    type Stored = Omit<Deadline, 'due' | 'submittedAt' | 'editedAt' | 'status' | 'myLabel'>
+      & { due: number; submittedAt: number; editedAt?: number | null; status?: Deadline['status']; myLabel?: string | null };
     return this.prefs
-      .getJSON<(Omit<Deadline, 'due' | 'submittedAt'> & { due: number; submittedAt: number })[]>(PrefKey.localDeadlines, [])
-      .map((d) => ({ ...d, due: new Date(d.due), submittedAt: new Date(d.submittedAt), isMine: d.isMine ?? null }));
+      .getJSON<Stored[]>(PrefKey.localDeadlines, [])
+      .map((d) => ({
+        ...d,
+        due: new Date(d.due),
+        submittedAt: new Date(d.submittedAt),
+        isMine: d.isMine ?? null,
+        status: d.status ?? 'pending',
+        editedAt: typeof d.editedAt === 'number' ? new Date(d.editedAt) : null,
+        myLabel: d.myLabel ?? null,
+      }));
   }
 
   private save(list: Deadline[]): void {
     this.prefs.setJSON(
       PrefKey.localDeadlines,
-      list.map((d) => ({ ...d, due: d.due.getTime(), submittedAt: d.submittedAt.getTime() })),
+      list.map((d) => ({ ...d, due: d.due.getTime(), submittedAt: d.submittedAt.getTime(), editedAt: d.editedAt?.getTime() ?? null })),
     );
   }
 
@@ -290,6 +330,14 @@ export class LocalDeadlineStore implements DeadlineStore {
 
   async submit(deadline: Deadline): Promise<void> {
     this.save([...this.load(), deadline]);
+  }
+
+  async edit(id: string, fields: { title: string; kind: DeadlineKind; due: Date }): Promise<void> {
+    this.save(this.load().map((d) => (d.id === id ? { ...d, ...fields, editedAt: new Date() } : d)));
+  }
+
+  async setLabel(id: string, label: string | null): Promise<void> {
+    this.save(this.load().map((d) => (d.id === id ? { ...d, myLabel: label } : d)));
   }
 
   async withdraw(id: string, submitterID: string): Promise<void> {
@@ -318,6 +366,7 @@ export class LocalDeadlineStore implements DeadlineStore {
   }
 
   async report(): Promise<void> {}
+  async withdrawReport(): Promise<void> {}
   async hideAuthor(): Promise<void> {}
   async hiddenAuthorCount(): Promise<number> { return 0; }
   async unhideAllAuthors(): Promise<void> {}

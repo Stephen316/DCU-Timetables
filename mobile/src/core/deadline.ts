@@ -30,6 +30,16 @@ export function deadlineKindLabel(kind: DeadlineKind): string {
 }
 
 /**
+ * Where a moderator has put it. `blocked` rows never reach a student, so the app only ever
+ * holds these two.
+ */
+export type DeadlineStatus = 'pending' | 'verified';
+
+/** The database's limits, so a form can't offer what the server will refuse. */
+export const TITLE_LIMIT = 120;
+export const LABEL_LIMIT = 80;
+
+/**
  * A deadline one student has shared with everyone taking the module. Deadlines belong to
  * the **module**, not to one occurrence of a class.
  */
@@ -52,6 +62,12 @@ export interface Deadline {
    * never has to leave it. Null for rows from the local fallback store.
    */
   isMine: boolean | null;
+  /** `verified` once a trusted person or the console has confirmed it. */
+  status: DeadlineStatus;
+  /** When its poster (or an admin) last changed it. */
+  editedAt: Date | null;
+  /** This student's own name for it, which nobody else sees. */
+  myLabel: string | null;
 }
 
 export function makeDeadline(fields: {
@@ -64,6 +80,9 @@ export function makeDeadline(fields: {
   submitterID: string;
   submittedAt?: Date;
   isMine?: boolean | null;
+  status?: DeadlineStatus;
+  editedAt?: Date | null;
+  myLabel?: string | null;
 }): Deadline {
   return {
     id: fields.id ?? uuid(),
@@ -75,7 +94,15 @@ export function makeDeadline(fields: {
     submitterID: fields.submitterID,
     submittedAt: fields.submittedAt ?? new Date(),
     isMine: fields.isMine ?? null,
+    status: fields.status ?? 'pending',
+    editedAt: fields.editedAt ?? null,
+    myLabel: fields.myLabel ?? null,
   };
+}
+
+/** What this student sees it called: their own name for it if they gave one. */
+export function displayTitle(deadline: Deadline): string {
+  return deadline.myLabel ?? deadline.title;
 }
 
 /** Falls back to comparing ids for the local store, which still has them. */
@@ -91,14 +118,28 @@ export interface DeadlineConfirmation {
 
 export const CONFIRM_THRESHOLD = 3;
 
-/** How much agreement a deadline has, and whether this student is part of it. */
+/**
+ * How much agreement a deadline has, and where this student stands. Each person holds one
+ * side at a time: confirming takes back a dispute, and disputing takes back a confirmation.
+ */
 export class DeadlineStanding {
-  constructor(readonly confirmCount: number, readonly confirmedByMe: boolean) {}
+  constructor(
+    readonly confirmCount: number,
+    readonly confirmedByMe: boolean,
+    readonly disputeCount = 0,
+    readonly disputedByMe = false,
+  ) {}
 
   static readonly none = new DeadlineStanding(0, false);
 
+  /** Three vouches, and more of them than people saying it's wrong. */
   get isConfirmed(): boolean {
-    return this.confirmCount >= CONFIRM_THRESHOLD;
+    return this.confirmCount >= CONFIRM_THRESHOLD && this.confirmCount > this.disputeCount;
+  }
+
+  /** At least as many say it's wrong as say it's right — a warning worth more than a tick. */
+  get isDisputed(): boolean {
+    return this.disputeCount > 0 && this.disputeCount >= this.confirmCount;
   }
 
   /** Always the real number, never "x of 3". */
@@ -107,6 +148,27 @@ export class DeadlineStanding {
     if (this.confirmCount === 1) return '1 person has confirmed';
     return `${this.confirmCount} people have confirmed`;
   }
+
+  /** Null when nobody disputes it, so the row only grows a line when there's news. */
+  get disputeSummary(): string | null {
+    if (this.disputeCount < 1) return null;
+    if (this.disputeCount === 1) return '1 person says the details are wrong';
+    return `${this.disputeCount} people say the details are wrong`;
+  }
+}
+
+/**
+ * The line a row leads its agreement with. A moderator's confirmation sits above the crowd,
+ * as a verdict does over cancellation reports: it's a different kind of claim, so it's
+ * worded as one rather than shown as a big number.
+ */
+export type DeadlineTrust = 'verified' | 'disputed' | 'confirmed' | 'unconfirmed';
+
+export function deadlineTrust(deadline: Deadline, standing: DeadlineStanding): DeadlineTrust {
+  if (deadline.status === 'verified') return 'verified';
+  if (standing.isDisputed) return 'disputed';
+  if (standing.isConfirmed) return 'confirmed';
+  return 'unconfirmed';
 }
 
 /**
@@ -171,7 +233,22 @@ export const DeadlineRules = {
 
   /** A submission is only accepted with a real title and a due date in the future. */
   isValid(title: string, due: Date, now: Date = new Date()): boolean {
-    return title.trim().length > 0 && due.getTime() > now.getTime();
+    const length = title.trim().length;
+    return length > 0 && length <= TITLE_LIMIT && due.getTime() > now.getTime();
+  },
+
+  /**
+   * Whether an edit throws away the confirmations: people vouched for a date and a type,
+   * so moving either one means they haven't vouched for this. A reworded title keeps them.
+   */
+  editClearsConfirmations(deadline: Deadline, kind: DeadlineKind, due: Date): boolean {
+    return kind !== deadline.kind || due.getTime() !== deadline.due.getTime();
+  },
+
+  /** The name to save: blank, or the shared title itself, means no name of your own. */
+  labelToSave(deadline: Deadline, label: string): string | null {
+    const trimmed = label.trim().slice(0, LABEL_LIMIT);
+    return trimmed.length === 0 || trimmed === deadline.title ? null : trimmed;
   },
 
   /**
@@ -208,8 +285,8 @@ export const DeadlineRules = {
     }
     const today = DeadlineRules.dueAt(event, deadlines);
     const test = today.find((d) => isSatInClass(d.kind));
-    if (test) return { kind: 'test', title: test.title };
-    if (today.length > 0) return { kind: 'assignment', title: today[0].title };
+    if (test) return { kind: 'test', title: displayTitle(test) };
+    if (today.length > 0) return { kind: 'assignment', title: displayTitle(today[0]) };
     return null;
   },
 
@@ -248,6 +325,11 @@ export const DeadlineRules = {
  */
 export type DeadlineReportReason = 'offensive' | 'spam' | 'wrong' | 'other';
 export const DEADLINE_REPORT_REASONS: DeadlineReportReason[] = ['offensive', 'spam', 'wrong', 'other'];
+/**
+ * What the Report sheet offers. `wrong` is a dispute with its own button: it's counted in
+ * the open and doesn't hide the row, since a wrong date is still one the class should see.
+ */
+export const ABUSE_REPORT_REASONS: DeadlineReportReason[] = ['offensive', 'spam', 'other'];
 
 export function reportReasonLabel(reason: DeadlineReportReason): string {
   switch (reason) {

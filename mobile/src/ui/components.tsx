@@ -56,6 +56,7 @@ const ICONS = {
   notAttending: 'person-remove-outline',
   done: 'checkmark-done-circle',
   delete: 'trash-outline',
+  edit: 'create-outline',
   close: 'close',
 } as const;
 

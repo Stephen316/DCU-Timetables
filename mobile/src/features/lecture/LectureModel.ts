@@ -153,6 +153,28 @@ export class LectureModel extends Observable {
     await this.load();
   }
 
+  /** "The details are wrong", or taking that back. It stays on the page either way. */
+  toggleDispute(deadline: Deadline): Promise<void> {
+    if (this.isMine(deadline)) return Promise.resolve();
+    return this.busy(async () => {
+      if (this.standing(deadline).disputedByMe) await this.services.deadlines.withdrawReport(deadline.id);
+      else await this.services.deadlines.report(deadline.id, 'wrong');
+    }, "Couldn't send that.");
+  }
+
+  async editDeadline(deadline: Deadline, title: string, kind: DeadlineKind, due: Date): Promise<void> {
+    if (!this.isMine(deadline) || !DeadlineRules.isValid(title, due)) return;
+    await this.busy(() => this.services.deadlines.edit(deadline.id, { title, kind, due }), "Couldn't save that change.");
+  }
+
+  /** Only this student sees the name. */
+  async renameDeadline(deadline: Deadline, label: string): Promise<void> {
+    await this.busy(
+      () => this.services.deadlines.setLabel(deadline.id, DeadlineRules.labelToSave(deadline, label)),
+      "Couldn't rename that.",
+    );
+  }
+
   async removeDeadline(deadline: Deadline): Promise<void> {
     if (!this.isMine(deadline)) return;
     await this.dropThen(deadline, () => this.services.deadlines.withdraw(deadline.id, this.reporterID), "Couldn't remove that deadline.");

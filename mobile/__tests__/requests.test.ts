@@ -126,10 +126,46 @@ describe('Supabase requests', () => {
   });
 
   test('standings come from the tally view', async () => {
-    const { calls, fn } = fakeFetch(() => ({ body: [{ deadline_id: 'd1', confirm_count: 4, mine: true }] }));
-    const s = await new SupabaseDeadlineStore(await signedInREST(fn)).standings(['d1']);
-    expect(query(calls[0].url)).toEqual({ select: 'deadline_id,confirm_count,mine', deadline_id: 'in.("d1")' });
-    expect(s.get('d1')).toMatchObject({ confirmCount: 4, confirmedByMe: true });
+    const { calls, fn } = fakeFetch(() => ({ body: [
+      { deadline_id: 'd1', confirm_count: 4, mine: true, dispute_count: 2, disputed_by_me: false },
+      // A server without phase 25 sends no dispute columns.
+      { deadline_id: 'd2', confirm_count: 1, mine: false },
+    ] }));
+    const s = await new SupabaseDeadlineStore(await signedInREST(fn)).standings(['d1', 'd2']);
+    expect(query(calls[0].url)).toEqual({ select: 'deadline_id,confirm_count,mine,dispute_count,disputed_by_me', deadline_id: 'in.("d1","d2")' });
+    expect(s.get('d1')).toMatchObject({ confirmCount: 4, confirmedByMe: true, disputeCount: 2, disputedByMe: false });
+    expect(s.get('d2')).toMatchObject({ confirmCount: 1, disputeCount: 0 });
+  });
+
+  test('status, edits and your own name come back with each deadline', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: [{
+      id: 'd1', module_key: 'CA106', at_group_key: null, title: 'Quiz', due_at: '2026-09-25T09:00:00+00:00', kind: 'quiz',
+      is_mine: false, submitted_at: '2026-09-20T09:00:00+00:00', status: 'verified', edited_at: '2026-09-21T10:00:00+00:00', my_label: 'memory quiz',
+    }, {
+      id: 'd2', module_key: 'CA106', at_group_key: null, title: 'Lab', due_at: '2026-09-26T09:00:00+00:00', kind: 'labReport',
+      is_mine: false, submitted_at: '2026-09-20T09:00:00+00:00', status: 'pending', edited_at: null, my_label: null,
+    }] }));
+    const list = await new SupabaseDeadlineStore(await signedInREST(fn)).deadlinesForModule('CA106');
+    expect(query(calls[0].url).select).toBe('id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label');
+    expect(list[0]).toMatchObject({ status: 'verified', editedAt: utc(2026, 9, 21, 10), myLabel: 'memory quiz' });
+    expect(list[1]).toMatchObject({ status: 'pending', editedAt: null, myLabel: null });
+  });
+
+  test('editing, naming and disputing go through the RPCs', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: null }));
+    const store = new SupabaseDeadlineStore(await signedInREST(fn));
+    await store.edit('d1', { title: 'Quiz 2', kind: 'exam', due: utc(2026, 10, 2, 9) });
+    await store.setLabel('d1', 'memory quiz');
+    await store.setLabel('d1', null);
+    await store.report('d1', 'wrong');
+    await store.withdrawReport('d1');
+    expect(calls.map((c) => [c.url.replace(config.url, ''), c.body])).toEqual([
+      ['/rest/v1/rpc/edit_deadline', { p_deadline: 'd1', p_title: 'Quiz 2', p_kind: 'exam', p_due: '2026-10-02T09:00:00Z' }],
+      ['/rest/v1/rpc/set_deadline_label', { p_deadline: 'd1', p_label: 'memory quiz' }],
+      ['/rest/v1/rpc/set_deadline_label', { p_deadline: 'd1', p_label: '' }],
+      ['/rest/v1/rpc/report_deadline', { p_deadline: 'd1', p_reason: 'wrong' }],
+      ['/rest/v1/rpc/withdraw_deadline_report', { p_deadline: 'd1' }],
+    ]);
   });
 
   test('a verdict replaces the row, and unknown states are dropped on read', async () => {

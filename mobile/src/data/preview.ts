@@ -76,7 +76,7 @@ export const PreviewData = {
     const now = new Date();
     return [
       makeDeadline({ id: 'dl-quiz', moduleKey: 'CA106', title: 'Quiz 2: memory hierarchy', due: addDays(now, 1), kind: 'quiz', submitterID: 'someone', isMine: false }),
-      makeDeadline({ id: 'dl-sched', moduleKey: 'CA216', title: 'Scheduler assignment', due: addDays(now, 4), kind: 'assignment', submitterID: 'someone', isMine: false }),
+      makeDeadline({ id: 'dl-sched', moduleKey: 'CA216', title: 'Scheduler assignment', due: addDays(now, 4), kind: 'assignment', submitterID: 'someone', isMine: false, status: 'verified' }),
       makeDeadline({ id: 'dl-sheet', moduleKey: 'MS121', title: 'Problem sheet 3', due: addDays(now, 9), kind: 'assignment', submitterID: 'preview-me', isMine: true }),
     ];
   },
@@ -123,6 +123,8 @@ class PreviewDeadlineStore implements DeadlineStore {
   async deadlinesForModule(moduleKey: string) { return PreviewData.deadlines().filter((d) => d.moduleKey === moduleKey); }
   async deadlinesForModules() { return PreviewData.deadlines(); }
   async submit() {}
+  async edit() {}
+  async setLabel() {}
   async withdraw() {}
   async standings(ids: string[]) {
     return new Map(ids.length > 0 ? [[ids[0], new DeadlineStanding(4, true)]] : []);
@@ -130,6 +132,7 @@ class PreviewDeadlineStore implements DeadlineStore {
   async confirm() {}
   async unconfirm() {}
   async report() {}
+  async withdrawReport() {}
   async hideAuthor() {}
   async hiddenAuthorCount() { return 0; }
   async unhideAllAuthors() {}
