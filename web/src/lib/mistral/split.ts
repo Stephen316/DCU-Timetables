@@ -35,7 +35,9 @@ export async function interpretMessage(opts: {
     messages: [
       { role: "system", content: SYSTEM },
       ...(context ? [{ role: "system", content: context }] : []),
-      ...historyMessages(history),
+      // The recent conversation, not all of it: each turn resends it, so an uncapped history
+      // costs more every message and keeps an earlier module in front of the model.
+      ...historyMessages(history.slice(-12)),
       { role: "user", content: text },
     ],
     tools: [SPLIT_TOOL, CHANGE_TOOL].map((t) => ({
