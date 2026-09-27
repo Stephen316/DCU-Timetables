@@ -66,15 +66,36 @@ export async function weeks(): Promise<Week[]> {
   return vo.Weeks.map((w) => ({ number: w.WeekNumber, label: w.WeekLabel, firstDay: dublin(w.FirstDayInWeek).date }));
 }
 
-const moduleIdentity = unstable_cache(lookupModule, ["dcu-module-identity"], { revalidate: 7 * 86_400 });
+/// Thrown rather than returned so `unstable_cache` doesn't keep a miss: a module DCU's
+/// search briefly failed to find would otherwise stay missing for the whole week.
+class ModuleNotFound extends Error {}
 
-async function lookupModule(code: string): Promise<string | null> {
+const cachedModuleIdentity = unstable_cache(lookupModule, ["dcu-module-identity"], { revalidate: 7 * 86_400 });
+
+async function moduleIdentity(code: string): Promise<string | null> {
+  try {
+    return await cachedModuleIdentity(code);
+  } catch (e) {
+    if (e instanceof ModuleNotFound) return null;
+    throw e;
+  }
+}
+
+/// The module whose name starts with exactly this code. Never the search's best guess: a
+/// mistyped code would fetch — and check a change against — another module's classes.
+async function lookupModule(code: string): Promise<string> {
   const res = await call<{ Results: { Identity: string; Name: string }[] }>(
     `Public/CategoryTypes/${MODULE_TYPE}/Categories/FilterWithCache/${INSTITUTION}`,
     { body: [], query: { query: code, itemsPerPage: "50", pageNumber: "1", returnOccurrences: "false" } },
   );
-  const exact = res.Results.find((r) => r.Name.toUpperCase().startsWith(code.toUpperCase()));
-  return (exact ?? res.Results[0])?.Identity ?? null;
+  const wanted = code.trim().toUpperCase();
+  const exact = res.Results.find((r) => {
+    const name = r.Name.trim().toUpperCase();
+    // EEG1001 must not match EEG10012: the code has to end at a non-alphanumeric.
+    return name.startsWith(wanted) && !/[A-Z0-9]/.test(name.charAt(wanted.length));
+  });
+  if (!exact) throw new ModuleNotFound(code);
+  return exact.Identity;
 }
 
 /// Every class of these modules in the given weeks.
