@@ -88,6 +88,19 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 240,
+          "resizeMode": "contain",
+          "backgroundColor": "#212129",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#212129"
+          }
+        }
+      ],
       "@react-native-community/datetimepicker",
       [
         "expo-camera",
