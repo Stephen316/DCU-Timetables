@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "DCU Timetable — console",
   description: "Moderation and course data for the DCU Timetable app.",
+  icons: { icon: "/logo.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

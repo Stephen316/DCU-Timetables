@@ -53,6 +53,7 @@ p  { margin: 0 0 12px; color: var(--muted); }
   overflow-y: auto;
   align-self: flex-start;
 }
+.sidebar .brand { display: block; width: 100%; height: auto; border-radius: 8px; margin-bottom: 12px; }
 .sidebar .who {
   padding: 4px 8px 16px;
   color: var(--dim);
@@ -143,6 +144,7 @@ label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px
   .shell { flex-direction: column; }
   .sidebar { width: auto; flex: none; border-right: none; border-bottom: 1px solid var(--border);
              position: static; height: auto; overflow: visible; align-self: stretch; }
+  .sidebar .brand { width: 96px; }
   .nav { display: flex; flex-wrap: wrap; gap: 2px; }
   .main { padding: 16px; }
 }
