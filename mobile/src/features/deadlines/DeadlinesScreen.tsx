@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { deadlineSectionTitle } from '../../core/deadline';
 import { useModel, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { EmptyState, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
+import { EmptyState, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 import { DeadlineRow } from './DeadlineRows';
 import { DeadlinesModel } from './DeadlinesModel';
@@ -22,9 +23,14 @@ export function DeadlinesScreen() {
   /** Modules to ask about, from the timetable that's already loaded. */
   const modules = week.loadedModuleKeys;
 
-  useEffect(() => {
-    void model.load(modules);
-  }, [model, modules]);
+  // On every visit, not only when the module list changes: the tab stays mounted behind the
+  // timetable, so a deadline added on a class's page — or a load that failed the first time —
+  // would otherwise never be fetched again.
+  useFocusEffect(
+    useCallback(() => {
+      void model.load(modules);
+    }, [model, modules]),
+  );
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + Space.s, borderBottomColor: theme.separator }]}>
@@ -37,6 +43,21 @@ export function DeadlinesScreen() {
       <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
         {header}
         <Spinner />
+      </View>
+    );
+  }
+  // Said, not shown as "Nothing due": an empty list that is really a failed load reads as
+  // "no deadlines", which is how a broken fetch went unnoticed.
+  if (model.isEmpty && model.errorText) {
+    return (
+      <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
+        {header}
+        <EmptyState
+          icon="offline"
+          title="Couldn't load deadlines"
+          message={model.errorText}
+          action={<InlineAction title="Try again" onPress={() => void model.reload()} />}
+        />
       </View>
     );
   }
