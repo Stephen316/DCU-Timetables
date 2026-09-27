@@ -382,6 +382,27 @@ describe('Deadlines', () => {
   });
 });
 
+describe("A new deadline's date", () => {
+  const lab = (start: Date) => event('EEG1007[1]OC/L2/01', start);
+
+  test('starts at the class it was added from', () => {
+    expect(DeadlineRules.defaultDue(lab(at(2026, 10, 1, 11)), at(2026, 9, 28, 9))).toEqual(at(2026, 10, 1, 11));
+  });
+
+  test('a class already under way moves to the same slot next week', () => {
+    // 11:00 class, opened at 11:30 the same day: its own start would be refused as past.
+    expect(DeadlineRules.defaultDue(lab(at(2026, 10, 1, 11)), at(2026, 10, 1, 11, 30))).toEqual(at(2026, 10, 8, 11));
+    // Opened from an old week, it lands on the first slot still to come.
+    expect(DeadlineRules.defaultDue(lab(at(2026, 9, 17, 11)), at(2026, 10, 1, 12))).toEqual(at(2026, 10, 8, 11));
+  });
+
+  test('the default is due at the class it came from, so the class leads with it', () => {
+    const start = at(2026, 10, 1, 11);
+    const d = makeDeadline({ moduleKey: 'EEG1007', atGroupKey: groupKeyOf(lab(start)), title: 'Quiz', due: DeadlineRules.defaultDue(lab(start), at(2026, 9, 28, 9)), kind: 'quiz', submitterID: 's' });
+    expect(DeadlineRules.dueAt(lab(start), [d])).toEqual([d]);
+  });
+});
+
 describe('Grade weight', () => {
   test('0 reads as not graded, anything else as a percentage', () => {
     expect(gradeWeightLabel(0)).toBe('Not graded');

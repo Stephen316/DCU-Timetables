@@ -143,10 +143,16 @@ A highlight also outranks the faint orange clash outline. Colours are mapped in 
 ## Where a deadline appears
 
 A deadline is submitted from a class's page and pinned to that class (`at_group_key`, a
-`TimetableEvent.groupKey`):
+`TimetableEvent.groupKey`). Its due date starts at that class's own start time
+(`DeadlineRules.defaultDue`) — or the same slot next week if the class has already begun — and
+two small controls beside "Due" change the date or the time. It shows up here:
 
-- **At the very top of that class's page** — "Lab report due at this class" — and nowhere
-  else. Monday's lecture doesn't headline what's handed in at Thursday's practical.
+- **Just under the heading of that class's page** — "Lab report due at this class", with
+  its date and weight — and nowhere else. Monday's lecture doesn't headline what's handed in
+  at Thursday's practical.
+- **On the day view**, as a small blue "!" beside the class's title and a line in its
+  description with the type and title ("Quiz: Quiz 2"). A class with nothing due has neither.
+- **In the corner of its block** on the week grid, as the same blue "!".
 - **At the bottom of every class's page in that module**, under "All EEG1001 dates", which is
   the full list of assignments, quizzes and exams regardless of which class they're pinned to.
 - **As a border** on the pinned class, on the due day only.

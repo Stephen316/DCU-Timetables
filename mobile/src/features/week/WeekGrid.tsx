@@ -1,11 +1,11 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { ClassHighlight, highlightReason } from '../../core/deadline';
+import { ClassHighlight, Deadline, deadlineKindLabel, displayTitle, highlightReason } from '../../core/deadline';
 import { locationDisplay, parsedLocations } from '../../core/roomLocation';
 import { WeekGrid as Placement, PlacedEvent } from '../../core/schedule';
 import { addDays, formatTime, formatWeekdayDayMonth, isSameDay, isWeekend, startOfDay, startOfWeek, weekdayShort } from '../../core/time';
 import { TimetableEvent, titleOf } from '../../core/timetableEvent';
-import { Icon, Txt } from '../../ui/components';
+import { DeadlineMark, Icon, Txt } from '../../ui/components';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
 import { moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
@@ -19,12 +19,13 @@ const GUTTER = 40;
  * Overlapping classes share the column width.
  */
 export function WeekGridView({
-  eventsByDay, weekStart, clashingIDs, highlight, onSelect, now,
+  eventsByDay, weekStart, clashingIDs, highlight, dueAt, onSelect, now,
 }: {
   eventsByDay: DayEvents[];
   weekStart: Date | null;
   clashingIDs: Set<string>;
   highlight: (event: TimetableEvent) => ClassHighlight | null;
+  dueAt: (event: TimetableEvent) => Deadline[];
   onSelect: (event: TimetableEvent) => void;
   now: Date;
 }) {
@@ -65,6 +66,7 @@ export function WeekGridView({
               dayWidth={width}
               top={offsetY(item.event.start)}
               highlight={highlight(item.event)}
+              due={dueAt(item.event)}
               isClashing={clashingIDs.has(item.event.id)}
               onPress={() => !pagerDrag.isSuppressingTaps() && onSelect(item.event)}
             />
@@ -129,12 +131,13 @@ function GridBody({
 }
 
 function Block({
-  item, dayWidth, top, highlight, isClashing, onPress,
+  item, dayWidth, top, highlight, due, isClashing, onPress,
 }: {
   item: PlacedEvent;
   dayWidth: number;
   top: number;
   highlight: ClassHighlight | null;
+  due: Deadline[];
   isClashing: boolean;
   onPress: () => void;
 }) {
@@ -150,6 +153,7 @@ function Block({
   const room = first ? first.buildingName ?? first.code : null;
   const spoken = [
     highlight ? highlightReason(highlight) : null,
+    ...due.map((d) => `Due at this class, ${deadlineKindLabel(d.kind)}: ${displayTitle(d)}`),
     titleOf(event),
     `${formatTime(event.start)} to ${formatTime(event.end)}`,
     locationDisplay(event),
@@ -182,7 +186,12 @@ function Block({
           <Txt type="caption2" numberOfLines={1} color={theme.inkSecondary} maxFontSizeMultiplier={1.4}>{room}</Txt>
         ) : null}
       </View>
-      {highlight ? (
+      {/* The "!" wins the corner: the border already says a class is off, but only this says something's due. */}
+      {due.length > 0 ? (
+        <View style={styles.corner}>
+          <DeadlineMark size={12} />
+        </View>
+      ) : highlight ? (
         <View style={styles.corner}>
           <Icon name={highlightIcon(highlight)} size={11} color={highlightTint(highlight, theme)} />
         </View>

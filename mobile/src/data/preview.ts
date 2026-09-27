@@ -74,7 +74,10 @@ export const PreviewData = {
 
   deadlines(): Deadline[] {
     const now = new Date();
+    // Due at today's practical, so the day view shows the "!" and the class page its banner.
+    const practical = PreviewData.today[1];
     return [
+      makeDeadline({ id: 'dl-demo', moduleKey: 'CA107', title: 'Prototype demo', due: practical.start, kind: 'presentation', submitterID: 'someone', isMine: false, gradeWeight: 15 }),
       makeDeadline({ id: 'dl-quiz', moduleKey: 'CA106', title: 'Quiz 2: memory hierarchy', due: addDays(now, 1), kind: 'quiz', submitterID: 'someone', isMine: false }),
       makeDeadline({ id: 'dl-sched', moduleKey: 'CA216', title: 'Scheduler assignment', due: addDays(now, 4), kind: 'assignment', submitterID: 'someone', isMine: false, status: 'verified' }),
       makeDeadline({ id: 'dl-sheet', moduleKey: 'MS121', title: 'Problem sheet 3', due: addDays(now, 9), kind: 'assignment', submitterID: 'preview-me', isMine: true }),

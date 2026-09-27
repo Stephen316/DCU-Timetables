@@ -388,6 +388,23 @@ export function Spinner({ label }: { label?: string }) {
 }
 
 /** Nothing to show, said plainly — `ContentUnavailableView`. */
+/**
+ * A small blue "!" on a class that has something due at it. A mark of its own rather than
+ * the kind's icon, so one shape means "a deadline is here" at every size, the grid included.
+ */
+export function DeadlineMark({ size = 16 }: { size?: number }) {
+  const theme = useTheme();
+  return (
+    <View
+      style={[styles.deadlineMark, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.tint.test }]}
+      importantForAccessibility="no-hide-descendants"
+      accessibilityElementsHidden
+    >
+      <Text style={[styles.deadlineMarkText, { fontSize: size * 0.72, lineHeight: size }]} allowFontScaling={false}>!</Text>
+    </View>
+  );
+}
+
 export function EmptyState({
   icon, title, message, action,
 }: { icon: IconName; title: string; message?: string; action?: ReactNode }) {
@@ -593,6 +610,8 @@ export const styles = StyleSheet.create({
   inlineTarget: { minHeight: MIN_TARGET, justifyContent: 'center' },
   inlineChip: { borderRadius: Radius.control, paddingHorizontal: Space.m, paddingVertical: Space.xs + Space.xxs },
   medium: { fontWeight: '500' },
+  deadlineMark: { alignItems: 'center', justifyContent: 'center' },
+  deadlineMarkText: { color: '#FFFFFF', fontWeight: '800', textAlign: 'center' },
   semibold: { fontWeight: '600' },
   barButton: { minHeight: MIN_TARGET, justifyContent: 'center', paddingHorizontal: Space.xs },
   iconButton: { minWidth: MIN_TARGET, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center' },

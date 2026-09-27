@@ -244,6 +244,18 @@ export const DeadlineRules = {
       .sort((a, b) => a.due.getTime() - b.due.getTime());
   },
 
+  /**
+   * Where a new deadline's date starts when it's added from a class: that class's own start,
+   * since most things are due at the class they're announced for. A class already under way
+   * moves on a week at a time — the same slot next week — so the form never opens on a date
+   * it would refuse.
+   */
+  defaultDue(event: TimetableEvent, now: Date = new Date()): Date {
+    let due = event.start;
+    while (due.getTime() <= now.getTime()) due = addDays(due, 7);
+    return due;
+  },
+
   /** The oldest deadline still worth fetching or showing. */
   horizon(now: Date = new Date()): Date {
     return startOfDay(now);

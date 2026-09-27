@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 import { CANCELLATION_NET_THRESHOLD, CANCELLATION_THRESHOLD, ReportStance, VERDICT_STATES, VerdictState } from '../../core/cancellation';
-import { CONFIRM_THRESHOLD, Deadline, deadlineKindLabel, displayTitle, isSatInClass } from '../../core/deadline';
+import {
+  CONFIRM_THRESHOLD, Deadline, deadlineKindLabel, DeadlineRules, displayTitle, gradeWeightLabel, isSatInClass,
+} from '../../core/deadline';
 import { Attendance, Lecturer, lecturerDisplayName, lecturerInitials } from '../../core/misc';
 import { locationDisplay } from '../../core/roomLocation';
 import { formatComplete, formatTime, formatWeekdayDayMonth } from '../../core/time';
@@ -9,9 +11,8 @@ import { eventTypeLabel, groupLabelOf, TimetableEvent, titleOf } from '../../cor
 import { PrefKey } from '../../data/storage';
 import { useModel, usePrefJSON, useServices } from '../../state/hooks';
 import {
-  ActionRow, ConfirmSheet, IconName, Label, LabeledRow, ListScroll, Row, Section, ToggleRow, Txt,
+  ActionRow, ConfirmSheet, DeadlineMark, IconName, Label, LabeledRow, ListScroll, Row, Section, ToggleRow, Txt,
 } from '../../ui/components';
-import { deadlineTint } from '../../ui/meaning';
 import { Space, useTheme, withAlpha } from '../../ui/theme';
 import { DeadlineForm, DeadlineRow } from '../deadlines/DeadlineRows';
 import { LectureModel } from './LectureModel';
@@ -60,24 +61,6 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           </Section>
         ) : null}
 
-        {/* The very top of the page: what's due at this exact class today, and nothing else. */}
-        {model.dueHere.length > 0 ? (
-          <Section>
-            {model.dueHere.map((d) => (
-              <Row key={d.id}>
-                <Label
-                  icon={isSatInClass(d.kind) ? 'test' : 'assignment'}
-                  text={isSatInClass(d.kind) ? `${deadlineKindLabel(d.kind)} in this class` : `${deadlineKindLabel(d.kind)} due at this class`}
-                  type="status"
-                  color={deadlineTint(d.kind, theme)}
-                />
-                <Txt type="headline">{displayTitle(d)}</Txt>
-                <Txt type="caption" color={theme.inkSecondary}>{formatComplete(d.due)}</Txt>
-              </Row>
-            ))}
-          </Section>
-        ) : null}
-
         <Section>
           <Row>
             <Txt type="pageTitle">{titleOf(event)}</Txt>
@@ -85,6 +68,24 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
             {isSkipping ? <Label icon="notAttending" text="You're not attending this" type="caption" color={theme.inkSecondary} /> : null}
           </Row>
         </Section>
+
+        {/* Just under the heading: what's due at this exact class, and nothing else. */}
+        {model.dueHere.length > 0 ? (
+          <Section>
+            {model.dueHere.map((d) => (
+              <Row key={d.id}>
+                <View style={styles.dueLine}>
+                  <DeadlineMark />
+                  <Txt type="status" color={theme.tint.test}>
+                    {isSatInClass(d.kind) ? `${deadlineKindLabel(d.kind)} in this class` : `${deadlineKindLabel(d.kind)} due at this class`}
+                  </Txt>
+                </View>
+                <Txt type="headline">{displayTitle(d)}</Txt>
+                <Txt type="caption" color={theme.inkSecondary}>{formatComplete(d.due)} · {gradeWeightLabel(d.gradeWeight)}</Txt>
+              </Row>
+            ))}
+          </Section>
+        ) : null}
 
         <Section header="Class">
           <LabeledRow label="Time" value={`${formatTime(event.start)}–${formatTime(event.end)}`} />
@@ -200,6 +201,8 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
 
       <DeadlineForm
         visible={showingForm}
+        // Due at this class unless the student says otherwise.
+        defaultDue={DeadlineRules.defaultDue(event)}
         onClose={() => setShowingForm(false)}
         onSubmit={(fields) => void model.addDeadline(fields)}
       />
@@ -242,6 +245,7 @@ function LecturerRow({ lecturer }: { lecturer: Lecturer }) {
 
 const styles = StyleSheet.create({
   banner: { gap: Space.xxs, paddingHorizontal: Space.xs },
+  dueLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   bannerLines: { marginLeft: 26, gap: Space.xxs },
   lecturer: { flexDirection: 'row', alignItems: 'center', gap: Space.m },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

@@ -6,12 +6,15 @@ import {
   DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, displayTitle, LABEL_LIMIT, reportReasonLabel,
   gradeWeightLabel, TITLE_LIMIT,
 } from '../../core/deadline';
-import { addDays, formatAbbreviated, formatWeekdayDayMonthTime, localDateString, formatTime } from '../../core/time';
+import {
+  addDays, formatAbbreviated, formatTime, formatWeekdayDayMonth, formatWeekdayDayMonthTime, localDateString, startOfDay,
+} from '../../core/time';
 import {
   ActionRow, ActionSheet, AdaptiveStack, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
   useLargeText,
 } from '../../ui/components';
 import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
+import { useNow } from '../../state/hooks';
 import { Space, useTheme } from '../../ui/theme';
 
 export interface DeadlineActions {
@@ -238,12 +241,14 @@ function RenameSheet({
  * is, when it's due, and how much of the grade it's worth.
  */
 export function DeadlineForm({
-  visible, onClose, onSubmit, editing,
+  visible, onClose, onSubmit, editing, defaultDue,
 }: {
   visible: boolean;
   onClose: () => void;
   onSubmit: (fields: DeadlineFields) => void;
   editing?: { deadline: Deadline; standing: DeadlineStanding };
+  /** Where a new one's date starts — the class it's added from. A week out when there's no class. */
+  defaultDue?: Date;
 }) {
   const theme = useTheme();
   const initial = editing?.deadline;
@@ -253,7 +258,8 @@ export function DeadlineForm({
   // Kept as typed; blank is 0, which is not graded.
   const [weightText, setWeightText] = useState('');
   const weight = DeadlineRules.parseGradeWeight(weightText);
-  const valid = DeadlineRules.isValid(title, due) && weight !== null;
+  const now = useNow();
+  const valid = DeadlineRules.isValid(title, due, now) && weight !== null;
 
   // Filled in each time it opens, so an edit starts from what's saved now, not at first render.
   const [wasVisible, setWasVisible] = useState(visible);
@@ -262,7 +268,7 @@ export function DeadlineForm({
     if (visible) {
       setTitle(initial?.title ?? '');
       setKind(initial?.kind ?? 'assignment');
-      setDue(initial?.due ?? addDays(new Date(), 7));
+      setDue(initial?.due ?? defaultDue ?? addDays(new Date(), 7));
       setWeightText(initial && initial.gradeWeight > 0 ? String(initial.gradeWeight) : '');
     }
   }
@@ -317,8 +323,15 @@ export function DeadlineForm({
             </View>
           </Row>
           <Row>
-            <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Due</Txt>
-            <DuePicker value={due} onChange={setDue} />
+            <View style={styles.dueRow}>
+              <Txt type="footnote" color={theme.inkSecondary}>Due</Txt>
+              <DuePicker value={due} onChange={setDue} />
+            </View>
+            {due.getTime() <= now.getTime() ? (
+              <Txt type="caption" color={theme.tint.off}>That time has passed. Pick a later one.</Txt>
+            ) : !editing && defaultDue && due.getTime() === defaultDue.getTime() ? (
+              <Txt type="caption" color={theme.inkTertiary}>When this class starts</Txt>
+            ) : null}
           </Row>
           <Row>
             <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Worth</Txt>
@@ -360,34 +373,56 @@ function editFooter({ deadline, standing }: { deadline: Deadline; standing: Dead
   return parts.join(' ');
 }
 
-/** A date and time in the future: the system picker where there is one, typed on the web. */
+/**
+ * The due date and the time as two small controls on one line. The form already opens on
+ * the class's own time, so these are there to be changed, not filled in: iOS's compact
+ * pickers (a pill that opens a calendar or a wheel), Android's dialogs behind two chips,
+ * typed on the web. Changing one keeps the other.
+ */
 function DuePicker({ value, onChange }: { value: Date; onChange: (date: Date) => void }) {
   const theme = useTheme();
-  const now = new Date();
+  const today = startOfDay(new Date());
+  const setDay = (day: Date) =>
+    onChange(new Date(day.getFullYear(), day.getMonth(), day.getDate(), value.getHours(), value.getMinutes()));
+  const setTime = (time: Date) =>
+    onChange(new Date(value.getFullYear(), value.getMonth(), value.getDate(), time.getHours(), time.getMinutes()));
+
   if (Platform.OS === 'ios') {
     return (
-      <DateTimePicker
-        value={value}
-        mode="datetime"
-        display="inline"
-        minimumDate={now}
-        accentColor={theme.accent}
-        themeVariant={theme.scheme}
-        onValueChange={(_, date) => onChange(date)}
-      />
+      <View style={styles.dueControls}>
+        <DateTimePicker
+          value={value}
+          mode="date"
+          display="compact"
+          minimumDate={today}
+          accentColor={theme.accent}
+          themeVariant={theme.scheme}
+          onValueChange={(_, date) => setDay(date)}
+        />
+        <DateTimePicker
+          value={value}
+          mode="time"
+          display="compact"
+          accentColor={theme.accent}
+          themeVariant={theme.scheme}
+          onValueChange={(_, date) => setTime(date)}
+        />
+      </View>
     );
   }
   if (Platform.OS === 'android') {
-    // Android's pickers are dialogs, one for the date and one for the time.
-    const pick = () =>
-      DateTimePickerAndroid.open({
-        value,
-        mode: 'date',
-        minimumDate: now,
-        onValueChange: (_, date) =>
-          DateTimePickerAndroid.open({ value: date, mode: 'time', is24Hour: true, onValueChange: (__, time) => onChange(time) }),
-      });
-    return <InlineAction title={formatAbbreviated(value)} onPress={pick} />;
+    return (
+      <View style={styles.dueControls}>
+        <InlineAction
+          title={formatWeekdayDayMonth(value)}
+          onPress={() => DateTimePickerAndroid.open({ value, mode: 'date', minimumDate: today, onValueChange: (_, date) => setDay(date) })}
+        />
+        <InlineAction
+          title={formatTime(value)}
+          onPress={() => DateTimePickerAndroid.open({ value, mode: 'time', is24Hour: true, onValueChange: (_, date) => setTime(date) })}
+        />
+      </View>
+    );
   }
   return <TypedDate value={value} onChange={onChange} />;
 }
@@ -428,6 +463,8 @@ const styles = StyleSheet.create({
   moreButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   input: { fontSize: 17, minHeight: 40 },
   fieldLabel: { marginBottom: Space.xs },
+  dueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.m },
+  dueControls: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   kinds: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.s },
   kind: { borderRadius: 8, paddingHorizontal: Space.m, paddingVertical: Space.s },
   weight: { flexDirection: 'row', alignItems: 'center', gap: Space.s },

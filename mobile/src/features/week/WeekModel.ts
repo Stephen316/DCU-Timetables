@@ -93,6 +93,11 @@ export class WeekModel extends Observable {
     return this.cancellations.get(CancellationRules.eventKey(event)) ?? CancellationStatus.none;
   }
 
+  /** Everything due at this class on its day — what the day view lists and the "!" marks. */
+  dueAt(event: TimetableEvent): Deadline[] {
+    return DeadlineRules.dueAt(event, this.deadlines);
+  }
+
   /** What (if anything) to outline a class with. */
   highlight(event: TimetableEvent): ClassHighlight | null {
     return DeadlineRules.highlight(event, this.deadlines, this.status(event));

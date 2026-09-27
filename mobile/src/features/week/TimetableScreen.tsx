@@ -77,6 +77,7 @@ export function TimetableScreen() {
             weekStart={model.weeks[i]?.firstDay ?? null}
             clashingIDs={model.clashingIDs}
             highlight={(e) => model.highlight(e)}
+            dueAt={(e) => model.dueAt(e)}
             onSelect={open}
             now={now}
           />
@@ -105,6 +106,7 @@ export function TimetableScreen() {
               now={now}
               clashingIDs={model.clashingIDs}
               highlight={(e) => model.highlight(e)}
+              dueAt={(e) => model.dueAt(e)}
               skipped={skippedSet}
               isLoading={model.isLoading}
               onSelect={open}

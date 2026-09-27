@@ -1,12 +1,12 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { CancellationRules } from '../../core/cancellation';
-import { ClassHighlight, highlightReason } from '../../core/deadline';
+import { ClassHighlight, Deadline, deadlineKindLabel, displayTitle, highlightReason } from '../../core/deadline';
 import { activitySummary } from '../../core/activityCode';
 import { locationDisplay } from '../../core/roomLocation';
 import { DaySchedule, DaySlot, gapLabel, NextClassWindow, slotID } from '../../core/schedule';
 import { formatDayMonth, formatTime, isToday, isTomorrow, weekdayName } from '../../core/time';
 import { eventTypeLabel, staffText, TimetableEvent, titleOf } from '../../core/timetableEvent';
-import { Icon, Label, Txt } from '../../ui/components';
+import { DeadlineMark, Icon, Label, Txt } from '../../ui/components';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
 import { Space, useTheme } from '../../ui/theme';
 import { usePagerDrag } from './Pager';
@@ -18,13 +18,15 @@ import { RailGap, RailRow, railPosition, RailStop } from './Rail';
  * the left, and the class to be heading to picked out in the accent.
  */
 export function DayPage({
-  day, events, now, clashingIDs, highlight, skipped, isLoading, onSelect,
+  day, events, now, clashingIDs, highlight, dueAt, skipped, isLoading, onSelect,
 }: {
   day: Date | null;
   events: TimetableEvent[];
   now: Date;
   clashingIDs: Set<string>;
   highlight: (event: TimetableEvent) => ClassHighlight | null;
+  /** What's due at this class on its day. */
+  dueAt: (event: TimetableEvent) => Deadline[];
   /** Event keys marked "I won't attend". */
   skipped: Set<string>;
   /** Holds back the empty state while the week is still arriving. */
@@ -69,6 +71,7 @@ export function DayPage({
                 followsClass={slots[i - 1]?.kind === 'session'}
                 count={slots.length}
                 highlight={highlight(slot.event)}
+                due={dueAt(slot.event)}
                 isClashing={clashingIDs.has(slot.event.id)}
                 isSkipped={skipped.has(CancellationRules.eventKey(slot.event))}
                 now={now}
@@ -108,7 +111,7 @@ function DayHeading({ day, slots, now }: { day: Date | null; slots: DaySlot[]; n
 
 /** A class on the rail: tap to open its page. */
 function ClassStop({
-  event, stop, index, count, followsClass, highlight, isClashing, isSkipped, now, onSelect,
+  event, stop, index, count, followsClass, highlight, due, isClashing, isSkipped, now, onSelect,
 }: {
   event: TimetableEvent;
   stop: RailStop;
@@ -117,6 +120,8 @@ function ClassStop({
   /** Straight after another class, with no free time between to separate them. */
   followsClass: boolean;
   highlight: ClassHighlight | null;
+  /** Deadlines due at this class — listed in its description, and nowhere when there are none. */
+  due: Deadline[];
   isClashing: boolean;
   /** Marked "I won't attend". Dimmed rather than hidden — it's still on. */
   isSkipped: boolean;
@@ -141,8 +146,13 @@ function ClassStop({
     return rest === 0 ? `Starts in ${hours} hr` : `Starts in ${hours} hr ${rest} min`;
   })();
 
+  // A deadline has its own lines below, so only a cancellation or a move takes the status line.
+  const news = highlight && (highlight.kind === 'cancelled' || highlight.kind === 'moved') ? highlight : null;
+  const dueLines = due.map((d) => `${deadlineKindLabel(d.kind)}: ${displayTitle(d)}`);
+
   const spoken = [
-    highlight ? highlightReason(highlight) : stop.kind === 'next' ? nextLine : null,
+    news ? highlightReason(news) : stop.kind === 'next' ? nextLine : null,
+    ...dueLines.map((line) => `Due at this class, ${line}`),
     titleOf(event),
     `${formatTime(event.start)} to ${formatTime(event.end)}`,
     activitySummary(event.activity),
@@ -163,19 +173,27 @@ function ClassStop({
     >
       <RailRow start={event.start} end={event.end} stop={stop} position={railPosition(index, count)} divider={followsClass}>
         <View style={{ gap: Space.xxs, opacity: isSkipped ? 0.45 : stop.kind === 'past' ? 0.6 : 1 }}>
-          {highlight ? (
-            <Label icon={highlightIcon(highlight)} text={highlightReason(highlight)} type="status" color={highlightTint(highlight, theme)} />
+          {news ? (
+            <Label icon={highlightIcon(news)} text={highlightReason(news)} type="status" color={highlightTint(news, theme)} />
           ) : stop.kind === 'next' ? (
             <Txt type="status" color={theme.accent}>{nextLine}</Txt>
           ) : null}
 
           <View style={styles.titleLine}>
             <Txt type="headline" style={styles.title}>{titleOf(event)}</Txt>
+            {due.length > 0 ? <View style={styles.mark}><DeadlineMark /></View> : null}
             {isSkipped ? <Icon name="notAttending" size={16} color={theme.inkSecondary} /> : null}
             {isClashing ? <Icon name="warning" size={16} color={theme.tint.off} /> : null}
           </View>
 
           <Txt type="subheadline" color={theme.inkSecondary}>{activitySummary(event.activity)}</Txt>
+
+          {due.map((d) => (
+            <Txt key={d.id} type="footnote" color={theme.tint.test} numberOfLines={2}>
+              <Txt type="footnote" color={theme.tint.test} style={styles.dueKind}>{deadlineKindLabel(d.kind)}: </Txt>
+              {displayTitle(d)}
+            </Txt>
+          ))}
 
           {place ? (
             <Label icon={event.type === 'onCampus' ? 'place' : 'video'} text={place} type="footnote" color={theme.inkSecondary} />
@@ -196,4 +214,7 @@ const styles = StyleSheet.create({
   rail: { paddingLeft: Space.l },
   titleLine: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.s },
   title: { flex: 1 },
+  // Sits on the headline's first line rather than its top edge.
+  mark: { paddingTop: 3 },
+  dueKind: { fontWeight: '600' },
 });
