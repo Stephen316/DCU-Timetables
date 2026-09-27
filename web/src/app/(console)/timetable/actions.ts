@@ -1,41 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { currentProfile, supabaseServer } from "@/lib/supabase/server";
+import { consoleOpen } from "@/lib/auth/gate";
+import { supabaseServer } from "@/lib/supabase/server";
 import { classes, weeks } from "@/lib/dcu/timetable";
-import { audience, checkChange, hitFindings, removalHits, toRow, type TimetableChange } from "@/lib/changes/change";
-import type { Finding } from "@/lib/extraction/rotation";
+import { audience, toRow, type TimetableChange } from "@/lib/changes/change";
+import { review } from "@/lib/changes/review";
 
 type Result = { ok: true } | { ok: false; error: string };
 
-async function admin() {
-  // A Server Action is reachable by POST without the page that hosts it.
-  const profile = await currentProfile();
-  return profile?.role === "admin";
-}
-
-/// The teaching weeks the dates fall in, so a removal is checked against those weeks only.
-async function weeksFor(dates: string[]): Promise<number[]> {
-  const all = await weeks();
-  const within = (d: string, first: string) => {
-    const t = Date.parse(`${d}T12:00:00Z`) - Date.parse(`${first}T00:00:00Z`);
-    return t >= 0 && t < 7 * 86_400_000;
-  };
-  return [...new Set(dates.flatMap((d) => all.filter((w) => within(d, w.firstDay)).map((w) => w.number)))];
-}
-
-/// Everything saving would refuse or warn about, including — for a removal — whether each
-/// date has a class to remove. Used by Ask when it proposes, and again here when it saves.
-export async function reviewChange(change: TimetableChange): Promise<Finding[]> {
-  const findings = checkChange(change);
-  if (change.kind !== "remove" || findings.some((f) => f.level === "error")) return findings;
-  try {
-    const found = await classes([change.module], await weeksFor(change.dates));
-    return [...findings, ...hitFindings(change, removalHits(change, found))];
-  } catch {
-    return [...findings, { level: "warn", message: "Couldn't reach DCU's timetable to check the dates have that class." }];
-  }
-}
+// A Server Action is reachable by POST without the page that hosts it, so each checks.
+const NOT_ALLOWED = "The console is locked, or this account isn't an admin.";
 
 export async function saveChange(change: TimetableChange): Promise<Result> {
   return saveChanges([change]);
@@ -44,10 +19,10 @@ export async function saveChange(change: TimetableChange): Promise<Result> {
 /// Several changes, all or none — "keep only for BMED1" is a removal for each of the other
 /// programmes, and half of those saved is a timetable nobody meant.
 export async function saveChanges(changes: TimetableChange[]): Promise<Result> {
-  if (!(await admin())) return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: NOT_ALLOWED };
   if (!changes.length) return { ok: false, error: "Nothing to save." };
   for (const change of changes) {
-    const blocker = (await reviewChange(change)).find((f) => f.level === "error");
+    const blocker = (await review(change)).find((f) => f.level === "error");
     if (blocker) return { ok: false, error: changes.length > 1 ? `${audience(change.group)}: ${blocker.message}` : blocker.message };
   }
 
@@ -62,7 +37,7 @@ export async function saveChanges(changes: TimetableChange[]): Promise<Result> {
 }
 
 export async function deleteChange(id: string): Promise<Result> {
-  if (!(await admin())) return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: NOT_ALLOWED };
   const db = await supabaseServer();
   const { data, error } = await db.rpc("delete_timetable_change", { p_id: id });
   if (error) return { ok: false, error: error.message };
@@ -75,7 +50,7 @@ export async function deleteChange(id: string): Promise<Result> {
 /// "remove every week" means, read from DCU rather than assumed from a week pattern.
 export async function slotDates(module: string, code: string, day: string, start: string):
   Promise<{ ok: true; dates: string[] } | { ok: false; error: string }> {
-  if (!(await admin())) return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: NOT_ALLOWED };
   try {
     const all = await weeks();
     const found = await classes([module], all.map((w) => w.number));

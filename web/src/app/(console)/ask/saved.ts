@@ -1,6 +1,7 @@
 "use server";
 
-import { currentProfile, supabaseServer } from "@/lib/supabase/server";
+import { consoleOpen } from "@/lib/auth/gate";
+import { supabaseServer } from "@/lib/supabase/server";
 
 /// What applies to one programme and module — the "Saved" list under the chat. Nothing
 /// without both: every table for every module is offered by the reuse dropdown instead
@@ -38,8 +39,7 @@ export type SavedView = {
 
 export async function listSaved(programme: string, module: string):
   Promise<{ ok: true; view: SavedView } | { ok: false; error: string }> {
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   if (!programme || !module) return { ok: true, view: { rotation: null, splits: [], classList: null } };
 
   const db = await supabaseServer();
@@ -115,8 +115,7 @@ export type SavedTarget =
 /// Removes one entry from the Saved list. Each kind has its own definer function, which
 /// checks the caller is an admin and writes the audit row.
 export async function deleteSaved(target: SavedTarget): Promise<{ ok: true } | { ok: false; error: string }> {
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   const db = await supabaseServer();
 
   const { error } =

@@ -1,6 +1,7 @@
 "use server";
 
-import { currentProfile, supabaseServer } from "@/lib/supabase/server";
+import { consoleOpen } from "@/lib/auth/gate";
+import { supabaseServer } from "@/lib/supabase/server";
 import { mistralKey, MISTRAL_MODEL } from "@/lib/mistral/client";
 import { classify } from "@/lib/mistral/api";
 import { readDocument, transcribeRotation, type ReadDocument } from "@/lib/mistral/rotation";
@@ -12,7 +13,8 @@ import { normalise } from "@/lib/extraction/normalise";
 import { interpretMessage, type ChangeArgs } from "@/lib/mistral/split";
 import { classes, dublin, weeks } from "@/lib/dcu/timetable";
 import { checkChangeProvenance, describeChange, fromRow, type TimetableChange } from "@/lib/changes/change";
-import { reviewChange, saveChange } from "../timetable/actions";
+import { saveChange } from "../timetable/actions";
+import { review } from "@/lib/changes/review";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
 import { PROGRAMME_CODE, checkScope, moduleFor, programmeFor, type Scope } from "@/lib/proposals/courses";
 import type { Proposal } from "@/lib/proposals/types";
@@ -36,18 +38,32 @@ export type AskResult = {
 };
 
 
+/// The conversation the page sent back, or null when it isn't one — a hand-made POST, or a
+/// page from an older deploy.
+function parseHistory(raw: FormDataEntryValue | null): Turn[] | null {
+  try {
+    const value: unknown = JSON.parse(typeof raw === "string" && raw ? raw : "[]");
+    if (!Array.isArray(value)) return null;
+    const ok = value.every((t) =>
+      t && typeof t === "object" && (t.role === "user" || t.role === "model") && typeof t.text === "string");
+    return ok ? (value as Turn[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function ask(form: FormData): Promise<AskResult> {
   // The layout redirects non-admins, but a Server Action is its own entry point — reachable
   // by POST without ever rendering the page that hosts it.
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
 
   const scope: Scope = {
     programme: String(form.get("programme") ?? "").trim(),
     module: String(form.get("module") ?? "").trim(),
   };
   const message = String(form.get("message") ?? "").trim();
-  const history: Turn[] = JSON.parse(String(form.get("history") ?? "[]"));
+  const history = parseHistory(form.get("history"));
+  if (!history) return { ok: false, error: "The conversation couldn't be read. Start a new conversation and try again." };
   const file = form.get("file");
   const hasFile = file instanceof File && file.size > 0;
 
@@ -211,7 +227,7 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
         ? [{ level: "error" as const, message: `A change for ${change.group} alone is made on the Timetable page, not here.` }]
         : []),
       ...checkScope(scope, { module: a.module }),
-      ...(await reviewChange(change)),
+      ...(await review(change)),
       ...checkChangeProvenance(change, source),
     ],
   };
@@ -468,8 +484,7 @@ function members(rows: RosterRow[]) {
 /// shown. Once a proposal has been on screen, the payload and the picture are two different
 /// objects.
 export async function accept(proposal: Proposal) {
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   const db = await supabaseServer();
 
   if (proposal.kind === "split") {

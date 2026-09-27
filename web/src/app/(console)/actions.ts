@@ -2,14 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { consoleOpen } from "@/lib/auth/gate";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /// Every mutation goes through a Postgres RPC rather than a table write, so the action and
 /// its audit row land in one transaction. A console that writes the row and then logs it
 /// will eventually do the first and not the second — in exactly the case you needed the
 /// log for.
+///
+/// Each function below also checks the console is open in this browser: the database
+/// functions check the caller is an admin, but only the console knows about its lock.
+
+const LOCKED = "The console is locked, or this account isn't an admin.";
 
 export async function verifyDeadline(id: string, status: "verified" | "rejected" | "pending") {
+  if (!(await consoleOpen())) return { error: LOCKED };
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc("verify_deadline", { deadline: id, new_status: status });
   if (error) return { error: error.message };
@@ -20,6 +27,7 @@ export async function verifyDeadline(id: string, status: "verified" | "rejected"
 /// Closes every open report on a deadline. "remove" also rejects the deadline, which takes
 /// it out of every student's view.
 export async function resolveReports(id: string, action: "dismiss" | "remove") {
+  if (!(await consoleOpen())) return { error: LOCKED };
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc("resolve_deadline_reports", { p_deadline: id, p_action: action });
   if (error) return { error: error.message };
@@ -28,6 +36,7 @@ export async function resolveReports(id: string, action: "dismiss" | "remove") {
 }
 
 export async function setRole(id: string, role: "student" | "trusted" | "admin") {
+  if (!(await consoleOpen())) return { error: LOCKED };
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc("set_user_role", { target: id, new_role: role });
   if (error) return { error: error.message };
@@ -36,6 +45,7 @@ export async function setRole(id: string, role: "student" | "trusted" | "admin")
 }
 
 export async function setBan(id: string, days: number | null, reason: string) {
+  if (!(await consoleOpen())) return { error: LOCKED };
   const supabase = await supabaseServer();
   const until =
     days === null ? null : new Date(Date.now() + days * 86_400_000).toISOString();
@@ -46,6 +56,7 @@ export async function setBan(id: string, days: number | null, reason: string) {
 }
 
 export async function findByPI(pi: string) {
+  if (!(await consoleOpen())) return { error: LOCKED };
   const supabase = await supabaseServer();
   const { data, error } = await supabase.rpc("find_by_pi", { identifier: pi });
   if (error) return { error: error.message };

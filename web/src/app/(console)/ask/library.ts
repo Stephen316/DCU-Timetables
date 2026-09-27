@@ -1,6 +1,7 @@
 "use server";
 
-import { currentProfile, supabaseServer } from "@/lib/supabase/server";
+import { consoleOpen } from "@/lib/auth/gate";
+import { supabaseServer } from "@/lib/supabase/server";
 import { PROGRAMMES, checkScope, moduleFor, type Scope } from "@/lib/proposals/courses";
 import { checkProvenance, checkRule, splitSource, type SplitRule } from "@/lib/proposals/rules";
 import { validateRotation, type RotationSession } from "@/lib/extraction/rotation";
@@ -29,13 +30,9 @@ export type LibraryEntry =
 
 type Failed = { ok: false; error: string };
 
-async function admin() {
-  const profile = await currentProfile();
-  return profile?.role === "admin";
-}
 
 export async function listLibrary(): Promise<{ ok: true; entries: LibraryEntry[] } | Failed> {
-  if (!(await admin())) return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   const db = await supabaseServer();
 
   const [rot, splits, rosters, groups] = await Promise.all([
@@ -100,7 +97,7 @@ export type Reused = { ok: true; proposal: Proposal; reply: string } | Failed;
 /// A saved rotation back on the panel as a proposal, for the selected programme. From there
 /// it is corrected by message, like an upload, and accepting saves it as a new version.
 export async function reuseRotation(from: string, scope: Scope): Promise<Reused> {
-  if (!(await admin())) return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   const db = await supabaseServer();
   const { data, error } = await db.from("lab_rotations")
     .select("title, version, created_at, lab_rotation_sessions(week, date, day, start_time, end_time, module, activity, groups, room)")
@@ -139,7 +136,7 @@ export async function reuseRotation(from: string, scope: Scope): Promise<Reused>
 /// A saved split, proposed for the selected module. The same bands often apply to a sister
 /// module — a lecture split by surname in Maths I is usually the same in Maths II.
 export async function reuseSplit(from: { module: string; activity: string }, scope: Scope): Promise<Reused> {
-  if (!(await admin())) return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   const db = await supabaseServer();
   const [{ data, error }, existing] = await Promise.all([
     db.from("module_splits")

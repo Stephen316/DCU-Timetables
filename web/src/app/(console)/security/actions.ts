@@ -1,16 +1,14 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { consoleStatus } from "@/lib/auth/gate";
-import { currentProfile, supabaseServer } from "@/lib/supabase/server";
+import { consoleOpen } from "@/lib/auth/gate";
+import { supabaseServer } from "@/lib/supabase/server";
 
 /// Every action here re-checks admin, and that this browser is open. A Server Action is its
 /// own entry point, reachable by POST without ever rendering the page that hosts it — and
 /// changing the code from a locked browser would undo the lock.
 async function requireOpen() {
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") throw new Error("Not allowed.");
-  if (!(await consoleStatus())?.unlocked) throw new Error("The console is locked.");
+  if (!(await consoleOpen())) throw new Error("The console is locked, or this account isn't an admin.");
 }
 
 export async function changeCode(_prev: unknown, form: FormData) {

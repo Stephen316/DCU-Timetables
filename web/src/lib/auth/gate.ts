@@ -1,5 +1,5 @@
 import "server-only";
-import { supabaseServer } from "@/lib/supabase/server";
+import { currentProfile, supabaseServer } from "@/lib/supabase/server";
 
 /// Two ways into the console (supabase/phase22_remembered_console.sql):
 ///
@@ -34,4 +34,13 @@ export async function consoleStatus(): Promise<ConsoleStatus | null> {
     hasCode: data.has_code,
     attemptsLeft: data.attempts_left,
   };
+}
+
+/// True for an admin in a browser whose console is open. Every Server Action asks this: an
+/// action is reachable by POST without the page that hosts it, so the page's lock alone
+/// would leave every action open on a locked browser.
+export async function consoleOpen(): Promise<boolean> {
+  const profile = await currentProfile();
+  if (profile?.role !== "admin") return false;
+  return (await consoleStatus())?.unlocked === true;
 }
