@@ -14,7 +14,6 @@ import { AccountSheet } from '../account/AccountSheet';
 import { DayPage } from './DayPage';
 import { Pager } from './Pager';
 import { WeekGridView } from './WeekGrid';
-import { WeekModel } from './WeekModel';
 
 /** The timetable tab: the day on the rail, or the week as a grid. */
 export function TimetableScreen() {
@@ -24,7 +23,6 @@ export function TimetableScreen() {
   const model = useModel(useWeekModel());
   const now = useNow();
   const [showsCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
-  const [hiddenGroups] = usePrefJSON<string[]>(PrefKey.hiddenGroups, []);
   const [skipped] = usePrefJSON<string[]>(PrefKey.skipped, []);
   const [sheet, setSheet] = useState<'menu' | 'account' | null>(null);
 
@@ -46,17 +44,6 @@ export function TimetableScreen() {
   useAppEvent('timetableChangesChanged', () => model.reloadChanges());
   useAppEvent('moduleSplitsChanged', () => model.reloadSplits());
   useAppEvent('labRotationChanged', () => void model.reloadAll());
-
-  const hiddenKey = hiddenGroups.join('\n');
-  const firstHidden = useRef(true);
-  useEffect(() => {
-    if (firstHidden.current) {
-      firstHidden.current = false;
-      return;
-    }
-    model.updateHiddenGroups(new Set(hiddenGroups));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hiddenKey, model]);
 
   const open = (event: TimetableEvent) => router.push({ pathname: '/class/[id]', params: { id: event.id } });
 
@@ -83,7 +70,6 @@ export function TimetableScreen() {
       <Pager
         count={Math.max(model.weeks.length, 1)}
         index={model.weekIndex}
-        bounds={WeekModel.weekBounds}
         onIndexChange={(i) => model.setWeekIndex(i)}
         renderPage={(i) => (
           <WeekGridView
@@ -103,7 +89,6 @@ export function TimetableScreen() {
       <Pager
         count={Math.max(model.weeks.length * WeekdayIndex.daysPerWeek, 1)}
         index={WeekdayIndex.flat(model.weekIndex, model.dayIndex)}
-        bounds="clamped"
         swipe="easy"
         onIndexChange={(i) => {
           const { week, day } = WeekdayIndex.split(i);

@@ -143,7 +143,7 @@ describe('Week model with a split', () => {
   async function model(address: string) {
     const services = await createServices({ kv: new MemoryKV(), secrets: { get: async () => null, set: async () => {}, remove: async () => {} }, env: {} });
     services.user.save({ id: 'u1', address });
-    return { services, model: new WeekModel(services, programme, source, null, new Set()) };
+    return { services, model: new WeekModel(services, programme, source, null) };
   }
 
   test("shows only the signed-in student's band, and re-applies when the splits change", async () => {
@@ -163,7 +163,7 @@ describe('Week model with a split', () => {
   test('a split already cached applies from the first load', async () => {
     const { services } = await model('niamh.smith@mail.dcu.ie');
     services.splitCache.store([lectureSplit]);
-    const m = new WeekModel(services, programme, source, null, new Set());
+    const m = new WeekModel(services, programme, source, null);
     await m.start();
     expect(ids(m.events)).toEqual([thuLecture.id]);
   });

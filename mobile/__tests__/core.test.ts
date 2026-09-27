@@ -1,6 +1,4 @@
 import { Attendance, LecturerDirectory, lecturerDisplayName, lecturerInitials, makeLecturer, PagerDragState, PagerIndex, WeekdayIndex } from '../src/core/misc';
-import { GroupCatalog } from '../src/core/groupCatalog';
-import { groupKeyOf } from '../src/core/timetableEvent';
 import { parseActivityCode } from '../src/core/activityCode';
 import {
   AccountRules, makeAccountProfile, parseDCUEmail, parseRole, PasswordValidation, PublicIdentifier, StudentNumber,
@@ -444,53 +442,37 @@ describe('Next class window', () => {
 describe('Pagers', () => {
   const weeks = 52;
   test('week 1 has nothing before it', () => {
-    expect(PagerIndex.resolve(-1, weeks, 'clamped')).toBeNull();
-    expect(PagerIndex.step(0, -1, weeks, 'clamped')).toBe(0);
-    expect(PagerIndex.canStep(0, -1, weeks, 'clamped')).toBe(false);
+    expect(PagerIndex.resolve(-1, weeks)).toBeNull();
+    expect(PagerIndex.step(0, -1, weeks)).toBe(0);
   });
   test('the last week has nothing after it', () => {
-    expect(PagerIndex.resolve(weeks, weeks, 'clamped')).toBeNull();
-    expect(PagerIndex.step(51, 1, weeks, 'clamped')).toBe(51);
-    expect(PagerIndex.canStep(51, 1, weeks, 'clamped')).toBe(false);
+    expect(PagerIndex.resolve(weeks, weeks)).toBeNull();
+    expect(PagerIndex.step(51, 1, weeks)).toBe(51);
   });
   test('steps normally in the middle', () => {
-    expect(PagerIndex.step(10, 1, weeks, 'clamped')).toBe(11);
-    expect(PagerIndex.step(10, -1, weeks, 'clamped')).toBe(9);
-    expect(PagerIndex.canStep(0, 1, weeks, 'clamped')).toBe(true);
-    expect(PagerIndex.canStep(51, -1, weeks, 'clamped')).toBe(true);
-    expect(PagerIndex.resolve(0, weeks, 'clamped')).toBe(0);
-    expect(PagerIndex.resolve(51, weeks, 'clamped')).toBe(51);
+    expect(PagerIndex.step(10, 1, weeks)).toBe(11);
+    expect(PagerIndex.step(10, -1, weeks)).toBe(9);
+    expect(PagerIndex.resolve(0, weeks)).toBe(0);
+    expect(PagerIndex.resolve(51, weeks)).toBe(51);
   });
   test('a big step stops at the edge', () => {
-    expect(PagerIndex.step(3, -10, weeks, 'clamped')).toBe(0);
-    expect(PagerIndex.step(48, 10, weeks, 'clamped')).toBe(51);
-  });
-  test('days still wrap within the week', () => {
-    expect(PagerIndex.resolve(-1, 5, 'wrapping')).toBe(4);
-    expect(PagerIndex.resolve(5, 5, 'wrapping')).toBe(0);
-    expect(PagerIndex.step(0, -1, 5, 'wrapping')).toBe(4);
-    expect(PagerIndex.step(4, 1, 5, 'wrapping')).toBe(0);
-    expect(PagerIndex.canStep(0, -1, 5, 'wrapping')).toBe(true);
+    expect(PagerIndex.step(3, -10, weeks)).toBe(0);
+    expect(PagerIndex.step(48, 10, weeks)).toBe(51);
   });
   test('the day pager runs Friday into the next Monday and back', () => {
     const friday = WeekdayIndex.flat(3, 4);
     expect(WeekdayIndex.split(friday + 1)).toEqual({ week: 4, day: 0 });
     expect(WeekdayIndex.split(WeekdayIndex.flat(4, 0) - 1)).toEqual({ week: 3, day: 4 });
-    expect(PagerIndex.resolve(-1, weeks * 5, 'clamped')).toBeNull();
-    expect(PagerIndex.resolve(weeks * 5, weeks * 5, 'clamped')).toBeNull();
+    expect(PagerIndex.resolve(-1, weeks * 5)).toBeNull();
+    expect(PagerIndex.resolve(weeks * 5, weeks * 5)).toBeNull();
   });
   test('an empty pager asks for nothing', () => {
-    for (const bounds of ['clamped', 'wrapping'] as const) {
-      expect(PagerIndex.resolve(0, 0, bounds)).toBeNull();
-      expect(PagerIndex.step(0, 1, 0, bounds)).toBe(0);
-      expect(PagerIndex.canStep(0, 1, 0, bounds)).toBe(false);
-    }
+    expect(PagerIndex.resolve(0, 0)).toBeNull();
+    expect(PagerIndex.step(0, 1, 0)).toBe(0);
   });
   test('a single page goes nowhere', () => {
-    for (const bounds of ['clamped', 'wrapping'] as const) {
-      expect(PagerIndex.canStep(0, 1, 1, bounds)).toBe(false);
-      expect(PagerIndex.canStep(0, -1, 1, bounds)).toBe(false);
-    }
+    expect(PagerIndex.step(0, 1, 1)).toBe(0);
+    expect(PagerIndex.step(0, -1, 1)).toBe(0);
   });
 
   test('taps pass through when nobody is swiping', () => expect(new PagerDragState().isSuppressingTaps()).toBe(false));
@@ -551,39 +533,6 @@ describe('Time', () => {
     expect(parseISO('2026-09-15T14:30:00.123456+01:00')?.getTime()).toBe(utc(2026, 9, 15, 13, 30).getTime() + 123);
     expect(parseISO('not a date')).toBeNull();
     expect(isoSeconds(utc(2026, 9, 16, 9))).toBe('2026-09-16T09:00:00Z');
-  });
-});
-
-
-describe('Group catalog', () => {
-  const e = (code: string, moduleName: string | null = null) => event(code, new Date(), undefined, { moduleName });
-
-  test('offers only choosable streams, not lectures', () => {
-    const modules = GroupCatalog.modules([
-      e('EEG1001[1]OC/L1/01', 'Project & Technical Drawing'),
-      e('EEG1001[1]OC/P1/01', 'Project & Technical Drawing'),
-      e('EEG1001[1]OC/P2/01', 'Project & Technical Drawing'),
-      e('EEG1001[1]OC/P1/01', 'Project & Technical Drawing'),
-    ]);
-    expect(modules).toHaveLength(1);
-    expect(modules[0].moduleCode).toBe('EEG1001');
-    expect(modules[0].groups).toHaveLength(2);
-  });
-
-  test('a module with only lectures is omitted', () => {
-    expect(GroupCatalog.modules([e('EEG1006[1]OC/L1/01'), e('EEG1006[1]OC/L2/01')])).toHaveLength(0);
-  });
-
-  test('surname splits are distinct groups', () => {
-    const modules = GroupCatalog.modules([e('BIO1000[1]OC/T1/01 Surname A - M', 'How life works 1'), e('BIO1000[1]OC/T1/01 Surname N - Z', 'How life works 1')]);
-    expect(modules[0].groups).toHaveLength(2);
-  });
-
-  test('the filter hides selected groups, and nothing when none are hidden', () => {
-    const p1 = e('EEG1001[1]OC/P1/01');
-    const p2 = e('EEG1001[1]OC/P2/01');
-    expect(GroupCatalog.filter([p1, p2], new Set([groupKeyOf(p2)])).map(groupKeyOf)).toEqual([groupKeyOf(p1)]);
-    expect(GroupCatalog.filter([p1], new Set())).toHaveLength(1);
   });
 });
 

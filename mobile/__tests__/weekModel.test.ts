@@ -1,9 +1,9 @@
-import { CancellationRules, makeReport } from '../src/core/cancellation';
+import { CancellationRules, CancellationTally, makeReport } from '../src/core/cancellation';
 import { makeChange , TimetableAudience } from '../src/core/profile';
-import { groupKeyOf, TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar } from '../src/core/timetableEvent';
+import { TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar } from '../src/core/timetableEvent';
 import { TimetableSource } from '../src/data/dcuApi';
 import { createServices } from '../src/data/services';
-import { MemoryKV, PrefKey } from '../src/data/storage';
+import { MemoryKV } from '../src/data/storage';
 import { WeekModel } from '../src/features/week/WeekModel';
 import { at, event } from './helpers';
 
@@ -27,10 +27,10 @@ class FakeSource implements TimetableSource {
 
 const programme: TimetableCategory = { identity: 'p', name: 'ECE1 (Electronic Eng)', categoryTypeIdentity: 't' };
 
-async function setup(events: TimetableEvent[], hidden: string[] = [], audience: TimetableAudience | null = null) {
+async function setup(events: TimetableEvent[], audience: TimetableAudience | null = null) {
   const services = await createServices({ kv: new MemoryKV(), secrets: { get: async () => null, set: async () => {}, remove: async () => {} }, env: {} });
   const source = new FakeSource(events);
-  return { services, source, model: (s = services) => new WeekModel(s, programme, source, audience, new Set(hidden)) };
+  return { services, source, model: (s = services) => new WeekModel(s, programme, source, audience) };
 }
 
 async function settle() {
@@ -77,13 +77,13 @@ describe('Week model', () => {
     const m = model();
     await m.start();
     await settle();
-    expect(m.canStep(-1)).toBe(false);
     m.stepIndex(-1);
     expect(m.weekIndex).toBe(0);
     m.stepIndex(5);
     await settle();
     expect(m.weekIndex).toBe(2);
-    expect(m.canStep(1)).toBe(false);
+    m.stepIndex(1);
+    expect(m.weekIndex).toBe(2);
   });
 
   test('swiping the day view past Friday lands on next Monday, and back from Monday on last Friday', async () => {
@@ -105,21 +105,9 @@ describe('Week model', () => {
     expect([m.weekLabel, m.dayIndex]).toEqual(['Week 2', 4]);
   });
 
-  test('hidden groups leave the timetable and the clash check, but not the module list', async () => {
-    jest.useFakeTimers({ now: at(2026, 9, 23, 8), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
-    const { model } = await setup([lectureWed, labA, labB]);
-    const m = model();
-    await m.start();
-    await settle();
-    m.updateHiddenGroups(new Set([groupKeyOf(labA)]));
-    expect(m.events.map((e) => e.id)).toEqual(['lec', 'labB']);
-    expect(m.clashingIDs.size).toBe(0);
-    expect(m.loadedModuleKeys).toEqual(['EEG1001']);
-  });
-
   test("the audience's saved changes are applied to the week", async () => {
     jest.useFakeTimers({ now: at(2026, 9, 23, 8), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
-    const { services, model } = await setup([lectureWed, labB], [], new TimetableAudience('EEG1', 'B'));
+    const { services, model } = await setup([lectureWed, labB], new TimetableAudience('EEG1', 'B'));
     services.changeCache.store([
       makeChange({ id: 'r', courseKey: 'EEG1', group: 'B', kind: 'remove', module: 'EEG1001', dates: ['2026-09-24'], start: '14:00' }),
       makeChange({ id: 'a', courseKey: 'EEG1', group: 'B', kind: 'add', module: 'EEG1004', title: 'Make-up lab', dates: ['2026-09-25'], start: '10:00', end: '12:00', room: 'S205' }),
@@ -128,6 +116,27 @@ describe('Week model', () => {
     await m.start();
     await settle();
     expect(m.events.map((e) => e.id)).toEqual(['lec', 'change-a-2026-09-25']);
+  });
+
+  test("an answer for a week no longer on screen doesn't clear the current week's flags", async () => {
+    jest.useFakeTimers({ now: at(2026, 9, 23, 8), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
+    const { services, model } = await setup([lectureWed, nextWeek]);
+    const m = model();
+    await m.start();
+    await settle();
+    // Each tallies request waits until the test answers it.
+    const waiting: ((t: CancellationTally[]) => void)[] = [];
+    services.cancellations.tallies = () => new Promise((resolve) => waiting.push(resolve));
+    const stale = m.refreshCancellations();
+    m.setWeekIndex(2);
+    await settle();
+    expect(waiting).toHaveLength(2);
+    const nextKey = CancellationRules.eventKey(nextWeek);
+    waiting[1]([{ eventKey: nextKey, reportCount: 3, onCount: 0, myStance: null }]);
+    await settle();
+    waiting[0]([]);
+    await stale;
+    expect(m.highlight(nextWeek)).toEqual({ kind: 'cancelled', reportCount: 3, decidedBy: null });
   });
 
   test('three reports flag a class; the outline follows', async () => {
@@ -139,6 +148,5 @@ describe('Week model', () => {
     await m.start();
     await settle();
     expect(m.highlight(lectureWed)).toEqual({ kind: 'cancelled', reportCount: 3, decidedBy: null });
-    expect(services.prefs.get(PrefKey.hiddenGroups)).toBeNull();
   });
 });

@@ -1,12 +1,12 @@
 import { CancellationRules, CancellationStatus } from '../../core/cancellation';
 import { ClassHighlight, Deadline, DeadlineRules } from '../../core/deadline';
-import { PagerBounds, PagerIndex } from '../../core/misc';
+import { PagerIndex } from '../../core/misc';
 import { TimetableAudience, TimetableChange, TimetableChanges } from '../../core/profile';
 import { ModuleSplit, ModuleSplits, surnameInitial } from '../../core/splits';
 import { campusName, parsedLocations } from '../../core/roomLocation';
 import { ClashDetector, DefaultDay } from '../../core/schedule';
 import { addDays, startOfDay } from '../../core/time';
-import { groupKeyOf as groupKey, TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/timetableEvent';
+import { TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/timetableEvent';
 import { errorMessage } from '../../data/rest';
 import { userEmail } from '../../data/session';
 import { Services } from '../../data/services';
@@ -27,8 +27,6 @@ export interface DayEvents {
  * the weeks already loaded, so it costs no extra request and can't disagree with the grid.
  */
 export class WeekModel extends Observable {
-  /** The academic year has a first and a last week; the pager stops at both. */
-  static readonly weekBounds: PagerBounds = 'clamped';
   /** A week and a day, so the next class day is in the widget even across a long weekend. */
   private static readonly widgetDays = 8;
 
@@ -65,6 +63,15 @@ export class WeekModel extends Observable {
   /** The signed-in student's surname initial, which picks their band of a split. */
   private readonly initial: string | null;
   private started = false;
+  /**
+   * Bumped by each refresh. Swiping across weeks overlaps them, and an answer that arrives
+   * after a newer request was made is for a week no longer on screen — applying it would
+   * wipe the current week's flags.
+   */
+  private cancellationRequest = 0;
+  private deadlineRequest = 0;
+  /** Weeks being fetched as the current week; the spinner stays until all have landed. */
+  private loadingCount = 0;
 
   constructor(
     readonly services: Services,
@@ -72,7 +79,6 @@ export class WeekModel extends Observable {
     private readonly source: TimetableSource,
     /** Whose changes apply. Null for a programme the console has no course for. */
     private readonly audience: TimetableAudience | null,
-    private hiddenGroups: Set<string>,
   ) {
     super();
     this.changes = audience ? services.changeCache.changes(audience.courseKey) : [];
@@ -94,6 +100,7 @@ export class WeekModel extends Observable {
 
   /** Non-fatal: a reporting outage must never stop the timetable itself showing. */
   async refreshCancellations(): Promise<void> {
+    const request = ++this.cancellationRequest;
     const keys = this.events.map((e) => CancellationRules.eventKey(e));
     if (keys.length === 0) {
       this.cancellations = new Map();
@@ -106,7 +113,7 @@ export class WeekModel extends Observable {
       this.services.cancellations.tallies(keys).catch(() => null),
       this.services.verdicts.verdicts(keys).catch(() => null),
     ]);
-    if (tallies === null && verdicts === null) return;
+    if (request !== this.cancellationRequest || (tallies === null && verdicts === null)) return;
     this.cancellations = CancellationRules.statusesFromTallies(tallies ?? [], verdicts ?? []);
     // Keys with no reports are absent from the result, so clear this week's first or a
     // withdrawn report would stay flagged on the widget.
@@ -120,6 +127,7 @@ export class WeekModel extends Observable {
    * any loaded week, so the deadlines widget doesn't lose a module that doesn't meet this week.
    */
   async refreshDeadlines(): Promise<void> {
+    const request = ++this.deadlineRequest;
     const modules = new Set([...this.moduleKeys(), ...this.events.map(DeadlineRules.moduleKey)]);
     if (modules.size === 0) {
       this.deadlines = [];
@@ -127,7 +135,9 @@ export class WeekModel extends Observable {
       return;
     }
     try {
-      this.deadlines = await this.services.deadlines.deadlinesForModules([...modules]);
+      const deadlines = await this.services.deadlines.deadlinesForModules([...modules]);
+      if (request !== this.deadlineRequest) return;
+      this.deadlines = deadlines;
       this.changed();
     } catch {
       // Keep what was there.
@@ -135,8 +145,8 @@ export class WeekModel extends Observable {
   }
 
   /**
-   * Every module seen in any week loaded so far — from the raw events, before group
-   * filtering: hiding a lab group doesn't stop you taking the module.
+   * Every module seen in any week loaded so far — from the raw events, before changes and
+   * splits: another band's session moving doesn't stop you taking the module.
    */
   moduleKeys(): string[] {
     const keys = new Set<string>();
@@ -164,7 +174,7 @@ export class WeekModel extends Observable {
 
   /** Any week's events grouped by day — the calendar pager asks for its neighbours. */
   eventsByDayForWeekIndex(index: number): DayEvents[] {
-    const resolved = PagerIndex.resolve(index, this.weeks.length, WeekModel.weekBounds);
+    const resolved = PagerIndex.resolve(index, this.weeks.length);
     if (resolved === null) return [];
     return grouped(this.eventsByWeekNumber.get(this.weeks[resolved].number) ?? []);
   }
@@ -199,7 +209,7 @@ export class WeekModel extends Observable {
   /** Moves the pager and loads the week there. */
   stepIndex(delta: number): void {
     if (this.weeks.length === 0) return;
-    this.setWeekIndex(PagerIndex.step(this.weekIndex, delta, this.weeks.length, WeekModel.weekBounds));
+    this.setWeekIndex(PagerIndex.step(this.weekIndex, delta, this.weeks.length));
   }
 
   setWeekIndex(index: number): void {
@@ -207,11 +217,6 @@ export class WeekModel extends Observable {
     this.weekIndex = index;
     this.changed();
     void this.loadCurrentWeek();
-  }
-
-  /** Whether the chevron in that direction has anywhere to go. */
-  canStep(delta: number): boolean {
-    return PagerIndex.canStep(this.weekIndex, delta, this.weeks.length, WeekModel.weekBounds);
   }
 
   setDayIndex(index: number): void {
@@ -241,14 +246,6 @@ export class WeekModel extends Observable {
     this.dayIndex = target.dayIndex;
     this.changed();
     if (target.weekStep !== 0) this.stepIndex(target.weekStep);
-  }
-
-  /** Re-apply group filtering when the student changes their selection. */
-  updateHiddenGroups(hidden: Set<string>): void {
-    this.hiddenGroups = hidden;
-    this.applyFilter();
-    // A group just hidden is a class the widget must stop pointing at.
-    this.publishWidgetSnapshot();
   }
 
   /** Re-read the saved changes after a refresh downloaded new ones. */
@@ -288,10 +285,12 @@ export class WeekModel extends Observable {
     if (moved && resetDay) this.resetToDefaultDay();
 
     if (!this.rawByWeekNumber.has(week.number)) {
+      this.loadingCount += 1;
       this.isLoading = true;
       this.changed();
       await this.load(week, true);
-      this.isLoading = false;
+      this.loadingCount -= 1;
+      this.isLoading = this.loadingCount > 0;
       this.changed();
     }
     await this.refreshCancellations();
@@ -328,7 +327,7 @@ export class WeekModel extends Observable {
 
   private neighbours(index: number): TeachingWeek[] {
     return [-1, 1].flatMap((delta) => {
-      const resolved = PagerIndex.resolve(index + delta, this.weeks.length, WeekModel.weekBounds);
+      const resolved = PagerIndex.resolve(index + delta, this.weeks.length);
       return resolved === null ? [] : [this.weeks[resolved]];
     });
   }
@@ -353,15 +352,13 @@ export class WeekModel extends Observable {
   }
 
   private applyFilter(): void {
-    // Changes first, then splits, then the student's own group filter — so an added class
-    // for their group can still be hidden by them like any other.
+    // Changes first, then splits: a class added for one band of a split is split like any other.
     const filtered = new Map<number, TimetableEvent[]>();
     for (const [number, events] of this.rawByWeekNumber) {
       const weekStart = this.weeks.find((w) => w.number === number)?.firstDay ?? null;
-      const changed = ModuleSplits.apply(
+      filtered.set(number, ModuleSplits.apply(
         TimetableChanges.apply(events, this.changes, this.audience, weekStart), this.splits, this.initial,
-      );
-      filtered.set(number, this.hiddenGroups.size === 0 ? changed : changed.filter((e) => !this.hiddenGroups.has(groupKey(e))));
+      ));
     }
     this.eventsByWeekNumber = filtered;
     this.loadedModuleKeys = sameList(this.loadedModuleKeys, this.moduleKeys());

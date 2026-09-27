@@ -20,10 +20,7 @@ export default function OnboardingRoute() {
     case 'programmePicker':
       return (
         <ProgrammePicker
-          onSelect={(category) => {
-            prefs.setJSON(PrefKey.selectedProgramme, category);
-            prefs.set(PrefKey.hiddenGroups, null);
-          }}
+          onSelect={(category) => prefs.setJSON(PrefKey.selectedProgramme, category)}
         />
       );
     case 'shell':

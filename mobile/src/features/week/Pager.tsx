@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
-import { PagerBounds, PagerDragState, PagerIndex } from '../../core/misc';
+import { PagerDragState, PagerIndex } from '../../core/misc';
 
 /**
  * The enclosing pager's drag state. Defaults to one that never suppresses anything, so a
@@ -28,18 +28,14 @@ const MIN_FLICK_DISTANCE = 20;
  * A horizontally paged container whose content **tracks the finger**. Three pages are kept
  * live — previous, current, next — offset by the drag, so a partial swipe shows the
  * neighbour and can be abandoned. On release the offset animates to the page edge and the
- * index is committed, which is what makes wrapping (Fri → Mon) possible.
- *
- * `bounds` decides the ends. Both the day and week pagers stop, because scrolling back
- * from week 1 and landing in week 52 is a teleport, not a scroll.
+ * index is committed. It stops at both ends (`PagerIndex`).
  */
 export function Pager({
-  count, index, onIndexChange, bounds = 'wrapping', swipe = 'standard', renderPage,
+  count, index, onIndexChange, swipe = 'standard', renderPage,
 }: {
   count: number;
   index: number;
   onIndexChange: (index: number) => void;
-  bounds?: PagerBounds;
   swipe?: keyof typeof SWIPE;
   renderPage: (index: number) => ReactNode;
 }) {
@@ -47,11 +43,11 @@ export function Pager({
   const [drag] = useState(() => new Animated.Value(0));
   const [dragState] = useState(() => new PagerDragState());
   /** The latest props, for the gesture handlers, which outlive a render. */
-  const live = useRef({ index, count, bounds, width, onIndexChange, swipe });
+  const live = useRef({ index, count, width, onIndexChange, swipe });
   const committing = useRef(false);
 
   useLayoutEffect(() => {
-    live.current = { index, count, bounds, width, onIndexChange, swipe };
+    live.current = { index, count, width, onIndexChange, swipe };
   });
 
   // The new centre page is already rendered by the time this runs, so resetting the offset
@@ -63,21 +59,21 @@ export function Pager({
 
   const responder = useMemo(() => {
     const isBlocked = (dx: number) => {
-      const { index: i, count: n, bounds: b } = live.current;
-      return PagerIndex.resolve(dx > 0 ? i - 1 : i + 1, n, b) === null;
+      const { index: i, count: n } = live.current;
+      return PagerIndex.resolve(dx > 0 ? i - 1 : i + 1, n) === null;
     };
     const settle = () => {
       Animated.timing(drag, { toValue: 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
     };
     const finish = (dx: number, dy: number, vx: number) => {
       dragState.end();
-      const { index: i, count: n, bounds: b, width: w, swipe: kind } = live.current;
+      const { index: i, count: n, width: w, swipe: kind } = live.current;
       if (Math.abs(dx) <= Math.abs(dy) || w === 0) return settle();
       const { commitFraction, flickVelocity } = SWIPE[kind];
       const flicked = Math.abs(vx) >= flickVelocity && Math.abs(dx) >= MIN_FLICK_DISTANCE && Math.sign(vx) === Math.sign(dx);
       const far = Math.abs(dx) > w * commitFraction;
       const step = far || flicked ? (dx < 0 ? 1 : -1) : 0;
-      const destination = step === 0 ? null : PagerIndex.resolve(i + step, n, b);
+      const destination = step === 0 ? null : PagerIndex.resolve(i + step, n);
       if (destination === null) return settle();
       committing.current = true;
       Animated.timing(drag, { toValue: step > 0 ? -w : w, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: false })
@@ -108,7 +104,7 @@ export function Pager({
 
   const page = (value: number) => {
     // Blank rather than the far end of the range — the whole point of `clamped`.
-    const resolved = PagerIndex.resolve(value, count, bounds);
+    const resolved = PagerIndex.resolve(value, count);
     return resolved === null ? null : renderPage(resolved);
   };
 

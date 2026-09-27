@@ -60,7 +60,6 @@ export function RootProvider({ children }: { children: ReactNode }) {
   const [studentID] = usePref(PrefKey.studentID);
   const [profileRaw, setProfileRaw] = usePrefJSON<unknown>(PrefKey.profile, null);
   const [programme] = usePrefJSON<TimetableCategory | null>(PrefKey.selectedProgramme, null);
-  const [, setHidden] = usePref(PrefKey.hiddenGroups);
   const [triedRaw, setTried] = usePrefJSON<Record<string, number>>(PrefKey.allocationTried, {});
   const profile = useMemo(() => decodeProfile(profileRaw), [profileRaw]);
 
@@ -110,8 +109,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
 
   const model = useMemo(() => {
     if (!shell) return null;
-    const hidden = new Set(services.prefs.getJSON<string[]>(PrefKey.hiddenGroups, []));
-    return new WeekModel(services, shell.programme, shell.source, shell.audience, hidden);
+    return new WeekModel(services, shell.programme, shell.source, shell.audience);
     // Rebuilt only when the timetable itself changes, not on every render of the flow.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shell?.key, services]);
@@ -163,7 +161,6 @@ export function RootProvider({ children }: { children: ReactNode }) {
           // The picked programme is kept underneath, so a profile later dropped from the
           // list falls back to it rather than to an empty picker.
           setProfileRaw(outcome.profile as StudentProfile);
-          setHidden(null);
           setTried(null);
         } else {
           setTried(outcome.tried);
@@ -174,12 +171,11 @@ export function RootProvider({ children }: { children: ReactNode }) {
       if (outcome.kind === 'updated') setProfileRaw(outcome.profile);
       if (outcome.kind === 'dropped') {
         setProfileRaw(null);
-        setHidden(null);
       }
     } finally {
       refreshing.current = false;
     }
-  }, [services, setProfileRaw, setHidden, setTried]);
+  }, [services, setProfileRaw, setTried]);
 
   // Also on picking a programme, which is when its class list is first worth asking about.
   useEffect(() => {

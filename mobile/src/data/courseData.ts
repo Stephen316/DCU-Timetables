@@ -55,8 +55,6 @@ export interface AllocationStore {
   resolve(courseKey: string, subgroup: string | null): Promise<AllocationResolution>;
   /** The one allocation row for a resolved key. */
   allocation(courseKey: string, key: string): Promise<Allocation | null>;
-  /** The subgroups on a course's list, to ask a student with a shared name which is theirs. */
-  subgroups(courseKey: string): Promise<string[]>;
 }
 
 export class SupabaseAllocationStore implements AllocationStore {
@@ -90,14 +88,6 @@ export class SupabaseAllocationStore implements AllocationStore {
     });
     const row = rows(json)[0];
     return row ? allocationFromRow(row) : null;
-  }
-
-  async subgroups(courseKey: string): Promise<string[]> {
-    const json = await this.rest.json('GET', '/rest/v1/course_allocations', describe, {
-      query: [['select', 'subgroup'], ['course_key', `eq.${courseKey}`]],
-    });
-    const set = new Set(rows(json).flatMap((r) => (typeof r.subgroup === 'string' ? [r.subgroup] : [])));
-    return [...set].sort();
   }
 }
 
