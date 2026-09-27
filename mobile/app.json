@@ -77,8 +77,8 @@
     "android": {
       "package": "com.stephenh.dcutimetable",
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/icon.png"
+        "backgroundColor": "#172549",
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
