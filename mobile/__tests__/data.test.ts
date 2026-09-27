@@ -75,7 +75,6 @@ class FakeAllocationStore implements AllocationStore {
     return this.resolution;
   }
   async allocation() { return this.row; }
-  async subgroups() { return []; }
 }
 
 describe('Allocation refresh', () => {
@@ -523,6 +522,24 @@ describe('Auth session', () => {
     expect(session.userID).toBeNull();
     expect(secrets.size).toBe(0);
   });
+});
+
+test('no signal while the token is refreshed keeps the student signed in', async () => {
+  const secrets = new Map<string, string>();
+  const store = { get: async (k: string) => secrets.get(k) ?? null, set: async (k: string, v: string) => void secrets.set(k, v), remove: async (k: string) => void secrets.delete(k) };
+  const config = { url: 'https://x.supabase.co', anonKey: 'anon' };
+  for (const failure of [
+    async () => { throw new TypeError('Network request failed'); },
+    async () => new Response('{}', { status: 503 }),
+  ]) {
+    let expired = 0;
+    const session = new SupabaseSession(store, () => expired++, jest.fn(failure) as unknown as typeof fetch);
+    await session.save({ accessToken: 'a', refreshToken: 'good', userID: 'u', expiresAt: Date.now() - 1000 });
+    await expect(session.accessToken(config)).rejects.toThrow("Couldn't reach the server");
+    expect(expired).toBe(0);
+    expect(session.userID).toBe('u');
+    expect(secrets.size).toBe(1);
+  }
 });
 
 describe('Device storage', () => {

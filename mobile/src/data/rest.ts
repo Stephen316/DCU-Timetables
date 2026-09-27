@@ -1,4 +1,4 @@
-import { SupabaseConfig, SupabaseSession } from './session';
+import type { SupabaseConfig, SupabaseSession } from './session';
 
 /** A request the server answered with a non-2xx status. `message` is written for a student. */
 export class ServiceError extends Error {

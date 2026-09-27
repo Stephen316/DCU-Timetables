@@ -1,5 +1,6 @@
 import { AppRole, DCUEmail, parseDCUEmail, parseRole } from '../core/identity';
 import { uuid } from '../core/uuid';
+import { userFacing } from './rest';
 import { Prefs, PrefKey } from './storage';
 
 // MARK: - Config
@@ -101,7 +102,7 @@ export interface SecretStore {
 export class SupabaseSession {
   private static readonly key = 'session';
   private cached: AuthSession | null = null;
-  private refreshing: Promise<AuthSession | null> | null = null;
+  private refreshing: Promise<AuthSession | 'refused'> | null = null;
 
   constructor(
     private readonly secrets: SecretStore,
@@ -134,8 +135,10 @@ export class SupabaseSession {
   }
 
   /**
-   * A live access token, or null when nobody is signed in and nothing can be refreshed.
-   * Callers fall back to the anon key, which RLS treats as an anonymous client.
+   * A live access token, or null when nobody is signed in or Supabase has refused the
+   * refresh. Callers fall back to the anon key, which RLS treats as an anonymous client.
+   * Throws when the refresh couldn't be asked at all — offline, or a server error — so a
+   * phone with no signal stays signed in and simply fails the request.
    */
   async accessToken(config: SupabaseConfig): Promise<string | null> {
     const current = this.cached;
@@ -145,7 +148,7 @@ export class SupabaseSession {
       this.refreshing = null;
     });
     const refreshed = await this.refreshing;
-    if (!refreshed) {
+    if (refreshed === 'refused') {
       // The refresh token is dead. The UI must hear about it, or it keeps showing the
       // student as signed in while every write is silently rejected.
       if (this.cached === current) {
@@ -158,18 +161,26 @@ export class SupabaseSession {
     return refreshed.accessToken;
   }
 
-  private async refresh(current: AuthSession, config: SupabaseConfig): Promise<AuthSession | null> {
+  /** 'refused' only when Supabase answered that the refresh token is no good. */
+  private async refresh(current: AuthSession, config: SupabaseConfig): Promise<AuthSession | 'refused'> {
+    const unreachable = () => userFacing("Couldn't reach the server. Check your internet connection and try again.");
+    let response: Response;
     try {
-      const response = await this.fetchFn(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
+      response = await this.fetchFn(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
         method: 'POST',
         headers: { apikey: config.anonKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: current.refreshToken }),
       });
-      if (!response.ok) return null;
-      return parseAuthSession(await response.json());
     } catch {
-      return null;
+      throw unreachable();
     }
+    // A revoked, rotated or expired refresh token is a 400 (sometimes 401/403). Anything
+    // else — a 5xx, a gateway timeout — is the server failing, not the student signed out.
+    if (response.status === 400 || response.status === 401 || response.status === 403) return 'refused';
+    if (!response.ok) throw unreachable();
+    const session = parseAuthSession(await response.json().catch(() => null));
+    if (!session) throw unreachable();
+    return session;
   }
 }
 
