@@ -237,15 +237,16 @@ export class WeekModel extends Observable {
   /**
    * Opens the day view on today — or tomorrow from 6pm, or Monday at the weekend. Friday
    * evening and the weekend want Monday of the *next* week, so this can move the week as
-   * well as the day. Stepping changes `weekStart`, which calls this again; the second pass
-   * finds the day inside the new week and stops.
+   * well as the day — but only on a fresh look (opening the app, or coming back to it). A
+   * week the student paged to stays put, or at the weekend they could never page back to the
+   * week just gone: it would bounce them on to the next one each time.
    */
-  resetToDefaultDay(now: Date = new Date()): void {
+  resetToDefaultDay(now: Date = new Date(), mayChangeWeek = true): void {
     if (!this.weekStart) return;
     const target = DefaultDay.target(this.weekStart, now);
     this.dayIndex = target.dayIndex;
     this.changed();
-    if (target.weekStep !== 0) this.stepIndex(target.weekStep);
+    if (mayChangeWeek && target.weekStep !== 0) this.stepIndex(target.weekStep);
   }
 
   /** Re-read the saved changes after a refresh downloaded new ones. */
@@ -278,11 +279,12 @@ export class WeekModel extends Observable {
     const week = this.currentWeek;
     if (!week) return;
     this.weekLabel = `Week ${week.label}`;
+    const firstLook = this.weekStart === null;
     const moved = this.weekStart?.getTime() !== week.firstDay.getTime();
     this.weekStart = week.firstDay;
     this.errorText = null;
     this.applyFilter();
-    if (moved && resetDay) this.resetToDefaultDay();
+    if (moved && resetDay) this.resetToDefaultDay(new Date(), firstLook);
 
     if (!this.rawByWeekNumber.has(week.number)) {
       this.loadingCount += 1;

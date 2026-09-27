@@ -71,6 +71,28 @@ describe('Week model', () => {
     expect(m.dayIndex).toBe(0);
   });
 
+  test('at the weekend, paging back to this week stays there rather than bouncing on to the next', async () => {
+    jest.useFakeTimers({ now: at(2026, 9, 26, 12), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
+    const { model } = await setup([lectureWed, nextWeek]);
+    const m = model();
+    await m.start();
+    await settle();
+    expect(m.weekLabel).toBe('Week 3');
+    m.stepIndex(-1);
+    await settle();
+    expect(m.weekLabel).toBe('Week 2');
+    expect(m.dayIndex).toBe(0);
+    m.stepIndex(-1);
+    await settle();
+    m.stepIndex(1);
+    await settle();
+    expect(m.weekLabel).toBe('Week 2');
+    // Coming back to the app is a fresh look, so that still moves on to the coming week.
+    m.resetToDefaultDay();
+    await settle();
+    expect(m.weekLabel).toBe('Week 3');
+  });
+
   test('the week pager stops at both ends of the year', async () => {
     jest.useFakeTimers({ now: at(2026, 9, 15, 9), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
     const { model } = await setup([]);
