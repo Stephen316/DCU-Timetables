@@ -51,7 +51,9 @@ export type AppEvent =
   /** The rotation on this device changed; anything showing labs should rebuild. */
   | 'labRotationChanged'
   /** The saved changes on this device changed; the week view re-applies them. */
-  | 'timetableChangesChanged';
+  | 'timetableChangesChanged'
+  /** The saved surname splits on this device changed; the week view re-applies them. */
+  | 'moduleSplitsChanged';
 
 // MARK: - Tokens
 

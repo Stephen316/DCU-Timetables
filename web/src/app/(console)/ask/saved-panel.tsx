@@ -106,7 +106,7 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
           meta={`${sp.ranges.length} band${sp.ranges.length === 1 ? "" : "s"} · ${when(sp.savedAt)}`}
           deleting={deleting === `split:${sp.module}:${sp.activity}`}
           onDelete={() => remove(`split:${sp.module}:${sp.activity}`, { kind: "split", module: sp.module, activity: sp.activity },
-            `Delete the ${sp.module} ${sp.activity} split? Students stop seeing which band they are in. This can't be undone.`)}
+            `Delete the ${sp.module} ${sp.activity} split? Students see every band's session again when the app next opens. This can't be undone.`)}
         >
           <table>
             <thead><tr><th>Surnames</th><th>Day</th><th>Time</th><th>Room</th></tr></thead>

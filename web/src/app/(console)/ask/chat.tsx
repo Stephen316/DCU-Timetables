@@ -224,7 +224,7 @@ export function Ask() {
         update(item.no, {
           status: "saved",
           message: proposal.kind === "split"
-            ? `${proposal.rule.moduleKey} ${proposal.rule.activity} saved.`
+            ? `${proposal.rule.moduleKey} ${proposal.rule.activity} split saved. Phones pick it up when the app next opens.`
             : proposal.kind === "change"
               ? "Change saved. Phones pick it up when the app next opens."
             : proposal.kind === "roster"

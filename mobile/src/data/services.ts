@@ -1,7 +1,8 @@
 import { AuthService, SupabaseAuthService } from './auth';
 import {
-  AllocationStore, LabRotationCache, LabRotationStore, SupabaseAllocationStore, SupabaseLabRotationStore,
-  SupabaseTimetableChangeStore, TimetableChangeCache, TimetableChangeStore,
+  AllocationStore, LabRotationCache, LabRotationStore, ModuleSplitCache, ModuleSplitStore, SupabaseAllocationStore,
+  SupabaseLabRotationStore, SupabaseModuleSplitStore, SupabaseTimetableChangeStore, TimetableChangeCache,
+  TimetableChangeStore,
 } from './courseData';
 import { DCU_API, DCUAPIClient, TimetableSource } from './dcuApi';
 import { SupabaseREST } from './rest';
@@ -38,8 +39,10 @@ export interface Services {
   allocations: AllocationStore | null;
   labRotations: LabRotationStore | null;
   timetableChanges: TimetableChangeStore | null;
+  moduleSplits: ModuleSplitStore | null;
   rotationCache: LabRotationCache;
   changeCache: TimetableChangeCache;
+  splitCache: ModuleSplitCache;
   timetableCache: TimetableCache;
   /** Programme search and a picked programme's timetable. */
   dcu: DCUAPIClient;
@@ -98,8 +101,10 @@ export async function createServices(platform: Platform): Promise<Services> {
     allocations: rest ? new SupabaseAllocationStore(rest) : null,
     labRotations: rest ? new SupabaseLabRotationStore(rest) : null,
     timetableChanges: rest ? new SupabaseTimetableChangeStore(rest) : null,
+    moduleSplits: rest ? new SupabaseModuleSplitStore(rest) : null,
     rotationCache: new LabRotationCache(prefs),
     changeCache: new TimetableChangeCache(prefs),
+    splitCache: new ModuleSplitCache(prefs),
     timetableCache: new TimetableCache(platform.kv),
     // The API host is versioned (docs/API.md), so it can be moved without a code change.
     dcu: new DCUAPIClient(

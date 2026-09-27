@@ -116,6 +116,7 @@ export const PrefKey = {
   appearance: 'appearance',
   labRotation: (courseKey: string) => `labRotation:${courseKey}`,
   timetableChanges: (courseKey: string) => `timetableChanges:${courseKey}`,
+  moduleSplits: 'moduleSplits',
   localReports: 'local:cancellationReports',
   localDeadlines: 'local:deadlines',
   localConfirmations: 'local:deadlineConfirmations',

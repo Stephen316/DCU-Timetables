@@ -44,6 +44,7 @@ export function TimetableScreen() {
   }, [model]);
 
   useAppEvent('timetableChangesChanged', () => model.reloadChanges());
+  useAppEvent('moduleSplitsChanged', () => model.reloadSplits());
   useAppEvent('labRotationChanged', () => void model.reloadAll());
 
   const hiddenKey = hiddenGroups.join('\n');

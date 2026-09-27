@@ -2,11 +2,13 @@ import { CancellationRules, CancellationStatus } from '../../core/cancellation';
 import { ClassHighlight, Deadline, DeadlineRules } from '../../core/deadline';
 import { PagerBounds, PagerIndex } from '../../core/misc';
 import { TimetableAudience, TimetableChange, TimetableChanges } from '../../core/profile';
+import { ModuleSplit, ModuleSplits, surnameInitial } from '../../core/splits';
 import { campusName, parsedLocations } from '../../core/roomLocation';
 import { ClashDetector, DefaultDay } from '../../core/schedule';
 import { addDays, startOfDay } from '../../core/time';
 import { groupKeyOf as groupKey, TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/timetableEvent';
 import { errorMessage } from '../../data/rest';
+import { userEmail } from '../../data/session';
 import { Services } from '../../data/services';
 import { TimetableSource } from '../../data/dcuApi';
 import { WidgetSnapshotPublisher } from '../../data/widgets';
@@ -59,6 +61,9 @@ export class WeekModel extends Observable {
   private knownStatuses = new Map<string, CancellationStatus>();
   private rawByWeekNumber = new Map<number, TimetableEvent[]>();
   private changes: TimetableChange[];
+  private splits: ModuleSplit[];
+  /** The signed-in student's surname initial, which picks their band of a split. */
+  private readonly initial: string | null;
   private started = false;
 
   constructor(
@@ -71,6 +76,9 @@ export class WeekModel extends Observable {
   ) {
     super();
     this.changes = audience ? services.changeCache.changes(audience.courseKey) : [];
+    this.splits = services.splitCache.splits();
+    const user = services.user.current;
+    this.initial = user ? surnameInitial(userEmail(user)?.familyName) : null;
   }
 
   // MARK: - Reports and deadlines
@@ -251,6 +259,13 @@ export class WeekModel extends Observable {
     this.publishWidgetSnapshot();
   }
 
+  /** Re-read the saved splits after a refresh downloaded new ones. */
+  reloadSplits(): void {
+    this.splits = this.services.splitCache.splits();
+    this.applyFilter();
+    this.publishWidgetSnapshot();
+  }
+
   /** Fetch every loaded week again — the rotation behind them changed. */
   async reloadAll(): Promise<void> {
     this.rawByWeekNumber = new Map();
@@ -338,12 +353,14 @@ export class WeekModel extends Observable {
   }
 
   private applyFilter(): void {
-    // Changes first, then the student's own group filter — so an added class for their
-    // group can still be hidden by them like any other.
+    // Changes first, then splits, then the student's own group filter — so an added class
+    // for their group can still be hidden by them like any other.
     const filtered = new Map<number, TimetableEvent[]>();
     for (const [number, events] of this.rawByWeekNumber) {
       const weekStart = this.weeks.find((w) => w.number === number)?.firstDay ?? null;
-      const changed = TimetableChanges.apply(events, this.changes, this.audience, weekStart);
+      const changed = ModuleSplits.apply(
+        TimetableChanges.apply(events, this.changes, this.audience, weekStart), this.splits, this.initial,
+      );
       filtered.set(number, this.hiddenGroups.size === 0 ? changed : changed.filter((e) => !this.hiddenGroups.has(groupKey(e))));
     }
     this.eventsByWeekNumber = filtered;

@@ -2,6 +2,7 @@ import {
   Allocation, allocationFromRow, changeFromRow, cohortForCourseKey, LabRotation, LabRotations, LabSession,
   profileFromAllocation, StudentProfile, TimetableChange,
 } from '../core/profile';
+import { ModuleSplit, splitFromRow } from '../core/splits';
 import { rows, SupabaseREST } from './rest';
 import { PrefKey, Prefs } from './storage';
 
@@ -355,6 +356,67 @@ export const TimetableChangeRefresh = {
     }
     if (JSON.stringify(fresh) === JSON.stringify(cache.changes(courseKey))) return false;
     cache.store(fresh, courseKey);
+    return true;
+  },
+};
+
+// MARK: - Module splits
+
+/** The surname splits saved in the console (`module_splits`), for every module. */
+export interface ModuleSplitStore {
+  splits(): Promise<ModuleSplit[]>;
+}
+
+export class SupabaseModuleSplitStore implements ModuleSplitStore {
+  constructor(private readonly rest: SupabaseREST) {}
+
+  /**
+   * Every module's, not only this student's: the table holds a handful of rows, and the
+   * modules a student takes are only known once their weeks have loaded.
+   */
+  async splits(): Promise<ModuleSplit[]> {
+    // Signed in or not at all: the anon key reads an empty table, which would wipe the cache.
+    const json = await this.rest.json('GET', '/rest/v1/module_splits', describe, {
+      auth: 'userOnly',
+      query: [
+        ['select', 'module_key,activity,module_split_ranges(from_letter,to_letter,day,start_time,end_time,room,label)'],
+        ['order', 'module_key,activity'],
+      ],
+    });
+    return rows(json).flatMap((r) => {
+      const split = splitFromRow(r);
+      return split ? [split] : [];
+    });
+  }
+}
+
+/** The last splits downloaded, so they hold with no signal. */
+export class ModuleSplitCache {
+  constructor(private readonly prefs: Prefs) {}
+
+  splits(): ModuleSplit[] {
+    return this.prefs.getJSON<ModuleSplit[]>(PrefKey.moduleSplits, []);
+  }
+
+  store(splits: ModuleSplit[]): void {
+    this.prefs.setJSON(PrefKey.moduleSplits, splits);
+  }
+}
+
+export const ModuleSplitRefresh = {
+  /**
+   * True when the splits differ from what is cached. A failed request keeps the cache:
+   * offline must not put back the other band's lecture.
+   */
+  async run(store: ModuleSplitStore, cache: ModuleSplitCache): Promise<boolean> {
+    let fresh: ModuleSplit[];
+    try {
+      fresh = await store.splits();
+    } catch {
+      return false;
+    }
+    if (JSON.stringify(fresh) === JSON.stringify(cache.splits())) return false;
+    cache.store(fresh);
     return true;
   },
 };
