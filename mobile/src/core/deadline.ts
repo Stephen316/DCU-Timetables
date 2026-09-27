@@ -39,6 +39,20 @@ export type DeadlineStatus = 'pending' | 'verified';
 export const TITLE_LIMIT = 120;
 export const LABEL_LIMIT = 80;
 
+/** What a poster fills in, on the way in and when they edit it. */
+export interface DeadlineFields {
+  title: string;
+  kind: DeadlineKind;
+  due: Date;
+  /** Whole percent of the module's grade. 0 means not graded. */
+  gradeWeight: number;
+}
+
+/** "Not graded" for 0, which is the default: an unsaid weight is not a guessed one. */
+export function gradeWeightLabel(weight: number): string {
+  return weight > 0 ? `${weight}% of the grade` : 'Not graded';
+}
+
 /**
  * A deadline one student has shared with everyone taking the module. Deadlines belong to
  * the **module**, not to one occurrence of a class.
@@ -68,6 +82,8 @@ export interface Deadline {
   editedAt: Date | null;
   /** This student's own name for it, which nobody else sees. */
   myLabel: string | null;
+  /** Whole percent of the module's grade; 0 means not graded. */
+  gradeWeight: number;
 }
 
 export function makeDeadline(fields: {
@@ -83,6 +99,7 @@ export function makeDeadline(fields: {
   status?: DeadlineStatus;
   editedAt?: Date | null;
   myLabel?: string | null;
+  gradeWeight?: number;
 }): Deadline {
   return {
     id: fields.id ?? uuid(),
@@ -97,6 +114,7 @@ export function makeDeadline(fields: {
     status: fields.status ?? 'pending',
     editedAt: fields.editedAt ?? null,
     myLabel: fields.myLabel ?? null,
+    gradeWeight: fields.gradeWeight ?? 0,
   };
 }
 
@@ -235,6 +253,18 @@ export const DeadlineRules = {
   isValid(title: string, due: Date, now: Date = new Date()): boolean {
     const length = title.trim().length;
     return length > 0 && length <= TITLE_LIMIT && due.getTime() > now.getTime();
+  },
+
+  /**
+   * The weight box, read: blank is 0 (not graded), and anything but a whole number from 0
+   * to 100 is null, so the form can refuse it rather than save something else.
+   */
+  parseGradeWeight(text: string): number | null {
+    const trimmed = text.trim().replace(/%$/, '').trim();
+    if (trimmed === '') return 0;
+    if (!/^\d{1,3}$/.test(trimmed)) return null;
+    const value = Number(trimmed);
+    return value <= 100 ? value : null;
   },
 
   /**

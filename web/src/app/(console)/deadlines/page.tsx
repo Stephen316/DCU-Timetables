@@ -26,7 +26,7 @@ export default async function Deadlines({
   const supabase = await supabaseServer();
   let query = supabase
     .from("module_deadlines")
-    .select("id, module_key, title, due_at, kind, status, source, submitted_at, edited_at, submitter_id")
+    .select("id, module_key, title, due_at, kind, grade_weight, status, source, submitted_at, edited_at, submitter_id")
     .limit(300);
   if (status !== "all") query = query.eq("status", status);
   // From the start of today, as the app lists them: a 9am hand-in stays upcoming all day.
@@ -120,6 +120,7 @@ export default async function Deadlines({
                 <th>Title</th>
                 <th>Due</th>
                 <th>Kind</th>
+                <th className="right" title="Share of the module's grade">Worth</th>
                 <th>State</th>
                 <th className="right" title="Students who confirmed it">Right</th>
                 <th className="right" title="Students who say the date or details are wrong">Wrong</th>

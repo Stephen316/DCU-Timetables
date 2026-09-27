@@ -107,7 +107,7 @@ describe('Supabase requests', () => {
     const d = makeDeadline({ id: 'd1', moduleKey: 'CA106', atGroupKey: 'g', title: 'Quiz', due: utc(2026, 9, 25, 9), kind: 'quiz', submitterID: 'user-1' });
     await new SupabaseDeadlineStore(await signedInREST(fn)).submit(d);
     expect(calls[0].url).toBe('https://proj.supabase.co/rest/v1/module_deadlines');
-    expect(calls[0].body).toEqual([{ id: 'd1', module_key: 'CA106', at_group_key: 'g', title: 'Quiz', due_at: '2026-09-25T09:00:00Z', kind: 'quiz', submitter_id: 'user-1' }]);
+    expect(calls[0].body).toEqual([{ id: 'd1', module_key: 'CA106', at_group_key: 'g', title: 'Quiz', due_at: '2026-09-25T09:00:00Z', kind: 'quiz', submitter_id: 'user-1', grade_weight: 0 }]);
   });
 
   test('moderation goes through the RPCs by deadline, never by person', async () => {
@@ -140,27 +140,28 @@ describe('Supabase requests', () => {
   test('status, edits and your own name come back with each deadline', async () => {
     const { calls, fn } = fakeFetch(() => ({ body: [{
       id: 'd1', module_key: 'CA106', at_group_key: null, title: 'Quiz', due_at: '2026-09-25T09:00:00+00:00', kind: 'quiz',
-      is_mine: false, submitted_at: '2026-09-20T09:00:00+00:00', status: 'verified', edited_at: '2026-09-21T10:00:00+00:00', my_label: 'memory quiz',
+      is_mine: false, submitted_at: '2026-09-20T09:00:00+00:00', status: 'verified', edited_at: '2026-09-21T10:00:00+00:00', my_label: 'memory quiz', grade_weight: 20,
     }, {
       id: 'd2', module_key: 'CA106', at_group_key: null, title: 'Lab', due_at: '2026-09-26T09:00:00+00:00', kind: 'labReport',
       is_mine: false, submitted_at: '2026-09-20T09:00:00+00:00', status: 'pending', edited_at: null, my_label: null,
     }] }));
     const list = await new SupabaseDeadlineStore(await signedInREST(fn)).deadlinesForModule('CA106');
-    expect(query(calls[0].url).select).toBe('id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label');
-    expect(list[0]).toMatchObject({ status: 'verified', editedAt: utc(2026, 9, 21, 10), myLabel: 'memory quiz' });
-    expect(list[1]).toMatchObject({ status: 'pending', editedAt: null, myLabel: null });
+    expect(query(calls[0].url).select).toBe('id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label,grade_weight');
+    expect(list[0]).toMatchObject({ status: 'verified', editedAt: utc(2026, 9, 21, 10), myLabel: 'memory quiz', gradeWeight: 20 });
+    // No weight from the server is no weight: not graded, never a guess.
+    expect(list[1]).toMatchObject({ status: 'pending', editedAt: null, myLabel: null, gradeWeight: 0 });
   });
 
   test('editing, naming and disputing go through the RPCs', async () => {
     const { calls, fn } = fakeFetch(() => ({ body: null }));
     const store = new SupabaseDeadlineStore(await signedInREST(fn));
-    await store.edit('d1', { title: 'Quiz 2', kind: 'exam', due: utc(2026, 10, 2, 9) });
+    await store.edit('d1', { title: 'Quiz 2', kind: 'exam', due: utc(2026, 10, 2, 9), gradeWeight: 15 });
     await store.setLabel('d1', 'memory quiz');
     await store.setLabel('d1', null);
     await store.report('d1', 'wrong');
     await store.withdrawReport('d1');
     expect(calls.map((c) => [c.url.replace(config.url, ''), c.body])).toEqual([
-      ['/rest/v1/rpc/edit_deadline', { p_deadline: 'd1', p_title: 'Quiz 2', p_kind: 'exam', p_due: '2026-10-02T09:00:00Z' }],
+      ['/rest/v1/rpc/edit_deadline', { p_deadline: 'd1', p_title: 'Quiz 2', p_kind: 'exam', p_due: '2026-10-02T09:00:00Z', p_weight: 15 }],
       ['/rest/v1/rpc/set_deadline_label', { p_deadline: 'd1', p_label: 'memory quiz' }],
       ['/rest/v1/rpc/set_deadline_label', { p_deadline: 'd1', p_label: '' }],
       ['/rest/v1/rpc/report_deadline', { p_deadline: 'd1', p_reason: 'wrong' }],

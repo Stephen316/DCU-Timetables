@@ -9,6 +9,8 @@ export type ConsoleDeadline = {
   title: string;
   due_at: string;
   kind: string;
+  /** Whole percent of the grade; 0 is not graded. */
+  grade_weight: number;
   status: "pending" | "verified" | "rejected";
   source: string;
   submitted_at: string;
@@ -30,6 +32,11 @@ const dateFormat = new Intl.DateTimeFormat("en-IE", {
   weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Dublin",
 });
 
+/// The app's wording, so a 0 reads the same in both places.
+function worth(weight: number): string {
+  return weight > 0 ? `${weight}%` : "not graded";
+}
+
 /// `datetime-local` wants the browser's wall-clock time with no zone.
 function localInput(iso: string): string {
   const d = new Date(iso);
@@ -44,6 +51,9 @@ export function DeadlineRow({ deadline }: { deadline: ConsoleDeadline }) {
   const [title, setTitle] = useState(deadline.title);
   const [kind, setKind] = useState(deadline.kind);
   const [due, setDue] = useState("");
+  const [weight, setWeight] = useState("");
+  const weightValue = weight.trim() === "" ? 0 : /^\d{1,3}$/.test(weight.trim()) ? Number(weight) : NaN;
+  const weightOK = weightValue >= 0 && weightValue <= 100;
 
   const isPast = new Date(deadline.due_at).getTime() < Date.now();
   // Missing a quiz or an exam is unrecoverable, so they are marked here rather than
@@ -63,6 +73,7 @@ export function DeadlineRow({ deadline }: { deadline: ConsoleDeadline }) {
     setTitle(deadline.title);
     setKind(deadline.kind);
     setDue(localInput(deadline.due_at));
+    setWeight(deadline.grade_weight > 0 ? String(deadline.grade_weight) : "");
     setError(null);
     setEditing(true);
   }
@@ -74,7 +85,7 @@ export function DeadlineRow({ deadline }: { deadline: ConsoleDeadline }) {
     return (
       <tr>
         <td className="mono">{deadline.module_key}</td>
-        <td colSpan={9}>
+        <td colSpan={10}>
           <div className="row" style={{ flexWrap: "wrap" }}>
             <div className="field" style={{ flex: 2, minWidth: 220, marginBottom: 0 }}>
               <label htmlFor={`t-${deadline.id}`}>Title</label>
@@ -90,17 +101,31 @@ export function DeadlineRow({ deadline }: { deadline: ConsoleDeadline }) {
               <label htmlFor={`d-${deadline.id}`}>Due</label>
               <input id={`d-${deadline.id}`} type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
             </div>
+            <div className="field" style={{ marginBottom: 0, width: 110 }}>
+              <label htmlFor={`w-${deadline.id}`}>Worth (%)</label>
+              <input
+                id={`w-${deadline.id}`}
+                inputMode="numeric"
+                value={weight}
+                placeholder="0"
+                maxLength={3}
+                onChange={(e) => setWeight(e.target.value)}
+              />
+            </div>
             <button
               className="primary"
-              disabled={pending || title.trim() === "" || due === ""}
+              disabled={pending || title.trim() === "" || due === "" || !weightOK}
               onClick={() => run(
-                () => editDeadline(deadline.id, title.trim(), kind, new Date(due).toISOString()),
+                () => editDeadline(deadline.id, title.trim(), kind, new Date(due).toISOString(), weightValue),
                 () => setEditing(false),
               )}
             >
               Save
             </button>
             <button disabled={pending} onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+          <div className="dim" style={{ marginTop: 8, fontSize: 12 }}>
+            {weightOK ? `Worth: ${worth(weightValue)}. 0 or blank means not graded.` : "Worth must be a whole number from 0 to 100."}
           </div>
           {clearsVouches && (
             <div className="tag warn" style={{ marginTop: 8 }}>
@@ -128,6 +153,7 @@ export function DeadlineRow({ deadline }: { deadline: ConsoleDeadline }) {
         {isPast && " · past"}
       </td>
       <td className={satInClass ? "tag warn" : "dim"}>{KINDS[deadline.kind] ?? deadline.kind}</td>
+      <td className="right dim" style={{ whiteSpace: "nowrap" }}>{worth(deadline.grade_weight)}</td>
       <td>
         {deadline.status === "verified" && <span className="tag ok">confirmed</span>}
         {deadline.status === "rejected" && <span className="tag off">blocked</span>}

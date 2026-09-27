@@ -185,7 +185,7 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
                 actions={{
                   onConfirm: () => void model.toggleConfirmation(d),
                   onDispute: () => void model.toggleDispute(d),
-                  onEdit: (title, kind, due) => void model.editDeadline(d, title, kind, due),
+                  onEdit: (fields) => void model.editDeadline(d, fields),
                   onRename: (label) => void model.renameDeadline(d, label),
                   onDelete: () => void model.removeDeadline(d),
                   onReport: (reason) => void model.reportDeadline(d, reason),
@@ -201,7 +201,7 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
       <DeadlineForm
         visible={showingForm}
         onClose={() => setShowingForm(false)}
-        onSubmit={(title, kind, due) => void model.addDeadline(title, kind, due)}
+        onSubmit={(fields) => void model.addDeadline(fields)}
       />
       <ConfirmSheet
         visible={pendingReport !== null}

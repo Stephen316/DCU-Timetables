@@ -1,5 +1,5 @@
 import {
-  Deadline, deadlineBelongsTo, DeadlineKind, DeadlineReportReason, DeadlineRules, DeadlineSchedule, DeadlineSection,
+  Deadline, deadlineBelongsTo, DeadlineFields, DeadlineReportReason, DeadlineRules, DeadlineSchedule, DeadlineSection,
   DeadlineStanding,
 } from '../../core/deadline';
 import { errorMessage } from '../../data/rest';
@@ -98,9 +98,9 @@ export class DeadlinesModel extends Observable {
     }, "Couldn't send that.");
   }
 
-  async edit(deadline: Deadline, title: string, kind: DeadlineKind, due: Date): Promise<void> {
-    if (!this.isMine(deadline) || !DeadlineRules.isValid(title, due)) return;
-    await this.act(() => this.services.deadlines.edit(deadline.id, { title, kind, due }), "Couldn't save that change.");
+  async edit(deadline: Deadline, fields: DeadlineFields): Promise<void> {
+    if (!this.isMine(deadline) || !DeadlineRules.isValid(fields.title, fields.due)) return;
+    await this.act(() => this.services.deadlines.edit(deadline.id, fields), "Couldn't save that change.");
   }
 
   /** Only this student sees the name. */

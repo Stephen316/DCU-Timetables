@@ -40,10 +40,12 @@ export async function moderateDeadline(id: string, action: "confirm" | "block" |
 
 /// The same edit a poster makes from the app, without their limits: a blocked or past
 /// deadline can be corrected too. Moving the date or type clears the confirmations.
-export async function editDeadline(id: string, title: string, kind: string, due: string) {
+export async function editDeadline(id: string, title: string, kind: string, due: string, weight: number) {
   if (!(await consoleOpen())) return { error: LOCKED };
   const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("edit_deadline", { p_deadline: id, p_title: title, p_kind: kind, p_due: due });
+  const { error } = await supabase.rpc("edit_deadline", {
+    p_deadline: id, p_title: title, p_kind: kind, p_due: due, p_weight: weight,
+  });
   if (error) return { error: error.message };
   revalidatePath("/review");
   revalidatePath("/deadlines");

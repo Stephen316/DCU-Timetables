@@ -4,7 +4,8 @@
 --
 -- RUN ORDER: phase18_reports_and_hiding.sql → phase20_view_security.sql → THIS FILE.
 -- It replaces two of phase 20's functions with wider ones, so re-running phase 20 after
--- this fails on them; run this file again instead.
+-- this fails on them; run this file again instead. Phase 26 widens two of these again, so
+-- after re-running this file, re-run phase 26 too.
 --
 -- Five changes, each closing a gap in what a deadline could do:
 --

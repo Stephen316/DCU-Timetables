@@ -2,7 +2,7 @@ import {
   CancellationReport, CancellationTally, EventVerdict, isReportStance, VerdictState, VERDICT_STATES,
 } from '../core/cancellation';
 import {
-  Deadline, DeadlineConfirmation, DeadlineKind, DeadlineReportReason, DeadlineRules, DeadlineStanding, isDeadlineKind,
+  Deadline, DeadlineConfirmation, DeadlineFields, DeadlineReportReason, DeadlineRules, DeadlineStanding, isDeadlineKind,
 } from '../core/deadline';
 import { AccountProfile, makeAccountProfile, parseRole } from '../core/identity';
 import { isoSeconds, parseISO } from '../core/time';
@@ -129,7 +129,7 @@ export interface DeadlineStore {
    * The poster changing their own. The server clears the other confirmations when the date
    * or type moves, and refuses anyone else's — or a deadline a moderator blocked.
    */
-  edit(id: string, fields: { title: string; kind: DeadlineKind; due: Date }): Promise<void>;
+  edit(id: string, fields: DeadlineFields): Promise<void>;
   /** This student's own name for a deadline; null goes back to the shared title. */
   setLabel(id: string, label: string | null): Promise<void>;
   /** Only the submitter can remove one — enforced by RLS, not just by hiding the button. */
@@ -175,7 +175,7 @@ export class SupabaseDeadlineStore implements DeadlineStore {
   private async fetch(moduleFilter: string): Promise<Deadline[]> {
     const json = await this.rest.json('GET', '/rest/v1/module_deadlines_public', SupabaseDeadlineStore.describe, {
       query: [
-        ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label'],
+        ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label,grade_weight'],
         ['module_key', moduleFilter],
         ['due_at', `gte.${isoSeconds(DeadlineRules.horizon())}`],
         ['order', 'due_at.asc'],
@@ -197,6 +197,7 @@ export class SupabaseDeadlineStore implements DeadlineStore {
         status: r.status === 'verified' ? 'verified' : 'pending',
         editedAt: typeof r.edited_at === 'string' ? parseISO(r.edited_at) : null,
         myLabel: typeof r.my_label === 'string' && r.my_label.length > 0 ? r.my_label : null,
+        gradeWeight: typeof r.grade_weight === 'number' ? r.grade_weight : 0,
       }];
     });
   }
@@ -211,12 +212,15 @@ export class SupabaseDeadlineStore implements DeadlineStore {
         due_at: isoSeconds(deadline.due),
         kind: deadline.kind,
         submitter_id: deadline.submitterID,
+        grade_weight: deadline.gradeWeight,
       }],
     });
   }
 
-  async edit(id: string, fields: { title: string; kind: DeadlineKind; due: Date }): Promise<void> {
-    await this.rpc('edit_deadline', { p_deadline: id, p_title: fields.title, p_kind: fields.kind, p_due: isoSeconds(fields.due) });
+  async edit(id: string, fields: DeadlineFields): Promise<void> {
+    await this.rpc('edit_deadline', {
+      p_deadline: id, p_title: fields.title, p_kind: fields.kind, p_due: isoSeconds(fields.due), p_weight: fields.gradeWeight,
+    });
   }
 
   async setLabel(id: string, label: string | null): Promise<void> {
@@ -279,7 +283,7 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     await this.rpc('unhide_all_authors', {});
   }
 
-  private rpc(name: string, args: Record<string, string>): Promise<unknown> {
+  private rpc(name: string, args: Record<string, string | number>): Promise<unknown> {
     return this.rest.json('POST', `/rest/v1/rpc/${name}`, SupabaseDeadlineStore.describe, { body: args });
   }
 }
@@ -293,8 +297,8 @@ export class LocalDeadlineStore implements DeadlineStore {
 
   private load(): Deadline[] {
     // Rows saved before status, edits and names existed have none of the three.
-    type Stored = Omit<Deadline, 'due' | 'submittedAt' | 'editedAt' | 'status' | 'myLabel'>
-      & { due: number; submittedAt: number; editedAt?: number | null; status?: Deadline['status']; myLabel?: string | null };
+    type Stored = Omit<Deadline, 'due' | 'submittedAt' | 'editedAt' | 'status' | 'myLabel' | 'gradeWeight'>
+      & { due: number; submittedAt: number; editedAt?: number | null; status?: Deadline['status']; myLabel?: string | null; gradeWeight?: number };
     return this.prefs
       .getJSON<Stored[]>(PrefKey.localDeadlines, [])
       .map((d) => ({
@@ -305,6 +309,7 @@ export class LocalDeadlineStore implements DeadlineStore {
         status: d.status ?? 'pending',
         editedAt: typeof d.editedAt === 'number' ? new Date(d.editedAt) : null,
         myLabel: d.myLabel ?? null,
+        gradeWeight: d.gradeWeight ?? 0,
       }));
   }
 
@@ -332,7 +337,7 @@ export class LocalDeadlineStore implements DeadlineStore {
     this.save([...this.load(), deadline]);
   }
 
-  async edit(id: string, fields: { title: string; kind: DeadlineKind; due: Date }): Promise<void> {
+  async edit(id: string, fields: DeadlineFields): Promise<void> {
     this.save(this.load().map((d) => (d.id === id ? { ...d, ...fields, editedAt: new Date() } : d)));
   }
 

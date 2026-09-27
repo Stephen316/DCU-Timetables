@@ -2,9 +2,9 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
-  ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
+  ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DeadlineFields, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
   DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, displayTitle, LABEL_LIMIT, reportReasonLabel,
-  TITLE_LIMIT,
+  gradeWeightLabel, TITLE_LIMIT,
 } from '../../core/deadline';
 import { addDays, formatAbbreviated, formatWeekdayDayMonthTime, localDateString, formatTime } from '../../core/time';
 import {
@@ -19,7 +19,7 @@ export interface DeadlineActions {
   /** "The details are wrong", or taking that back. */
   onDispute: () => void;
   /** The poster changing their own, for everyone. */
-  onEdit: (title: string, kind: DeadlineKind, due: Date) => void;
+  onEdit: (fields: DeadlineFields) => void;
   /** This student's own name for it. Blank goes back to the shared title. */
   onRename: (label: string) => void;
   onDelete: () => void;
@@ -41,6 +41,7 @@ export function DeadlineRow({
   const trust = deadlineTrust(deadline, standing);
   const edited = deadline.editedAt ? ' · edited' : '';
   const dispute = standing.disputeSummary;
+  const worth = gradeWeightLabel(deadline.gradeWeight);
   return (
     <Row>
       <View style={styles.rowBody}>
@@ -54,11 +55,11 @@ export function DeadlineRow({
             {deadline.myLabel ? <Txt type="caption" color={theme.inkTertiary}>Shared as “{deadline.title}”</Txt> : null}
             {variant === 'schedule' ? (
               <>
-                <Txt type="caption" color={theme.inkSecondary}>{deadline.moduleKey} {deadlineKindLabel(deadline.kind).toLowerCase()}</Txt>
+                <Txt type="caption" color={theme.inkSecondary}>{deadline.moduleKey} {deadlineKindLabel(deadline.kind).toLowerCase()} · {worth}</Txt>
                 <Txt type="caption" color={theme.inkSecondary}>{formatWeekdayDayMonthTime(deadline.due)}{edited}</Txt>
               </>
             ) : (
-              <Txt type="caption" color={theme.inkSecondary}>{deadlineKindLabel(deadline.kind)}, due {formatAbbreviated(deadline.due)}{edited}</Txt>
+              <Txt type="caption" color={theme.inkSecondary}>{deadlineKindLabel(deadline.kind)}, due {formatAbbreviated(deadline.due)} · {worth}{edited}</Txt>
             )}
           </View>
           <Txt type="caption" color={theme.inkSecondary} style={styles.medium}>{deadlineCountdown(deadline.due)}</Txt>
@@ -233,15 +234,15 @@ function RenameSheet({
 }
 
 /**
- * Adding a deadline, or the poster editing theirs. Kept to three fields — a title, what it
- * is, and when it's due.
+ * Adding a deadline, or the poster editing theirs. Kept to four fields — a title, what it
+ * is, when it's due, and how much of the grade it's worth.
  */
 export function DeadlineForm({
   visible, onClose, onSubmit, editing,
 }: {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (title: string, kind: DeadlineKind, due: Date) => void;
+  onSubmit: (fields: DeadlineFields) => void;
   editing?: { deadline: Deadline; standing: DeadlineStanding };
 }) {
   const theme = useTheme();
@@ -249,7 +250,10 @@ export function DeadlineForm({
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<DeadlineKind>('assignment');
   const [due, setDue] = useState(() => addDays(new Date(), 7));
-  const valid = DeadlineRules.isValid(title, due);
+  // Kept as typed; blank is 0, which is not graded.
+  const [weightText, setWeightText] = useState('');
+  const weight = DeadlineRules.parseGradeWeight(weightText);
+  const valid = DeadlineRules.isValid(title, due) && weight !== null;
 
   // Filled in each time it opens, so an edit starts from what's saved now, not at first render.
   const [wasVisible, setWasVisible] = useState(visible);
@@ -259,6 +263,7 @@ export function DeadlineForm({
       setTitle(initial?.title ?? '');
       setKind(initial?.kind ?? 'assignment');
       setDue(initial?.due ?? addDays(new Date(), 7));
+      setWeightText(initial && initial.gradeWeight > 0 ? String(initial.gradeWeight) : '');
     }
   }
 
@@ -274,7 +279,8 @@ export function DeadlineForm({
           bold
           disabled={!valid}
           onPress={() => {
-            onSubmit(title.trim(), kind, due);
+            if (weight === null) return;
+            onSubmit({ title: title.trim(), kind, due, gradeWeight: weight });
             onClose();
           }}
         />
@@ -313,6 +319,26 @@ export function DeadlineForm({
           <Row>
             <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Due</Txt>
             <DuePicker value={due} onChange={setDue} />
+          </Row>
+          <Row>
+            <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Worth</Txt>
+            <View style={styles.weight}>
+              <TextInput
+                value={weightText}
+                onChangeText={setWeightText}
+                keyboardType="number-pad"
+                maxLength={3}
+                placeholder="0"
+                placeholderTextColor={theme.inkTertiary}
+                style={[styles.input, styles.weightInput, { color: theme.ink, backgroundColor: theme.raised }]}
+                accessibilityLabel="Percent of the grade"
+              />
+              <Txt color={theme.inkSecondary}>%</Txt>
+              {/* Read back in words, so 0 is seen to mean "not graded" rather than "nothing typed". */}
+              <Txt type="footnote" color={weight === null ? theme.tint.off : theme.inkSecondary} style={styles.weightReadout}>
+                {weight === null ? 'A whole number from 0 to 100' : gradeWeightLabel(weight)}
+              </Txt>
+            </View>
           </Row>
         </Section>
       </ListScroll>
@@ -404,4 +430,7 @@ const styles = StyleSheet.create({
   fieldLabel: { marginBottom: Space.xs },
   kinds: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.s },
   kind: { borderRadius: 8, paddingHorizontal: Space.m, paddingVertical: Space.s },
+  weight: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
+  weightInput: { width: 64, borderRadius: 8, paddingHorizontal: Space.m, textAlign: 'right' },
+  weightReadout: { flex: 1, marginLeft: Space.s },
 });

@@ -1,6 +1,6 @@
 import { CancellationRules, CancellationStatus, makeReport, ReportStance, VerdictState } from '../../core/cancellation';
 import {
-  Deadline, deadlineBelongsTo, DeadlineKind, DeadlineReportReason, DeadlineRules, DeadlineStanding, makeDeadline,
+  Deadline, deadlineBelongsTo, DeadlineFields, DeadlineReportReason, DeadlineRules, DeadlineStanding, makeDeadline,
 } from '../../core/deadline';
 import { AccountRules, Roles } from '../../core/identity';
 import { Lecturer } from '../../core/misc';
@@ -134,11 +134,11 @@ export class LectureModel extends Observable {
     await this.busy(() => this.services.cancellations.withdraw(this.eventKey, this.reporterID), "Couldn't undo that report.");
   }
 
-  async addDeadline(title: string, kind: DeadlineKind, due: Date): Promise<void> {
-    if (!DeadlineRules.isValid(title, due)) return;
+  async addDeadline(fields: DeadlineFields): Promise<void> {
+    if (!DeadlineRules.isValid(fields.title, fields.due)) return;
     // Pinned to this class, so only this lecture or practical leads with it.
     const deadline = makeDeadline({
-      moduleKey: this.moduleKey, atGroupKey: groupKeyOf(this.event), title, due, kind, submitterID: this.reporterID, isMine: true,
+      moduleKey: this.moduleKey, atGroupKey: groupKeyOf(this.event), ...fields, submitterID: this.reporterID, isMine: true,
     });
     // Show it straight away; the reload confirms it landed.
     this.deadlines = DeadlineRules.upcoming([...this.deadlines, deadline]);
@@ -162,9 +162,9 @@ export class LectureModel extends Observable {
     }, "Couldn't send that.");
   }
 
-  async editDeadline(deadline: Deadline, title: string, kind: DeadlineKind, due: Date): Promise<void> {
-    if (!this.isMine(deadline) || !DeadlineRules.isValid(title, due)) return;
-    await this.busy(() => this.services.deadlines.edit(deadline.id, { title, kind, due }), "Couldn't save that change.");
+  async editDeadline(deadline: Deadline, fields: DeadlineFields): Promise<void> {
+    if (!this.isMine(deadline) || !DeadlineRules.isValid(fields.title, fields.due)) return;
+    await this.busy(() => this.services.deadlines.edit(deadline.id, fields), "Couldn't save that change.");
   }
 
   /** Only this student sees the name. */

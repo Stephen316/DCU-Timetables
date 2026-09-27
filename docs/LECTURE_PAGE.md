@@ -183,6 +183,9 @@ reports.
   everyone else's confirmations, since they vouched for the old one; the form says how many
   before you save. An edit to a moderator-confirmed deadline sends it back to waiting, and the
   row is marked "edited". A blocked deadline can't be edited back into view.
+- **What it's worth.** The form has a "Worth" box for the percentage of the module's grade,
+  a whole number from 0 to 100. Blank or 0 means not graded, and every row says so ("Not
+  graded", or "20% of the grade"). Changing only the weight keeps the confirmations.
 - **Anyone gives any deadline their own name** ("Give it my own name…"). Only they see it —
   on the row, the class banner, the timetable outline and the widget — with the shared title
   underneath. It's stored per account (`deadline_labels`), so it follows them to a new phone.

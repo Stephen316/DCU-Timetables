@@ -14,7 +14,7 @@ import {
 import { EventMapper, EventsResponseDTO } from '../src/data/dcuApi';
 import { buildQuery, PostgREST } from '../src/data/rest';
 import { isSessionValid, parseAuthSession, SupabaseSession } from '../src/data/session';
-import { MemoryKV, Prefs } from '../src/data/storage';
+import { MemoryKV, PrefKey, Prefs } from '../src/data/storage';
 import { LocalCancellationStore, LocalDeadlineStore } from '../src/data/stores';
 import { deadlineSFSymbol, WidgetSnapshotPublisher } from '../src/data/widgets';
 import { at, event, utc } from './helpers';
@@ -589,16 +589,23 @@ describe('Device storage', () => {
     expect(await store.deadlinesForModule('M')).toHaveLength(0);
   });
 
+  test('a deadline saved before weights existed reads as not graded', async () => {
+    const prefs = newPrefs();
+    const due = Date.now() + 86_400_000;
+    prefs.setJSON(PrefKey.localDeadlines, [{ id: 'old', moduleKey: 'M', atGroupKey: null, title: 'T', due, kind: 'quiz', submitterID: 'me', submittedAt: due }]);
+    expect((await new LocalDeadlineStore(prefs).deadlinesForModule('M'))[0].gradeWeight).toBe(0);
+  });
+
   test('the local deadline store keeps edits and names across a reload', async () => {
     const prefs = newPrefs();
     const due = new Date(Date.now() + 86_400_000);
     const d = makeDeadline({ moduleKey: 'M', title: 'T', due, submitterID: 'me' });
     await new LocalDeadlineStore(prefs).submit(d);
     const later = new Date(due.getTime() + 3600_000);
-    await new LocalDeadlineStore(prefs).edit(d.id, { title: 'T2', kind: 'exam', due: later });
+    await new LocalDeadlineStore(prefs).edit(d.id, { title: 'T2', kind: 'exam', due: later, gradeWeight: 25 });
     await new LocalDeadlineStore(prefs).setLabel(d.id, 'mine');
     const [back] = await new LocalDeadlineStore(prefs).deadlinesForModule('M');
-    expect(back).toMatchObject({ title: 'T2', kind: 'exam', due: later, myLabel: 'mine', status: 'pending' });
+    expect(back).toMatchObject({ title: 'T2', kind: 'exam', due: later, myLabel: 'mine', status: 'pending', gradeWeight: 25 });
     expect(back.editedAt).toBeInstanceOf(Date);
   });
 });

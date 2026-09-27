@@ -3,7 +3,7 @@ import {
 } from '../src/core/cancellation';
 import {
   Deadline, deadlineBelongsTo, DeadlineRules, DeadlineSchedule, DeadlineStanding, deadlineTrust, displayTitle,
-  makeDeadline, highlightReason, TITLE_LIMIT,
+  gradeWeightLabel, makeDeadline, highlightReason, TITLE_LIMIT,
 } from '../src/core/deadline';
 import { groupKeyOf } from '../src/core/timetableEvent';
 import { at, event, utc } from './helpers';
@@ -379,6 +379,36 @@ describe('Deadlines', () => {
     expect(DeadlineRules.isValid('x'.repeat(TITLE_LIMIT + 1), future)).toBe(false);
     // Spaces the server trims don't count against it.
     expect(DeadlineRules.isValid(`  ${'x'.repeat(TITLE_LIMIT)}  `, future)).toBe(true);
+  });
+});
+
+describe('Grade weight', () => {
+  test('0 reads as not graded, anything else as a percentage', () => {
+    expect(gradeWeightLabel(0)).toBe('Not graded');
+    expect(gradeWeightLabel(1)).toBe('1% of the grade');
+    expect(gradeWeightLabel(100)).toBe('100% of the grade');
+  });
+
+  test('a new deadline is not graded until someone says so', () => {
+    expect(makeDeadline({ moduleKey: 'M', title: 'T', due: new Date(), submitterID: 's' }).gradeWeight).toBe(0);
+  });
+
+  test('the box takes a blank or a whole number from 0 to 100', () => {
+    expect(DeadlineRules.parseGradeWeight('')).toBe(0);
+    expect(DeadlineRules.parseGradeWeight('  ')).toBe(0);
+    expect(DeadlineRules.parseGradeWeight('0')).toBe(0);
+    expect(DeadlineRules.parseGradeWeight('20')).toBe(20);
+    expect(DeadlineRules.parseGradeWeight(' 20% ')).toBe(20);
+    expect(DeadlineRules.parseGradeWeight('100')).toBe(100);
+    expect(DeadlineRules.parseGradeWeight('101')).toBeNull();
+    expect(DeadlineRules.parseGradeWeight('7.5')).toBeNull();
+    expect(DeadlineRules.parseGradeWeight('-5')).toBeNull();
+    expect(DeadlineRules.parseGradeWeight('ten')).toBeNull();
+  });
+
+  test('changing only the weight keeps the confirmations', () => {
+    const d = makeDeadline({ moduleKey: 'M', title: 'T', due: at(2026, 10, 2, 9), kind: 'quiz', submitterID: 's', gradeWeight: 10 });
+    expect(DeadlineRules.editClearsConfirmations(d, 'quiz', at(2026, 10, 2, 9))).toBe(false);
   });
 });
 
