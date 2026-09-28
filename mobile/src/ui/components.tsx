@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, isValidElement, ReactNode, useRef, useState } from 'react';
+import { Children, isValidElement, ReactNode, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, ColorValue, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
+  AccessibilityInfo, ActivityIndicator, ColorValue, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -99,6 +99,17 @@ export function Label({
  * The accessibility text sizes. Rows that sit side by side at default size stack at these,
  * rather than clipping a title to a few letters.
  */
+/** The system's Reduce Motion setting, kept current. */
+export function useReduceMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduce);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+    return () => subscription.remove();
+  }, []);
+  return reduce;
+}
+
 export function useLargeText(): boolean {
   return useWindowDimensions().fontScale >= 1.35;
 }
@@ -392,18 +403,28 @@ export function Spinner({ label }: { label?: string }) {
 /**
  * Diagonal lines across whatever it's laid over — how an online class is marked. It sits
  * behind the content and takes no touches.
+ *
+ * The lines sit at fixed places on the page, not on this view: `origin` is where this view
+ * is in a frame it shares with its neighbours, so two online classes back to back read as
+ * one run of lines rather than two that meet out of step.
  */
-export function Hatch({ color, spacing, thickness = 1, angle = -35, style }: {
+export function Hatch({ color, spacing, thickness = 1, angle = -35, origin = { x: 0, y: 0 }, style }: {
   color: string;
   /** Distance between lines, measured across them. */
   spacing: number;
   thickness?: number;
   angle?: number;
+  origin?: { x: number; y: number };
   style?: StyleProp<ViewStyle>;
 }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   // A square as wide as the diagonal still covers the area once it's rotated.
   const side = Math.ceil(Math.hypot(size.width, size.height));
+  // How far this view's centre is across the lines, in the shared frame; the first line goes
+  // where that puts it back in step with the page.
+  const radians = (angle * Math.PI) / 180;
+  const across = (origin.x + size.width / 2) * -Math.sin(radians) + (origin.y + size.height / 2) * Math.cos(radians);
+  const first = (((side / 2 - across) % spacing) + spacing) % spacing;
   return (
     <View
       pointerEvents="none"
@@ -421,8 +442,8 @@ export function Hatch({ color, spacing, thickness = 1, angle = -35, style }: {
           left: (size.width - side) / 2, top: (size.height - side) / 2,
           transform: [{ rotate: `${angle}deg` }],
         }}>
-          {Array.from({ length: Math.floor(side / spacing) }, (_, i) => (
-            <View key={i} style={{ position: 'absolute', left: 0, width: side, top: (i + 0.5) * spacing, height: thickness, backgroundColor: color }} />
+          {Array.from({ length: Math.ceil((side - first) / spacing) }, (_, i) => (
+            <View key={i} style={{ position: 'absolute', left: 0, width: side, top: first + i * spacing, height: thickness, backgroundColor: color }} />
           ))}
         </View>
       ) : null}

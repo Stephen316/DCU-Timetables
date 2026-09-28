@@ -36,6 +36,8 @@ export interface Palette {
   /** Text on an accent fill. */
   onAccent: string;
   destructive: string;
+  /** The line on the week grid at the current time, red as Calendar draws it. */
+  now: string;
   /** The colours that carry meaning in the timetable. */
   tint: {
     /** Something to hand in today. */
@@ -72,6 +74,7 @@ export const light: Palette = {
   accent: '#6C71C4',
   onAccent: '#FDF6E3',
   destructive: '#DC322F',
+  now: '#DC322F',
   tint: { due: '#B58900', test: '#268BD2', off: '#CB4B16', confirmed: '#859900', offFill: '#CB4B16', online: '#4E9A3C' },
   modules: ['#268BD2', '#859900', '#D33682', '#2AA198', '#6C71C4', '#DC322F', '#AC9D57'],
 };
@@ -90,6 +93,7 @@ export const dark: Palette = {
   accent: '#AFB8F2',
   onAccent: '#212129',
   destructive: '#FF6B6B',
+  now: '#FF453A',
   tint: { due: '#FBBF24', test: '#60A5FA', off: '#FB923C', confirmed: '#34D399', offFill: '#C2410C', online: '#4ADE80' },
   modules: ['#0A84FF', '#30D158', '#BF5AF2', '#40C8E0', '#5E5CE6', '#FF375F', '#AC8E68'],
 };

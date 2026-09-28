@@ -1,7 +1,7 @@
-import { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ReactNode, useEffect, useState } from 'react';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { formatTime } from '../../core/time';
-import { Hatch, Txt, useLargeText } from '../../ui/components';
+import { Hatch, Txt, useLargeText, useReduceMotion } from '../../ui/components';
 import { Space, useTheme, withAlpha } from '../../ui/theme';
 
 /**
@@ -16,7 +16,8 @@ import { Space, useTheme, withAlpha } from '../../ui/theme';
  */
 export type RailStop =
   | { kind: 'upcoming' }
-  | { kind: 'next' }
+  /** The class to head for. `live` while it's on: its ring pulses, as a "live" mark does. */
+  | { kind: 'next'; live: boolean }
   | { kind: 'past' }
   /** Carries news: cancelled, moved, a test, something due. Drawn in that news's colour. */
   | { kind: 'flagged'; color: string };
@@ -51,7 +52,7 @@ function heightFor(start: Date, end: Date): number {
  * One class on the rail. At the accessibility text sizes the times move above the content
  * instead of beside it, so the title keeps the full width.
  */
-export function RailRow({ start, end, stop, position, divider = false, online = false, children }: {
+export function RailRow({ start, end, stop, position, divider = false, online = false, top = 0, children }: {
   start: Date;
   end: Date;
   stop: RailStop;
@@ -60,6 +61,8 @@ export function RailRow({ start, end, stop, position, divider = false, online = 
   divider?: boolean;
   /** An online class: faint lines across it, clear of the times and the rail. */
   online?: boolean;
+  /** Where the row sits among the day's rows, so their lines meet in step. */
+  top?: number;
   children: ReactNode;
 }) {
   const theme = useTheme();
@@ -77,7 +80,7 @@ export function RailRow({ start, end, stop, position, divider = false, online = 
       ]}
     >
       {online ? (
-        <Hatch color={withAlpha(theme.tint.online, 0.18)} spacing={12} angle={-25} style={{ left: (stacked ? 0 : GUTTER) + COLUMN }} />
+        <Hatch color={withAlpha(theme.tint.online, 0.18)} spacing={12} angle={-25} origin={{ x: 0, y: top }} style={{ left: (stacked ? 0 : GUTTER) + COLUMN }} />
       ) : null}
       {/* The line through the row, and the stop on it. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -155,12 +158,47 @@ function StopMark({ stop }: { stop: RailStop }) {
       // A halo as well as a fill, so it doesn't rely on the accent's hue alone.
       return (
         <View style={[centred(STOP + 12), styles.halo, { borderColor: theme.accent + '59' }]}>
+          {stop.live ? <Pulse color={theme.accent} /> : null}
           <View style={{ width: STOP, height: STOP, borderRadius: STOP / 2, backgroundColor: theme.accent }} />
         </View>
       );
     case 'flagged':
       return <View style={[centred(STOP), { backgroundColor: stop.color }]} />;
   }
+}
+
+/** How long one pulse takes: slow enough to read as "on now", not as an alert. */
+const PULSE_MS = 2000;
+
+/**
+ * A ring that swells out of the halo and fades, again and again — the "live" mark. Still
+ * under Reduce Motion, where the halo alone says the class is on.
+ */
+function Pulse({ color }: { color: string }) {
+  const reduce = useReduceMotion();
+  const [progress] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (reduce) return;
+    const loop = Animated.loop(
+      Animated.timing(progress, { toValue: 1, duration: PULSE_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      progress.setValue(0);
+    };
+  }, [reduce, progress]);
+  if (reduce) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.pulse, {
+        borderColor: color,
+        opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
+        transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] }) }],
+      }]}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
@@ -175,4 +213,6 @@ const styles = StyleSheet.create({
   dashes: { position: 'absolute', top: 0, bottom: 0, width: LINE, overflow: 'hidden' },
   dash: { width: LINE, height: DASH, marginBottom: DASH_GAP },
   halo: { borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  // Over the halo exactly (its 3pt border included), so it starts where the halo is.
+  pulse: { position: 'absolute', top: -3, left: -3, right: -3, bottom: -3, borderRadius: 999, borderWidth: 2 },
 });

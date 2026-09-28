@@ -13,6 +13,7 @@ import { usePagerDrag } from './Pager';
 
 const HOUR_HEIGHT = 58;
 const GUTTER = 40;
+const NOW_DOT = 7;
 /** One line of `caption2` text in a block, and the block's padding and border above and below it. */
 const LINE_HEIGHT = 13.5;
 const BLOCK_INSET = 8;
@@ -108,7 +109,7 @@ function GridBody({
           );
         })}
       </View>
-      <ScrollView contentContainerStyle={styles.gridScroll}>
+      <ScrollView contentContainerStyle={styles.gridScroll} showsVerticalScrollIndicator={false}>
         <View style={styles.gridRow}>
           <View style={{ width: GUTTER, height: gridHeight }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
             {hours.map((hour) => (
@@ -127,8 +128,34 @@ function GridBody({
                 </View>
               ))
             : null}
+          {width > 0 ? <NowLine days={days} hours={hours} dayWidth={dayWidth} now={now} /> : null}
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Where the day has got to, as Calendar marks it: the time in red in the hours column, a red
+ * line with a dot across today, and a faint one across the rest of the week. It moves as the
+ * clock ticks, and shows only while today is on the grid and inside its hours.
+ */
+function NowLine({ days, hours, dayWidth, now }: { days: Date[]; hours: number[]; dayWidth: number; now: Date }) {
+  const theme = useTheme();
+  const today = days.findIndex((d) => isSameDay(d, now));
+  const minutes = (now.getHours() - hours[0]) * 60 + now.getMinutes();
+  if (today < 0 || hours.length === 0 || minutes < 0 || minutes > hours.length * 60) return null;
+  const top = (minutes / 60) * HOUR_HEIGHT;
+  const todayLeft = GUTTER + today * dayWidth;
+  return (
+    <View pointerEvents="none" style={[styles.now, { top }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View style={[styles.nowAcross, { left: GUTTER, width: days.length * dayWidth, backgroundColor: withAlpha(theme.now, 0.35) }]} />
+      <View style={[styles.nowToday, { left: todayLeft, width: dayWidth, backgroundColor: theme.now }]} />
+      <View style={[styles.nowDot, { left: todayLeft - NOW_DOT / 2, backgroundColor: theme.now }]} />
+      {/* On the canvas, so it covers the hour label it lands on. */}
+      <Txt type="caption2" color={theme.now} style={[styles.nowTime, { backgroundColor: theme.canvas }]} maxFontSizeMultiplier={1.2}>
+        {formatTime(now)}
+      </Txt>
     </View>
   );
 }
@@ -187,7 +214,7 @@ function Block({
         },
       ]}
     >
-      {isOnline(event) ? <Hatch color={withAlpha(theme.tint.online, 0.28)} spacing={7} /> : null}
+      {isOnline(event) ? <Hatch color={withAlpha(theme.tint.online, 0.28)} spacing={7} origin={{ x: item.column * width + 1, y: top + 1 }} /> : null}
       <View style={[styles.bar, { backgroundColor: tint }]} />
       <View style={styles.blockText}>
         <Txt type="caption2" numberOfLines={titleLines} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.bold} maxFontSizeMultiplier={1.4}>
@@ -235,4 +262,9 @@ const styles = StyleSheet.create({
   bar: { width: 2.5 },
   blockText: { flex: 1, paddingHorizontal: 3, paddingVertical: 2 },
   corner: { position: 'absolute', top: 1, right: 1 },
+  now: { position: 'absolute', left: 0, right: 0, height: 0 },
+  nowAcross: { position: 'absolute', top: -StyleSheet.hairlineWidth / 2, height: StyleSheet.hairlineWidth },
+  nowToday: { position: 'absolute', top: -1, height: 2 },
+  nowDot: { position: 'absolute', top: -NOW_DOT / 2, width: NOW_DOT, height: NOW_DOT, borderRadius: NOW_DOT / 2 },
+  nowTime: { position: 'absolute', left: 0, width: GUTTER - 2, top: -7, textAlign: 'right', paddingRight: 2, fontWeight: '600' },
 });

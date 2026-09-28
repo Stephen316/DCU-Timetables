@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { CancellationRules } from '../../core/cancellation';
 import { ClassHighlight, Deadline, deadlineKindLabel, displayTitle, highlightReason } from '../../core/deadline';
@@ -44,13 +45,13 @@ export function DayPage({
     // News outranks "next": a cancelled class you'd otherwise be walking to is drawn in orange.
     const h = highlight(event);
     if (h) return { kind: 'flagged', color: highlightTint(h, theme) };
-    if (event.id === nextID) return { kind: 'next' };
+    if (event.id === nextID) return { kind: 'next', live: now.getTime() >= event.start.getTime() && now.getTime() < event.end.getTime() };
     if (today && event.end.getTime() <= now.getTime()) return { kind: 'past' };
     return { kind: 'upcoming' };
   };
 
   return (
-    <ScrollView style={{ backgroundColor: theme.canvas }} contentContainerStyle={styles.content}>
+    <ScrollView style={{ backgroundColor: theme.canvas }} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <DayHeading day={day} slots={slots} now={now} />
       {sessions.length === 0 ? (
         !isLoading ? (
@@ -130,6 +131,7 @@ function ClassStop({
 }) {
   const theme = useTheme();
   const pagerDrag = usePagerDrag();
+  const [top, setTop] = useState(0);
 
   // The room, and how it's delivered only when that isn't "in the room".
   const room = locationDisplay(event) === '—' ? '' : locationDisplay(event);
@@ -170,8 +172,9 @@ function ClassStop({
       accessibilityLabel={spoken}
       accessibilityHint="Opens the class"
       style={({ pressed }) => pressed && { backgroundColor: theme.raised }}
+      onLayout={(e) => setTop(e.nativeEvent.layout.y)}
     >
-      <RailRow start={event.start} end={event.end} stop={stop} position={railPosition(index, count)} divider={followsClass} online={isOnline(event)}>
+      <RailRow start={event.start} end={event.end} stop={stop} position={railPosition(index, count)} divider={followsClass} online={isOnline(event)} top={top}>
         <View style={{ gap: Space.xxs, opacity: isSkipped ? 0.45 : stop.kind === 'past' ? 0.6 : 1 }}>
           {news ? (
             <Label icon={highlightIcon(news)} text={highlightReason(news)} type="status" color={highlightTint(news, theme)} />

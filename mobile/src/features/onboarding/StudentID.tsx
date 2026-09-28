@@ -3,14 +3,14 @@ import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
-  AccessibilityInfo, ActivityIndicator, Animated, Easing, Linking, Platform, Pressable, StyleSheet, Text, TextInput,
+  ActivityIndicator, Animated, Easing, Linking, Platform, Pressable, StyleSheet, Text, TextInput,
   useWindowDimensions, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StudentNumber } from '../../core/identity';
 import { errorMessage, isNotSignedIn } from '../../data/rest';
 import { useServices } from '../../state/hooks';
-import { ActionRow, BarButton, ListScroll, PrimaryButton, Row, SecondaryButton, Section, Sheet, Txt } from '../../ui/components';
+import { ActionRow, BarButton, ListScroll, PrimaryButton, Row, SecondaryButton, Section, Sheet, Txt, useReduceMotion } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 
 /** The guide frame's width as a share of the screen's. */
@@ -287,16 +287,6 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
   );
 }
 
-/** The system's Reduce Motion setting, kept current. */
-function useReduceMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduce);
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
-    return () => subscription.remove();
-  }, []);
-  return reduce;
-}
 
 type Box = { x: number; y: number; w: number; h: number };
 
