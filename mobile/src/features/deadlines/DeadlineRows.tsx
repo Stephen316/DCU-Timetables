@@ -35,8 +35,16 @@ export interface DeadlineActions {
  * outside its own class page, that is the first thing you need to know.
  */
 export function DeadlineRow({
-  deadline, standing, isMine, variant, actions,
-}: { deadline: Deadline; standing: DeadlineStanding; isMine: boolean; variant: 'module' | 'schedule'; actions: DeadlineActions }) {
+  deadline, moduleName, standing, isMine, variant, actions,
+}: {
+  deadline: Deadline;
+  /** What to call its module on the `schedule` row: the name, or the code when there isn't one. */
+  moduleName?: string;
+  standing: DeadlineStanding;
+  isMine: boolean;
+  variant: 'module' | 'schedule';
+  actions: DeadlineActions;
+}) {
   const theme = useTheme();
   const large = useLargeText();
   const [sheet, setSheet] = useState<'edit' | 'rename' | null>(null);
@@ -58,7 +66,7 @@ export function DeadlineRow({
             {deadline.myLabel ? <Txt type="caption" color={theme.inkTertiary}>Shared as “{deadline.title}”</Txt> : null}
             {variant === 'schedule' ? (
               <>
-                <Txt type="caption" color={theme.inkSecondary}>{deadline.moduleKey} {deadlineKindLabel(deadline.kind).toLowerCase()} · {worth}</Txt>
+                <Txt type="caption" color={theme.inkSecondary}>{moduleName ?? deadline.moduleKey} {deadlineKindLabel(deadline.kind).toLowerCase()} · {worth}</Txt>
                 <Txt type="caption" color={theme.inkSecondary}>{formatWeekdayDayMonthTime(deadline.due)}{edited}</Txt>
               </>
             ) : (

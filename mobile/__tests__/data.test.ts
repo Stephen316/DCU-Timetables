@@ -631,6 +631,13 @@ describe('Widget snapshot', () => {
     expect(WidgetSnapshotPublisher.room(online)).toBe('Online');
   });
 
+  test("a deadline carries its module's name when a class gives one, else the code", () => {
+    const names = new Map([['CA106', 'Computer Systems']]);
+    const snap = WidgetSnapshotPublisher.snapshot([], [deadline('a', t(25, 12))], clear, t(23, 8), names);
+    expect(snap.deadlines[0].code).toBe('Computer Systems');
+    expect(WidgetSnapshotPublisher.snapshot([], [deadline('a', t(25, 12))], clear, t(23, 8)).deadlines[0].code).toBe('CA106');
+  });
+
   test("a class's title leaves off the module code DCU puts in front of its name", () => {
     const coded = event('EEG1006[1]OC/L1/01', t(23, 9), t(23, 10), { id: 'm', moduleName: 'EEG1006[1] Materials Engineering' });
     const snap = WidgetSnapshotPublisher.snapshot([coded], [], clear, t(23, 8));

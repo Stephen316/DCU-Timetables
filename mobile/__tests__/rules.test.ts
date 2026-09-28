@@ -382,6 +382,20 @@ describe('Deadlines', () => {
   });
 });
 
+describe('Module names for deadlines', () => {
+  test("names each module after the first class that has a name, without DCU's code in front", () => {
+    const start = at(2026, 9, 28, 10);
+    const names = DeadlineRules.moduleNames([
+      event('EEG1006[1]OC/L1/01', start, undefined, { moduleName: 'EEG1006[1] Materials Engineering' }),
+      event('EEG1006[1]OC/T1/01', start, undefined, { moduleName: 'EEG1006[1] Something else' }),
+      event('EEG1007[1]OC/L1/01', start, undefined, { moduleName: null }),
+    ]);
+    expect(names.get('EEG1006')).toBe('Materials Engineering');
+    // No class names it, so the caller falls back to the code.
+    expect(names.has('EEG1007')).toBe(false);
+  });
+});
+
 describe("A new deadline's date", () => {
   const lab = (start: Date) => event('EEG1007[1]OC/L2/01', start);
 

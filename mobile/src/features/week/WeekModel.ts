@@ -51,6 +51,8 @@ export class WeekModel extends Observable {
   deadlines: Deadline[] = [];
   /** `moduleKeys` as of the last load, for the deadlines tab. */
   loadedModuleKeys: string[] = [];
+  /** The module's name for each of `loadedModuleKeys` that has one, for showing deadlines. */
+  moduleNames = new Map<string, string>();
 
   /**
    * Every status fetched this session, whichever week it was for. The widget shows the
@@ -153,6 +155,11 @@ export class WeekModel extends Observable {
    * Every module seen in any week loaded so far — from the raw events, before changes and
    * splits: another band's session moving doesn't stop you taking the module.
    */
+  /** What to call a deadline's module: its name, or its code when no class names it. */
+  moduleName(key: string): string {
+    return this.moduleNames.get(key) ?? key;
+  }
+
   moduleKeys(): string[] {
     const keys = new Set<string>();
     for (const list of this.rawByWeekNumber.values()) for (const e of list) keys.add(DeadlineRules.moduleKey(e));
@@ -328,7 +335,9 @@ export class WeekModel extends Observable {
     }
     const statuses = this.knownStatuses;
     WidgetSnapshotPublisher.publish(
-      WidgetSnapshotPublisher.snapshot(upcoming, this.deadlines, (e) => statuses.get(CancellationRules.eventKey(e)) ?? CancellationStatus.none),
+      WidgetSnapshotPublisher.snapshot(
+        upcoming, this.deadlines, (e) => statuses.get(CancellationRules.eventKey(e)) ?? CancellationStatus.none, new Date(), this.moduleNames,
+      ),
     );
   }
 
@@ -369,6 +378,7 @@ export class WeekModel extends Observable {
     }
     this.eventsByWeekNumber = filtered;
     this.loadedModuleKeys = sameList(this.loadedModuleKeys, this.moduleKeys());
+    this.moduleNames = DeadlineRules.moduleNames([...this.rawByWeekNumber.values()].flat());
     const week = this.currentWeek;
     const current = week ? filtered.get(week.number) ?? [] : [];
     this.events = current;

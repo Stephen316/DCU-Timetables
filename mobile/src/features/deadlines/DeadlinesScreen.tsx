@@ -103,6 +103,7 @@ export function DeadlinesScreen() {
               <DeadlineRow
                 key={d.id}
                 deadline={d}
+                moduleName={week.moduleName(d.moduleKey)}
                 standing={model.standing(d)}
                 isMine={model.isMine(d)}
                 variant="schedule"

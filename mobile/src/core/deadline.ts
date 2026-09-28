@@ -1,5 +1,5 @@
 import { CancellationStatus, verdictSource } from './cancellation';
-import { groupKeyOf, TimetableEvent } from './timetableEvent';
+import { groupKeyOf, shortTitleOf, TimetableEvent } from './timetableEvent';
 import { addDays, daysBetween, isSameDay, startOfDay, startOfWeek } from './time';
 import { uuid } from './uuid';
 
@@ -230,6 +230,19 @@ export const DeadlineRules = {
    */
   moduleKey(event: TimetableEvent): string {
     return event.activity.moduleCode ?? event.activity.raw;
+  },
+
+  /**
+   * Each module's name, by `moduleKey`, from the classes that carry one — a deadline only
+   * knows its module's code. A module none of the classes names is left out.
+   */
+  moduleNames(events: TimetableEvent[]): Map<string, string> {
+    const names = new Map<string, string>();
+    for (const e of events) {
+      const key = DeadlineRules.moduleKey(e);
+      if (e.moduleName && !names.has(key)) names.set(key, shortTitleOf(e));
+    }
+    return names;
   },
 
   /**
