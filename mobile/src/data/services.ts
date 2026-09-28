@@ -1,3 +1,4 @@
+import { ModuleAbbreviationCache, ModuleAbbreviationStore, SupabaseModuleAbbreviationStore } from './abbreviations';
 import { AlertScheduler, MemoryAlertScheduler } from './alerts';
 import { AuthService, SupabaseAuthService } from './auth';
 import {
@@ -43,10 +44,13 @@ export interface Services {
   moduleSplits: ModuleSplitStore | null;
   /** Headings set in the console. Null until Supabase is configured. */
   moduleTitles: ModuleTitleStore | null;
+  /** Week-grid abbreviations set in the console. Null until Supabase is configured. */
+  moduleAbbreviations: ModuleAbbreviationStore | null;
   rotationCache: LabRotationCache;
   changeCache: TimetableChangeCache;
   splitCache: ModuleSplitCache;
   titleCache: ModuleTitleCache;
+  abbreviationCache: ModuleAbbreviationCache;
   timetableCache: TimetableCache;
   /** Programme search and a picked programme's timetable. */
   dcu: DCUAPIClient;
@@ -112,10 +116,12 @@ export async function createServices(platform: Platform): Promise<Services> {
     timetableChanges: rest ? new SupabaseTimetableChangeStore(rest) : null,
     moduleSplits: rest ? new SupabaseModuleSplitStore(rest) : null,
     moduleTitles: rest ? new SupabaseModuleTitleStore(rest) : null,
+    moduleAbbreviations: rest ? new SupabaseModuleAbbreviationStore(rest) : null,
     rotationCache: new LabRotationCache(prefs),
     changeCache: new TimetableChangeCache(prefs),
     splitCache: new ModuleSplitCache(prefs),
     titleCache: new ModuleTitleCache(prefs),
+    abbreviationCache: new ModuleAbbreviationCache(prefs),
     timetableCache: new TimetableCache(platform.kv),
     // The API host is versioned (docs/API.md), so it can be moved without a code change.
     dcu: new DCUAPIClient(

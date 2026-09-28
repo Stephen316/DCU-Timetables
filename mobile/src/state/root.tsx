@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { decodeProfile, StudentProfile, TimetableAudience } from '../core/profile';
 import { categoryCode, TimetableCategory } from '../core/timetableEvent';
 import { AllocationRefresh, LabRotationRefresh, ModuleSplitRefresh, ModuleTitleRefresh, TimetableChangeRefresh } from '../data/courseData';
+import { ModuleAbbreviationRefresh } from '../data/abbreviations';
 import { TimetableSource } from '../data/dcuApi';
 import { AuthenticatedUser, userEmail } from '../data/session';
 import { PrefKey } from '../data/storage';
@@ -193,6 +194,31 @@ export function RootProvider({ children }: { children: ReactNode }) {
     });
     return () => sub.remove();
   }, [refreshAllocation]);
+
+  /**
+   * The week grid's abbreviations, from the console's Abbreviations page. On launch, sign-in
+   * and return to the foreground like the rest, and on a timer while the app is open, so a
+   * phone left open on the timetable picks up a change too.
+   */
+  const refreshAbbreviations = useCallback(async () => {
+    const store = services.moduleAbbreviations;
+    if (!latest.current.user || !store || AppState.currentState !== 'active') return;
+    if (await ModuleAbbreviationRefresh.run(store, services.abbreviationCache)) {
+      services.events.emit('moduleAbbreviationsChanged');
+    }
+  }, [services]);
+
+  useEffect(() => {
+    void refreshAbbreviations();
+    const timer = setInterval(() => void refreshAbbreviations(), ModuleAbbreviationRefresh.intervalMs);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshAbbreviations();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, [user?.id, refreshAbbreviations]);
 
   const signedIn = useCallback(
     (next: AuthenticatedUser) => {

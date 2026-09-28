@@ -118,6 +118,7 @@ export const PrefKey = {
   timetableChanges: (courseKey: string) => `timetableChanges:${courseKey}`,
   moduleSplits: 'moduleSplits',
   moduleTitles: 'moduleTitles',
+  moduleAbbreviations: 'moduleAbbreviations',
   localReports: 'local:cancellationReports',
   localDeadlines: 'local:deadlines',
   localConfirmations: 'local:deadlineConfirmations',

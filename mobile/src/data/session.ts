@@ -56,7 +56,9 @@ export type AppEvent =
   /** The saved surname splits on this device changed; the week view re-applies them. */
   | 'moduleSplitsChanged'
   /** The headings saved in the console changed; the week view re-applies them. */
-  | 'moduleTitlesChanged';
+  | 'moduleTitlesChanged'
+  /** The week-grid abbreviations set in the console changed; the week view re-applies them. */
+  | 'moduleAbbreviationsChanged';
 
 // MARK: - Tokens
 

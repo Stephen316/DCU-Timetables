@@ -51,6 +51,7 @@ export function TimetableScreen() {
   useAppEvent('timetableChangesChanged', () => model.reloadChanges());
   useAppEvent('moduleSplitsChanged', () => model.reloadSplits());
   useAppEvent('moduleTitlesChanged', () => model.reloadTitles());
+  useAppEvent('moduleAbbreviationsChanged', () => model.reloadAbbreviations());
   useAppEvent('labRotationChanged', () => void model.reloadAll());
 
   const open = (event: TimetableEvent) => router.push({ pathname: '/class/[id]', params: { id: event.id } });

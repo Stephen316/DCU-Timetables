@@ -1,5 +1,6 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
+import { MODULE_KEY } from "@/lib/abbreviations/names";
 
 // DCU's public MyTimetable API — the one the app reads — trimmed to what the console needs:
 // the teaching weeks, and one programme's classes for a week. A port of
@@ -157,6 +158,63 @@ async function fetchClasses(moduleCodes: string[], weekNumbers: number[]): Promi
     });
   }
   return out.sort((a, b) => `${a.date}${a.start}${a.code}`.localeCompare(`${b.date}${b.start}${b.code}`));
+}
+
+const PROGRAMME_TYPE = "241e4d36-60e0-49f8-b27e-99416745d98d";
+
+/// Every module on a programme's timetable for the year, with its name exactly as DCU gives
+/// it, codes and all. These are the modules a student of the programme sees on the app's
+/// week grid. That includes some a course's own list lacks: EEG1's first-year chemistry
+/// classes are CHM1006's, shared with EEG1017. A week not yet published contributes
+/// nothing, so a semester-2 module appears here only once DCU publishes semester 2.
+///
+/// The whole year is one request: 226 classes in 0.7 s for ECE1, measured 28 Sep 2026.
+export async function programmeModules(programmeCode: string): Promise<{ code: string; name: string }[]> {
+  return cachedProgrammeModules(programmeCode.trim().toUpperCase());
+}
+
+const cachedProgrammeModules = unstable_cache(fetchProgrammeModules, ["dcu-programme-modules"], { revalidate: 3600 });
+
+async function fetchProgrammeModules(programmeCode: string): Promise<{ code: string; name: string }[]> {
+  const found = await call<{ Results: { Identity: string; Name: string }[] }>(
+    `Public/CategoryTypes/${PROGRAMME_TYPE}/Categories/FilterWithCache/${INSTITUTION}`,
+    { body: [], query: { query: programmeCode, itemsPerPage: "50", pageNumber: "1", returnOccurrences: "false" } },
+  );
+  // "ECE1 (Engineering-1)" is ECE1's; "MECE1" is another programme the search also returns.
+  const programme = found.Results.find((r) => r.Name.trim().split(/\s+/)[0].toUpperCase() === programmeCode);
+  if (!programme) throw new Error(`DCU's timetable has no programme ${programmeCode}.`);
+
+  const vo = await viewOptions();
+  if (!vo.Weeks.length) return [];
+  const lastStart = new Date(vo.Weeks[vo.Weeks.length - 1].FirstDayInWeek);
+  const end = new Date(lastStart.getTime() + 7 * 86_400_000).toISOString().replace(".000Z", "+00:00");
+  const res = await call<{ CategoryEvents?: { Results?: EventDTO[] }[] }>(
+    `Public/CategoryTypes/Categories/Events/Filter/${INSTITUTION}`,
+    {
+      body: {
+        ViewOptions: {
+          Days: vo.Days,
+          Weeks: vo.Weeks,
+          TimePeriods: [{ Description: "All Day", StartTime: "00:00", EndTime: "23:59", IsDefault: true }],
+          DatePeriods: [{ Description: "Range", StartDateTime: vo.Weeks[0].FirstDayInWeek, EndDateTime: end, IsDefault: true, Type: null }],
+        },
+        CategoryTypesWithIdentities: [{ CategoryTypeIdentity: PROGRAMME_TYPE, CategoryIdentities: [programme.Identity] }],
+        FetchBookings: false,
+        FetchPersonalEvents: false,
+        PersonalIdentities: [],
+      },
+    },
+  );
+
+  // The app files a class under the module its activity code starts with, so this does too.
+  const names = new Map<string, string>();
+  for (const e of (res.CategoryEvents ?? []).flatMap((g) => g.Results ?? [])) {
+    if (!e.Name) continue;
+    const code = activityCode(e.Name).split("[")[0];
+    const name = e.ExtraProperties?.find((p) => p.Name === "Module Name")?.Value?.trim();
+    if (MODULE_KEY.test(code) && name && !names.has(code)) names.set(code, name);
+  }
+  return [...names].map(([code, name]) => ({ code, name })).sort((a, b) => a.code.localeCompare(b.code));
 }
 
 type EventDTO = {

@@ -8,6 +8,7 @@ import { campusName, parsedLocations } from '../../core/roomLocation';
 import { ClashDetector, DefaultDay } from '../../core/schedule';
 import { addDays, startOfDay } from '../../core/time';
 import { ModuleTitle, ModuleTitles, TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/timetableEvent';
+import { ModuleAbbreviation, ModuleAbbreviations } from '../../core/abbreviations';
 import { errorMessage } from '../../data/rest';
 import { userEmail } from '../../data/session';
 import { Services } from '../../data/services';
@@ -65,6 +66,7 @@ export class WeekModel extends Observable {
   private changes: TimetableChange[];
   private splits: ModuleSplit[];
   private titles: ModuleTitle[];
+  private abbreviations: ModuleAbbreviation[];
   /** The signed-in student's surname initial, which picks their band of a split. */
   private readonly initial: string | null;
   private started = false;
@@ -93,6 +95,7 @@ export class WeekModel extends Observable {
     this.changes = audience ? services.changeCache.changes(audience.courseKey) : [];
     this.splits = services.splitCache.splits();
     this.titles = services.titleCache.titles();
+    this.abbreviations = services.abbreviationCache.abbreviations();
     const user = services.user.current;
     this.initial = user ? surnameInitial(userEmail(user)?.familyName) : null;
     // A class marked not attending, or a new alert time, changes which alerts are due.
@@ -305,6 +308,15 @@ export class WeekModel extends Observable {
     this.publishWidgetSnapshot();
   }
 
+  /**
+   * Re-read the week-grid abbreviations after a refresh downloaded new ones. The widget
+   * doesn't show them, so it isn't sent a new snapshot.
+   */
+  reloadAbbreviations(): void {
+    this.abbreviations = this.services.abbreviationCache.abbreviations();
+    this.applyFilter();
+  }
+
   /** Fetch every loaded week again — the rotation behind them changed. */
   async reloadAll(): Promise<void> {
     this.rawByWeekNumber = new Map();
@@ -419,13 +431,17 @@ export class WeekModel extends Observable {
   }
 
   private applyFilter(): void {
-    // Headings, then changes, then splits: a class added for one band of a split is split
-    // like any other, and an added class keeps its own name rather than the module's heading.
+    // Headings and abbreviations, then changes, then splits: a class added for one band of a
+    // split is split like any other, and an added class keeps its own name rather than the
+    // module's heading or abbreviation.
     const filtered = new Map<number, TimetableEvent[]>();
     for (const [number, events] of this.rawByWeekNumber) {
       const weekStart = this.weeks.find((w) => w.number === number)?.firstDay ?? null;
       filtered.set(number, ModuleSplits.apply(
-        TimetableChanges.apply(ModuleTitles.apply(events, this.titles), this.changes, this.audience, weekStart), this.splits, this.initial,
+        TimetableChanges.apply(
+          ModuleAbbreviations.apply(ModuleTitles.apply(events, this.titles), this.abbreviations), this.changes, this.audience, weekStart,
+        ),
+        this.splits, this.initial,
       ));
     }
     this.eventsByWeekNumber = filtered;

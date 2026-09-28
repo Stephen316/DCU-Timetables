@@ -39,6 +39,8 @@ export interface TimetableEvent {
    */
   heading?: string;
   shortHeading?: string | null;
+  /** The module's name on the week grid, from the console's Abbreviations page. Put on by `ModuleAbbreviations.apply`. */
+  abbreviation?: string;
 }
 
 /** A module's heading, as saved in the console (`module_titles`). */
@@ -105,6 +107,8 @@ const ABBREVIATIONS: Record<string, string> = {
  * Professional Development" reads "Fund. of Prof. Dev.". Words it doesn't know are kept.
  */
 export function compactTitleOf(event: TimetableEvent): string {
+  // The Abbreviations page is where the week grid's names are set, so it comes first.
+  if (event.abbreviation) return event.abbreviation;
   // The admin's own short heading is used as it stands; anything else is shortened.
   if (event.shortHeading) return event.shortHeading;
   return shortTitleOf(event)
