@@ -113,6 +113,8 @@ export function RootProvider({ children }: { children: ReactNode }) {
     // Rebuilt only when the timetable itself changes, not on every render of the flow.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shell?.key, services]);
+  // The one it replaces stops scheduling class alerts for a timetable that's gone.
+  useEffect(() => () => model?.dispose(), [model]);
 
   // MARK: Keeping the class list, rotation and changes current
 

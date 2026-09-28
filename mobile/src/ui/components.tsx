@@ -29,6 +29,7 @@ const ICONS = {
   moved: 'arrow-redo-outline',
   person: 'person-outline',
   account: 'person-circle-outline',
+  bell: 'notifications-outline',
   more: 'ellipsis-horizontal-circle-outline',
   back: 'chevron-back',
   forward: 'chevron-forward',

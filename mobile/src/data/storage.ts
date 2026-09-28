@@ -112,6 +112,8 @@ export const PrefKey = {
   allocationTried: 'allocationTried',
   weekShowsCalendar: 'weekShowsCalendar',
   appearance: 'appearance',
+  /** `AlertSettings`: how long before a class it alerts. Kept across sign-outs, like appearance. */
+  classAlerts: 'classAlerts',
   labRotation: (courseKey: string) => `labRotation:${courseKey}`,
   timetableChanges: (courseKey: string) => `timetableChanges:${courseKey}`,
   moduleSplits: 'moduleSplits',

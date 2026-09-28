@@ -25,7 +25,8 @@
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.stephenh.dcutimetable"
-        ]
+        ],
+        "com.apple.developer.usernotifications.time-sensitive": true
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -88,6 +89,7 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {

@@ -5,12 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addDays, isSameDay, startOfDay } from '../../core/time';
 import { WeekdayIndex } from '../../core/misc';
 import { TimetableEvent } from '../../core/timetableEvent';
+import { listenForAlertTaps } from '../../data/notifications';
 import { PrefKey } from '../../data/storage';
 import { useAppEvent, useModel, useNow, usePrefBool, usePrefJSON } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
 import { ActionSheet, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 import { AccountSheet } from '../account/AccountSheet';
+import { NotificationsSheet } from '../alerts/NotificationsSheet';
 import { DayPage } from './DayPage';
 import { Pager } from './Pager';
 import { WeekGridView } from './WeekGrid';
@@ -24,7 +26,7 @@ export function TimetableScreen() {
   const now = useNow();
   const [showsCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
   const [skipped] = usePrefJSON<string[]>(PrefKey.skipped, []);
-  const [sheet, setSheet] = useState<'menu' | 'account' | null>(null);
+  const [sheet, setSheet] = useState<'menu' | 'account' | 'alerts' | null>(null);
 
   useEffect(() => {
     void model.start();
@@ -36,10 +38,15 @@ export function TimetableScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (lastAppState.current === 'background' && next === 'active') model.resetToDefaultDay();
+      // Alerts that have fired make room for later ones under iOS's limit.
+      if (next === 'active') model.scheduleAlerts();
       lastAppState.current = next;
     });
     return () => sub.remove();
   }, [model]);
+
+  // A tapped class alert opens that class, as a Calendar alert opens its event.
+  useEffect(() => listenForAlertTaps((id) => router.push({ pathname: '/class/[id]', params: { id } })), []);
 
   useAppEvent('timetableChangesChanged', () => model.reloadChanges());
   useAppEvent('moduleSplitsChanged', () => model.reloadSplits());
@@ -51,6 +58,7 @@ export function TimetableScreen() {
 
   const menu: SheetAction[] = [
     { label: 'Account', icon: 'account', onPress: () => setSheet('account') },
+    { label: 'Notifications', icon: 'bell', onPress: () => setSheet('alerts') },
     { label: 'Sign out', icon: 'swap', onPress: signOut },
   ];
 
@@ -144,6 +152,7 @@ export function TimetableScreen() {
 
       <ActionSheet visible={sheet === 'menu'} onClose={() => setSheet(null)} actions={menu} />
       <AccountSheet visible={sheet === 'account'} onClose={() => setSheet(null)} />
+      <NotificationsSheet visible={sheet === 'alerts'} onClose={() => setSheet(null)} />
     </View>
   );
 }

@@ -1,3 +1,4 @@
+import { AlertScheduler, MemoryAlertScheduler } from './alerts';
 import { AuthService, SupabaseAuthService } from './auth';
 import {
   AllocationStore, LabRotationCache, LabRotationStore, ModuleSplitCache, ModuleSplitStore, SupabaseAllocationStore,
@@ -48,6 +49,8 @@ export interface Services {
   dcu: DCUAPIClient;
   /** Replaces `dcu` for timetables when set — the preview fixtures. */
   sourceOverride: TimetableSource | null;
+  /** Class alerts on the phone. */
+  alerts: AlertScheduler;
   /**
    * Everything this student left on the device goes, not just their credentials: the next
    * person to sign in here is a different person.
@@ -60,6 +63,8 @@ export interface Platform {
   secrets: SecretStore;
   env: Record<string, string | undefined>;
   fetchFn?: typeof fetch;
+  /** Defaults to one that fires nothing: tests, the web build, the preview. */
+  alerts?: AlertScheduler;
 }
 
 export async function createServices(platform: Platform): Promise<Services> {
@@ -84,6 +89,7 @@ export async function createServices(platform: Platform): Promise<Services> {
   const rest = config ? new SupabaseREST(config, session, fetchFn) : null;
   const reporter = new ReporterID(prefs, user);
   const role = new CachedRole(prefs);
+  const alerts = platform.alerts ?? new MemoryAlertScheduler();
 
   const services: Services = {
     prefs,
@@ -112,6 +118,7 @@ export async function createServices(platform: Platform): Promise<Services> {
       fetchFn,
     ),
     sourceOverride: null,
+    alerts,
     signOut() {
       user.forget();
       void session.clear();
@@ -123,6 +130,9 @@ export async function createServices(platform: Platform): Promise<Services> {
       ]) {
         prefs.set(key, null);
       }
+      // Last, so nothing re-planned while the rest was cleared survives: the next person to
+      // sign in here shouldn't be told where this one's classes are.
+      void alerts.clear();
     },
   };
   return services;

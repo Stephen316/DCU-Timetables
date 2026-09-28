@@ -1,4 +1,5 @@
 import { CancellationRules, CancellationStatus } from '../../core/cancellation';
+import { ClassAlerts } from '../../core/classAlerts';
 import { ClassHighlight, Deadline, DeadlineRules } from '../../core/deadline';
 import { PagerIndex } from '../../core/misc';
 import { TimetableAudience, TimetableChange, TimetableChanges } from '../../core/profile';
@@ -10,6 +11,7 @@ import { TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/time
 import { errorMessage } from '../../data/rest';
 import { userEmail } from '../../data/session';
 import { Services } from '../../data/services';
+import { PrefKey } from '../../data/storage';
 import { TimetableSource } from '../../data/dcuApi';
 import { WidgetSnapshotPublisher } from '../../data/widgets';
 import { Observable } from '../../state/hooks';
@@ -65,6 +67,10 @@ export class WeekModel extends Observable {
   /** The signed-in student's surname initial, which picks their band of a split. */
   private readonly initial: string | null;
   private started = false;
+  /** The last plan handed to the phone, so an unchanged one isn't rescheduled. */
+  private alertPlan: string | null = null;
+  private disposed = false;
+  private readonly unsubscribe: (() => void)[] = [];
   /**
    * Bumped by each refresh. Swiping across weeks overlaps them, and an answer that arrives
    * after a newer request was made is for a week no longer on screen — applying it would
@@ -87,6 +93,20 @@ export class WeekModel extends Observable {
     this.splits = services.splitCache.splits();
     const user = services.user.current;
     this.initial = user ? surnameInitial(userEmail(user)?.familyName) : null;
+    // A class marked not attending, or a new alert time, changes which alerts are due.
+    this.unsubscribe.push(
+      services.prefs.subscribe(PrefKey.skipped, () => this.scheduleAlerts()),
+      services.prefs.subscribe(PrefKey.classAlerts, () => this.scheduleAlerts()),
+    );
+  }
+
+  /**
+   * Stops it scheduling alerts. A model replaced by another timetable, or left behind by a
+   * sign-out, would otherwise go on alerting for classes that are no longer the student's.
+   */
+  dispose(): void {
+    this.disposed = true;
+    for (const stop of this.unsubscribe.splice(0)) stop();
   }
 
   // MARK: - Reports and deadlines
@@ -339,6 +359,28 @@ export class WeekModel extends Observable {
         upcoming, this.deadlines, (e) => statuses.get(CancellationRules.eventKey(e)) ?? CancellationStatus.none, new Date(), this.moduleNames,
       ),
     );
+    this.scheduleAlerts();
+  }
+
+  /**
+   * Hands the phone an alert for every class still to come in the loaded weeks — the same
+   * moments the widget is refreshed, so the two can't disagree about what's on. `force`
+   * schedules even an unchanged plan: after permission is granted, say.
+   */
+  scheduleAlerts(force = false): void {
+    if (!this.started || this.disposed) return;
+    const prefs = this.services.prefs;
+    const skipped = new Set(prefs.getJSON<string[]>(PrefKey.skipped, []));
+    const settings = ClassAlerts.settings(prefs.getJSON<unknown>(PrefKey.classAlerts, null));
+    const events = [...this.eventsByWeekNumber.values()].flat();
+    const plan = ClassAlerts.plan(events, settings, new Date(), (e) => {
+      const key = CancellationRules.eventKey(e);
+      return skipped.has(key) || (this.knownStatuses.get(key)?.isFlagged ?? false);
+    });
+    const signature = JSON.stringify(plan);
+    if (!force && signature === this.alertPlan) return;
+    this.alertPlan = signature;
+    void this.services.alerts.replaceAll(plan);
   }
 
   private neighbours(index: number): TeachingWeek[] {

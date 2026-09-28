@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform as RNPlatform } from 'react-native';
+import { ExpoAlertScheduler } from './notifications';
 import { createPreviewServices } from './preview';
 import { createServices, Services } from './services';
 import { SecretStore } from './session';
@@ -51,5 +52,6 @@ export function isPreview(): boolean {
 export function createAppServices(): Promise<Services> {
   const kv = AsyncStorage as unknown as AsyncKV;
   if (isPreview()) return createPreviewServices(kv);
-  return createServices({ kv, secrets: RNPlatform.OS === 'web' ? webSecrets : keychain, env: env() });
+  const web = RNPlatform.OS === 'web';
+  return createServices({ kv, secrets: web ? webSecrets : keychain, env: env(), alerts: web ? undefined : new ExpoAlertScheduler() });
 }
