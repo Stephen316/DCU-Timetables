@@ -3,7 +3,7 @@ import { CancellationStatus } from '../core/cancellation';
 import { Deadline, DeadlineKind, DeadlineRules, displayTitle, isSatInClass } from '../core/deadline';
 import { parsedLocations } from '../core/roomLocation';
 import { isoSeconds } from '../core/time';
-import { TimetableEvent, moduleCodeOf, titleOf } from '../core/timetableEvent';
+import { isOnline, moduleCodeOf, shortTitleOf, TimetableEvent } from '../core/timetableEvent';
 
 /**
  * What the home-screen widgets draw, flattened — the app's half of the Swift widget
@@ -64,16 +64,18 @@ export function deadlineSFSymbol(kind: DeadlineKind): string {
 export const WidgetSnapshotPublisher = {
   /**
    * Rooms as bare codes ("FT301"), not "Polaris, Room 301": a widget row is one line of
-   * small text, and a truncated building name is worse than no building name.
+   * small text, and a truncated building name is worse than no building name. An online
+   * class with no room says so; otherwise the widget would put the module code there.
    */
   room(event: TimetableEvent): string {
-    return parsedLocations(event).map((l) => l.code).filter((c) => c.length > 0).join(' · ');
+    const rooms = parsedLocations(event).map((l) => l.code).filter((c) => c.length > 0).join(' · ');
+    return rooms === '' && isOnline(event) ? 'Online' : rooms;
   },
 
   widgetClass(event: TimetableEvent, status: CancellationStatus): WidgetClass {
     return {
       id: event.id,
-      title: titleOf(event),
+      title: shortTitleOf(event),
       code: moduleCodeOf(event) ?? event.activity.raw,
       room: WidgetSnapshotPublisher.room(event),
       // Whole seconds: Swift's `.iso8601` decoding refuses a fraction.

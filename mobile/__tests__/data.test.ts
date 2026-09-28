@@ -625,8 +625,17 @@ describe('Widget snapshot', () => {
     });
   });
 
-  test('a class with no room carries an empty one', () => {
+  test('a class with no room carries an empty one, or "Online" when it is', () => {
     expect(WidgetSnapshotPublisher.room(ev('a', t(23, 9), t(23, 11), []))).toBe('');
+    const online = event('EEG1006[1]SY/L1/01', t(23, 9), t(23, 10), { locations: [], type: 'synchronous' });
+    expect(WidgetSnapshotPublisher.room(online)).toBe('Online');
+  });
+
+  test("a class's title leaves off the module code DCU puts in front of its name", () => {
+    const coded = event('EEG1006[1]OC/L1/01', t(23, 9), t(23, 10), { id: 'm', moduleName: 'EEG1006[1] Materials Engineering' });
+    const snap = WidgetSnapshotPublisher.snapshot([coded], [], clear, t(23, 8));
+    expect(snap.classes[0].title).toBe('Materials Engineering');
+    expect(snap.classes[0].code).toBe('EEG1006');
   });
 
   test('a flagged class is marked cancelled; reports below the bar are not', () => {
