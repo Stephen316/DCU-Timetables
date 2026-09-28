@@ -390,9 +390,8 @@ export function Spinner({ label }: { label?: string }) {
 
 /** Nothing to show, said plainly — `ContentUnavailableView`. */
 /**
- * Diagonal dashed lines across whatever it's laid over — how an online class is marked. It
- * sits behind the content and takes no touches. Each line is the top edge of a dashed box
- * clipped to the line's thickness: a single dashed edge doesn't draw reliably on iOS.
+ * Diagonal lines across whatever it's laid over — how an online class is marked. It sits
+ * behind the content and takes no touches.
  */
 export function Hatch({ color, spacing, thickness = 1, angle = -35, style }: {
   color: string;
@@ -423,9 +422,7 @@ export function Hatch({ color, spacing, thickness = 1, angle = -35, style }: {
           transform: [{ rotate: `${angle}deg` }],
         }}>
           {Array.from({ length: Math.floor(side / spacing) }, (_, i) => (
-            <View key={i} style={{ position: 'absolute', left: 0, width: side, top: (i + 0.5) * spacing, height: thickness, overflow: 'hidden' }}>
-              <View style={{ width: side, height: thickness * 3, borderWidth: thickness, borderStyle: 'dashed', borderColor: color }} />
-            </View>
+            <View key={i} style={{ position: 'absolute', left: 0, width: side, top: (i + 0.5) * spacing, height: thickness, backgroundColor: color }} />
           ))}
         </View>
       ) : null}

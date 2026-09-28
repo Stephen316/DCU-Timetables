@@ -58,7 +58,7 @@ export function RailRow({ start, end, stop, position, divider = false, online = 
   position: RailPosition;
   /** A hairline above, where this class follows straight on from another. */
   divider?: boolean;
-  /** An online class: faint dashed lines across it, clear of the times and the rail. */
+  /** An online class: faint lines across it, clear of the times and the rail. */
   online?: boolean;
   children: ReactNode;
 }) {
@@ -77,7 +77,7 @@ export function RailRow({ start, end, stop, position, divider = false, online = 
       ]}
     >
       {online ? (
-        <Hatch color={withAlpha(theme.tint.online, 0.3)} spacing={12} angle={-25} style={{ left: (stacked ? 0 : GUTTER) + COLUMN }} />
+        <Hatch color={withAlpha(theme.tint.online, 0.18)} spacing={12} angle={-25} style={{ left: (stacked ? 0 : GUTTER) + COLUMN }} />
       ) : null}
       {/* The line through the row, and the stop on it. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">

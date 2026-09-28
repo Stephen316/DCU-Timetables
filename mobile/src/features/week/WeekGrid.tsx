@@ -187,7 +187,7 @@ function Block({
         },
       ]}
     >
-      {isOnline(event) ? <Hatch color={withAlpha(theme.tint.online, 0.45)} spacing={7} /> : null}
+      {isOnline(event) ? <Hatch color={withAlpha(theme.tint.online, 0.28)} spacing={7} /> : null}
       <View style={[styles.bar, { backgroundColor: tint }]} />
       <View style={styles.blockText}>
         <Txt type="caption2" numberOfLines={titleLines} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.bold} maxFontSizeMultiplier={1.4}>

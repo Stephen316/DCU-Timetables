@@ -51,7 +51,7 @@ export interface Palette {
      * shade lands near 2:1, so a filled control keeps the dark shade throughout.
      */
     offFill: string;
-    /** Online classes: drawn as faint dashed lines across the class, never as a fill. */
+    /** Online classes: drawn as faint lines across the class, never as a fill. */
     online: string;
   };
   /** Module colours for the calendar blocks: decoration, one per module. */
