@@ -5,7 +5,7 @@ import { activitySummary } from '../../core/activityCode';
 import { locationDisplay } from '../../core/roomLocation';
 import { DaySchedule, DaySlot, gapLabel, NextClassWindow, slotID } from '../../core/schedule';
 import { formatDayMonth, formatTime, isToday, isTomorrow, weekdayName } from '../../core/time';
-import { eventTypeLabel, shortTitleOf, staffText, TimetableEvent } from '../../core/timetableEvent';
+import { eventTypeLabel, isOnline, shortTitleOf, staffText, TimetableEvent } from '../../core/timetableEvent';
 import { DeadlineMark, Icon, Label, Txt } from '../../ui/components';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
 import { Space, useTheme } from '../../ui/theme';
@@ -171,7 +171,7 @@ function ClassStop({
       accessibilityHint="Opens the class"
       style={({ pressed }) => pressed && { backgroundColor: theme.raised }}
     >
-      <RailRow start={event.start} end={event.end} stop={stop} position={railPosition(index, count)} divider={followsClass}>
+      <RailRow start={event.start} end={event.end} stop={stop} position={railPosition(index, count)} divider={followsClass} online={isOnline(event)}>
         <View style={{ gap: Space.xxs, opacity: isSkipped ? 0.45 : stop.kind === 'past' ? 0.6 : 1 }}>
           {news ? (
             <Label icon={highlightIcon(news)} text={highlightReason(news)} type="status" color={highlightTint(news, theme)} />

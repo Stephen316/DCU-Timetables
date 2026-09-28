@@ -79,6 +79,11 @@ export function compactTitleOf(event: TimetableEvent): string {
     .join(' ');
 }
 
+/** Taught online, live or recorded — including a class that also has a room. */
+export function isOnline(event: TimetableEvent): boolean {
+  return event.type === 'synchronous' || event.type === 'asynchronous';
+}
+
 export function staffText(event: TimetableEvent): string | null {
   return event.staff.length === 0 ? null : event.staff.join(', ');
 }

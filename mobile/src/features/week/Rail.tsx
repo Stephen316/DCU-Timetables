@@ -1,8 +1,8 @@
 import { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { formatTime } from '../../core/time';
-import { Txt, useLargeText } from '../../ui/components';
-import { Space, useTheme } from '../../ui/theme';
+import { Hatch, Txt, useLargeText } from '../../ui/components';
+import { Space, useTheme, withAlpha } from '../../ui/theme';
 
 /**
  * The day as a line you move along. Every class is a stop on one continuous rail, with its
@@ -51,13 +51,15 @@ function heightFor(start: Date, end: Date): number {
  * One class on the rail. At the accessibility text sizes the times move above the content
  * instead of beside it, so the title keeps the full width.
  */
-export function RailRow({ start, end, stop, position, divider = false, children }: {
+export function RailRow({ start, end, stop, position, divider = false, online = false, children }: {
   start: Date;
   end: Date;
   stop: RailStop;
   position: RailPosition;
   /** A hairline above, where this class follows straight on from another. */
   divider?: boolean;
+  /** An online class: faint dashed lines across it, clear of the times and the rail. */
+  online?: boolean;
   children: ReactNode;
 }) {
   const theme = useTheme();
@@ -74,6 +76,9 @@ export function RailRow({ start, end, stop, position, divider = false, children 
         divider && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator },
       ]}
     >
+      {online ? (
+        <Hatch color={withAlpha(theme.tint.online, 0.3)} spacing={12} angle={-25} style={{ left: (stacked ? 0 : GUTTER) + COLUMN }} />
+      ) : null}
       {/* The line through the row, and the stop on it. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <View

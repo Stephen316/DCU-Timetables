@@ -6,7 +6,7 @@ import {
 import { locationDisplay, parseRoom, roomDisplayText } from '../src/core/roomLocation';
 import { ClashDetector, DaySchedule, DaySlot, DefaultDay, NextClassWindow, WeekGrid, gapLabel } from '../src/core/schedule';
 import { DublinTime, parseISO, isoSeconds } from '../src/core/time';
-import { compactTitleOf, shortTitleOf } from '../src/core/timetableEvent';
+import { compactTitleOf, EventType, isOnline, shortTitleOf } from '../src/core/timetableEvent';
 import { at, event, utc } from './helpers';
 
 describe('Activity codes', () => {
@@ -73,6 +73,18 @@ describe('Compact class title', () => {
   test('keeps words it has no short form for', () => {
     expect(compact('CA106[1]OC/L1/01', 'Computer Systems')).toBe('Comp. Systems');
     expect(compact('BIO1000[1]OC/L1/01', 'BIO1000[1] How life works 1')).toBe('How life works 1');
+  });
+});
+
+describe('Online classes', () => {
+  test('live and recorded classes are online, even with a room; the rest are not', () => {
+    const start = at(2026, 9, 28, 14);
+    const typed = (type: EventType) => isOnline(event('EEG1006[1]OC/T1/01', start, undefined, { type, locations: ['GLA.MARCONI'] }));
+    expect(typed('synchronous')).toBe(true);
+    expect(typed('asynchronous')).toBe(true);
+    expect(typed('onCampus')).toBe(false);
+    expect(typed('booking')).toBe(false);
+    expect(typed('unknown')).toBe(false);
   });
 });
 

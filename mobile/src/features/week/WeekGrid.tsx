@@ -4,8 +4,8 @@ import { ClassHighlight, Deadline, deadlineKindLabel, displayTitle, highlightRea
 import { locationDisplay, parsedLocations } from '../../core/roomLocation';
 import { WeekGrid as Placement, PlacedEvent } from '../../core/schedule';
 import { addDays, formatTime, formatWeekdayDayMonth, isSameDay, isWeekend, startOfDay, startOfWeek, weekdayShort } from '../../core/time';
-import { compactTitleOf, TimetableEvent, titleOf } from '../../core/timetableEvent';
-import { DeadlineMark, Icon, Txt } from '../../ui/components';
+import { compactTitleOf, isOnline, TimetableEvent, titleOf } from '../../core/timetableEvent';
+import { DeadlineMark, Hatch, Icon, Txt } from '../../ui/components';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
 import { moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
@@ -187,6 +187,7 @@ function Block({
         },
       ]}
     >
+      {isOnline(event) ? <Hatch color={withAlpha(theme.tint.online, 0.45)} spacing={7} /> : null}
       <View style={[styles.bar, { backgroundColor: tint }]} />
       <View style={styles.blockText}>
         <Txt type="caption2" numberOfLines={titleLines} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.bold} maxFontSizeMultiplier={1.4}>

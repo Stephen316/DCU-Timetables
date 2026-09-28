@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, isValidElement, ReactNode, useRef } from 'react';
+import { Children, isValidElement, ReactNode, useRef, useState } from 'react';
 import {
   ActivityIndicator, ColorValue, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
@@ -389,6 +389,50 @@ export function Spinner({ label }: { label?: string }) {
 
 /** Nothing to show, said plainly — `ContentUnavailableView`. */
 /**
+ * Diagonal dashed lines across whatever it's laid over — how an online class is marked. It
+ * sits behind the content and takes no touches. Each line is the top edge of a dashed box
+ * clipped to the line's thickness: a single dashed edge doesn't draw reliably on iOS.
+ */
+export function Hatch({ color, spacing, thickness = 1, angle = -35, style }: {
+  color: string;
+  /** Distance between lines, measured across them. */
+  spacing: number;
+  thickness?: number;
+  angle?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  // A square as wide as the diagonal still covers the area once it's rotated.
+  const side = Math.ceil(Math.hypot(size.width, size.height));
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[StyleSheet.absoluteFill, styles.hatch, style]}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width !== size.width || height !== size.height) setSize({ width, height });
+      }}
+    >
+      {side > 0 ? (
+        <View style={{
+          position: 'absolute', width: side, height: side,
+          left: (size.width - side) / 2, top: (size.height - side) / 2,
+          transform: [{ rotate: `${angle}deg` }],
+        }}>
+          {Array.from({ length: Math.floor(side / spacing) }, (_, i) => (
+            <View key={i} style={{ position: 'absolute', left: 0, width: side, top: (i + 0.5) * spacing, height: thickness, overflow: 'hidden' }}>
+              <View style={{ width: side, height: thickness * 3, borderWidth: thickness, borderStyle: 'dashed', borderColor: color }} />
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/**
  * A small blue "!" on a class that has something due at it. A mark of its own rather than
  * the kind's icon, so one shape means "a deadline is here" at every size, the grid included.
  */
@@ -586,6 +630,7 @@ export function ActionSheet({
 }
 
 export const styles = StyleSheet.create({
+  hatch: { overflow: 'hidden' },
   fill: { flex: 1 },
   flexText: { flexShrink: 1 },
   label: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
