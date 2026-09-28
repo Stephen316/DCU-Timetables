@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Children, isValidElement, ReactNode, useEffect, useRef, useState } from 'react';
 import {
-  AccessibilityInfo, ActivityIndicator, ColorValue, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
+  AccessibilityInfo, ActivityIndicator, Animated, ColorValue, Easing, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -364,13 +364,47 @@ export function IconButton({
 
 // MARK: - Controls
 
-/** A segmented control, for a few mutually exclusive choices. */
+/**
+ * A segmented control, for a few mutually exclusive choices — drawn as the tab bar is: an
+ * accent outline around the chosen segment that slides to the next one.
+ */
 export function Segmented<T extends string>({
   options, value, onChange, label,
 }: { options: { value: T; label: string }[]; value: T; onChange: (value: T) => void; label: string }) {
   const theme = useTheme();
+  const [width, setWidth] = useState(0);
+  const segmentWidth = options.length > 0 ? width / options.length : 0;
+  const index = Math.max(options.findIndex((option) => option.value === value), 0);
+  const [offset] = useState(() => new Animated.Value(0));
+  const lastWidth = useRef(0);
+
+  // A new width is a layout, not a move: jump there. A new choice slides.
+  useEffect(() => {
+    const target = index * segmentWidth;
+    if (lastWidth.current !== segmentWidth) {
+      lastWidth.current = segmentWidth;
+      offset.setValue(target);
+      return;
+    }
+    Animated.timing(offset, { toValue: target, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+  }, [index, segmentWidth, offset]);
+
+  // As the tab bar: white reads on the dark canvas, but would vanish on Solarized Light's cream.
+  const selectedInk = theme.scheme === 'dark' ? '#FFFFFF' : theme.ink;
+
   return (
-    <View style={[styles.segmented, { backgroundColor: theme.raised }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
+    <View
+      style={styles.segmented}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      accessibilityRole="radiogroup"
+      accessibilityLabel={label}
+    >
+      {segmentWidth > 0 ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.segmentOutline, { width: segmentWidth, borderColor: theme.accent, transform: [{ translateX: offset }] }]}
+        />
+      ) : null}
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -379,9 +413,11 @@ export function Segmented<T extends string>({
             onPress={() => onChange(option.value)}
             accessibilityRole="radio"
             accessibilityState={{ selected }}
-            style={[styles.segment, selected && [styles.segmentSelected, { backgroundColor: theme.surface }]]}
+            style={({ pressed }) => [styles.segment, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Txt type="subheadline" style={selected ? styles.semibold : undefined}>{option.label}</Txt>
+            <Txt type="subheadline" color={selected ? selectedInk : theme.inkSecondary} style={selected ? styles.semibold : undefined}>
+              {option.label}
+            </Txt>
           </Pressable>
         );
       })}
@@ -679,9 +715,9 @@ export const styles = StyleSheet.create({
   semibold: { fontWeight: '600' },
   barButton: { minHeight: MIN_TARGET, justifyContent: 'center', paddingHorizontal: Space.xs },
   iconButton: { minWidth: MIN_TARGET, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center' },
-  segmented: { flexDirection: 'row', borderRadius: Radius.control, padding: 2 },
-  segment: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.control - 2, paddingHorizontal: Space.s },
-  segmentSelected: { shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  segmented: { flexDirection: 'row' },
+  segment: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.s },
+  segmentOutline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1, borderRadius: Radius.control },
   spinner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.s, padding: Space.xl },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.s, padding: Space.xxl },
   emptyAction: { marginTop: Space.m },
