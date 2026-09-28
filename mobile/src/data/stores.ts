@@ -6,6 +6,7 @@ import {
 } from '../core/deadline';
 import { AccountProfile, makeAccountProfile, parseRole } from '../core/identity';
 import { isoSeconds, parseISO } from '../core/time';
+import { TimetableCategory } from '../core/timetableEvent';
 import { notSignedIn, PostgREST, rows, ServiceError, SupabaseREST, userFacing } from './rest';
 import { SignedInUser } from './session';
 import { PrefKey, Prefs } from './storage';
@@ -470,6 +471,9 @@ export interface ProfileStore {
   myProfile(): Promise<AccountProfile | null>;
   /** Records the student number. Set once — after that only an admin can change it. */
   setStudentID(number: string): Promise<void>;
+  /** The programme this account last picked, so signing back in doesn't ask again. */
+  savedProgramme(): Promise<TimetableCategory | null>;
+  saveProgramme(programme: TimetableCategory): Promise<void>;
   /** Deletes the account for good. Contributions survive with the link broken. */
   deleteAccount(): Promise<void>;
 }
@@ -516,6 +520,29 @@ export class SupabaseProfileStore implements ProfileStore {
     throw new ServiceError(response.status, SupabaseProfileStore.describe(response.status));
   }
 
+  /** Its own request, not part of `myProfile`, so a database without the column only loses this. */
+  async savedProgramme(): Promise<TimetableCategory | null> {
+    const uid = this.rest.session.userID;
+    if (!uid) throw notSignedIn();
+    const json = await this.rest.json('GET', '/rest/v1/profiles', SupabaseProfileStore.describe, {
+      query: [['select', 'programme'], ['id', `eq.${uid}`]],
+    });
+    const saved = rows(json)[0]?.programme as Partial<TimetableCategory> | null | undefined;
+    if (!saved || typeof saved.identity !== 'string' || typeof saved.name !== 'string') return null;
+    return {
+      identity: saved.identity,
+      name: saved.name,
+      categoryTypeIdentity: typeof saved.categoryTypeIdentity === 'string' ? saved.categoryTypeIdentity : '',
+    };
+  }
+
+  async saveProgramme(programme: TimetableCategory): Promise<void> {
+    if (!this.rest.session.userID) throw notSignedIn();
+    await this.rest.json('POST', '/rest/v1/rpc/set_programme', SupabaseProfileStore.describe, {
+      body: { p_programme: programme },
+    });
+  }
+
   async deleteAccount(): Promise<void> {
     // An anon key can't delete from auth.users, so this goes through the `security
     // definer` RPC, which deletes only `auth.uid()`'s own row.
@@ -534,5 +561,9 @@ export class LocalProfileStore implements ProfileStore {
     return current ? makeAccountProfile(current.id) : null;
   }
   async setStudentID(): Promise<void> {}
+  async savedProgramme(): Promise<TimetableCategory | null> {
+    return null;
+  }
+  async saveProgramme(): Promise<void> {}
   async deleteAccount(): Promise<void> {}
 }

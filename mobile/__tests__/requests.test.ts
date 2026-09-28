@@ -202,6 +202,24 @@ describe('Supabase requests', () => {
     expect(calls[0]).toMatchObject({ url: 'https://proj.supabase.co/rest/v1/rpc/set_student_id', body: { p_student_id: 'A12345678' } });
   });
 
+  test('the saved programme is read on its own and sent through the RPC', async () => {
+    const programme = { identity: 'uuid-1', name: 'CASE1 (Computer Science-1)', categoryTypeIdentity: 'type-1' };
+    const { calls, fn } = fakeFetch((c) => ({ body: c.url.includes('rpc') ? null : [{ programme }] }));
+    const store = new SupabaseProfileStore(await signedInREST(fn));
+    expect(await store.savedProgramme()).toEqual(programme);
+    expect(query(calls[0].url)).toEqual({ select: 'programme', id: 'eq.user-1' });
+    await store.saveProgramme(programme);
+    expect(calls[1]).toMatchObject({ url: 'https://proj.supabase.co/rest/v1/rpc/set_programme', body: { p_programme: programme } });
+  });
+
+  // An account from before the column existed, or one that never picked, gets the search.
+  test('no saved programme, or a malformed one, reads as none', async () => {
+    for (const row of [{ programme: null }, { programme: { name: 'CASE1' } }, {}]) {
+      const { fn } = fakeFetch(() => ({ body: [row] }));
+      expect(await new SupabaseProfileStore(await signedInREST(fn)).savedProgramme()).toBeNull();
+    }
+  });
+
   // The ID screen sends a student back to sign-in on exactly this error, rather than
   // showing a message no button on it can fix — so it has to be told apart from a refusal.
   test('without a session the profile store says so, recognisably, and sends nothing', async () => {

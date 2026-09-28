@@ -136,7 +136,7 @@ export async function createServices(platform: Platform): Promise<Services> {
       reporter.reset();
       role.reset();
       for (const key of [
-        PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme,
+        PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme, PrefKey.programmeSaved,
         PrefKey.skipped, PrefKey.allocationTried,
       ]) {
         prefs.set(key, null);

@@ -7,11 +7,15 @@ import { EmptyState, Icon, Label, ListScroll, Row, Section, Spinner, Txt } from 
 import { Radius, Space, useTheme } from '../../ui/theme';
 import { ScreenTitle } from './ScreenTitle';
 
-/** Search DCU programmes of study and pick one. */
+/**
+ * Search DCU programmes of study and pick one. An account that picked one before — signed
+ * out, or on another phone — gets it back without being asked, as the student number is.
+ */
 export function ProgrammePicker({ onSelect }: { onSelect: (category: TimetableCategory) => void }) {
   const theme = useTheme();
   const services = useServices();
   const source = services.sourceOverride ?? services.dcu;
+  const [checking, setChecking] = useState(true);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TimetableCategory[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,6 +24,21 @@ export function ProgrammePicker({ onSelect }: { onSelect: (category: TimetableCa
   const searching = query.trim().length >= 2;
   const shown = searching ? results : [];
   const shownError = searching ? errorText : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    services.profiles
+      .savedProgramme()
+      .then((saved) => {
+        if (!cancelled && saved) onSelect(saved);
+      })
+      // Not saved, or not reachable: they pick one, as they would have anyway.
+      .catch(() => undefined)
+      .finally(() => !cancelled && setChecking(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [services, onSelect]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -44,6 +63,15 @@ export function ProgrammePicker({ onSelect }: { onSelect: (category: TimetableCa
       clearTimeout(timer);
     };
   }, [query, source]);
+
+  if (checking) {
+    return (
+      <ListScroll>
+        <ScreenTitle title="Your programme" />
+        <Spinner />
+      </ListScroll>
+    );
+  }
 
   return (
     <ListScroll>

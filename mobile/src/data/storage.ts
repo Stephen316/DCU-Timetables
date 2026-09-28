@@ -108,6 +108,8 @@ export const PrefKey = {
   studentID: 'studentID',
   profile: 'studentProfile',
   selectedProgramme: 'selectedProgramme',
+  /** `accountID:programmeIdentity` last sent to the account, so it goes up once, not per launch. */
+  programmeSaved: 'programmeSaved',
   skipped: 'skippedEvents',
   allocationTried: 'allocationTried',
   weekShowsCalendar: 'weekShowsCalendar',

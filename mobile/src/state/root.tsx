@@ -62,6 +62,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
   const [profileRaw, setProfileRaw] = usePrefJSON<unknown>(PrefKey.profile, null);
   const [programme] = usePrefJSON<TimetableCategory | null>(PrefKey.selectedProgramme, null);
   const [triedRaw, setTried] = usePrefJSON<Record<string, number>>(PrefKey.allocationTried, {});
+  const [programmeSaved, setProgrammeSaved] = usePref(PrefKey.programmeSaved);
   const profile = useMemo(() => decodeProfile(profileRaw), [profileRaw]);
 
   const signOut = useCallback(() => {
@@ -118,6 +119,23 @@ export function RootProvider({ children }: { children: ReactNode }) {
   useEffect(() => () => model?.dispose(), [model]);
 
   // MARK: Keeping the class list, rotation and changes current
+
+  // The picked programme goes up with the account, so signing back in — here or on another
+  // phone — doesn't ask for it again. Also covers a programme picked before this was kept.
+  useEffect(() => {
+    if (!user || !programme) return;
+    const saved = `${user.id}:${programme.identity}`;
+    if (programmeSaved === saved) return;
+    let cancelled = false;
+    services.profiles
+      .saveProgramme(programme)
+      .then(() => !cancelled && setProgrammeSaved(saved))
+      // Tried again next launch; the phone's own copy is what the timetable runs on.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, programme, programmeSaved, services, setProgrammeSaved]);
 
   const refreshing = useRef(false);
   /** What the refresh reads when it runs — it outlives the render that started it. */

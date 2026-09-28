@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { TimetableCategory } from '../core/timetableEvent';
 import { PrefKey } from '../data/storage';
 import { ProgrammePicker } from '../features/onboarding/ProgrammePicker';
 import { SignIn } from '../features/onboarding/SignIn';
@@ -11,6 +12,7 @@ export default function OnboardingRoute() {
   const { prefs } = useServices();
   const { flow, signedIn, signOut } = useRoot();
   const onSaved = useCallback((number: string) => prefs.set(PrefKey.studentID, number), [prefs]);
+  const onSelect = useCallback((category: TimetableCategory) => prefs.setJSON(PrefKey.selectedProgramme, category), [prefs]);
 
   switch (flow) {
     case 'signIn':
@@ -18,11 +20,7 @@ export default function OnboardingRoute() {
     case 'studentID':
       return <StudentID onSaved={onSaved} onSignOut={signOut} />;
     case 'programmePicker':
-      return (
-        <ProgrammePicker
-          onSelect={(category) => prefs.setJSON(PrefKey.selectedProgramme, category)}
-        />
-      );
+      return <ProgrammePicker onSelect={onSelect} />;
     case 'shell':
       return null;
   }
