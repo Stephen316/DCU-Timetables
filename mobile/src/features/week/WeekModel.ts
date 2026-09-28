@@ -7,7 +7,7 @@ import { ModuleSplit, ModuleSplits, surnameInitial } from '../../core/splits';
 import { campusName, parsedLocations } from '../../core/roomLocation';
 import { ClashDetector, DefaultDay } from '../../core/schedule';
 import { addDays, startOfDay } from '../../core/time';
-import { TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/timetableEvent';
+import { ModuleTitle, ModuleTitles, TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/timetableEvent';
 import { errorMessage } from '../../data/rest';
 import { userEmail } from '../../data/session';
 import { Services } from '../../data/services';
@@ -64,6 +64,7 @@ export class WeekModel extends Observable {
   private rawByWeekNumber = new Map<number, TimetableEvent[]>();
   private changes: TimetableChange[];
   private splits: ModuleSplit[];
+  private titles: ModuleTitle[];
   /** The signed-in student's surname initial, which picks their band of a split. */
   private readonly initial: string | null;
   private started = false;
@@ -91,6 +92,7 @@ export class WeekModel extends Observable {
     super();
     this.changes = audience ? services.changeCache.changes(audience.courseKey) : [];
     this.splits = services.splitCache.splits();
+    this.titles = services.titleCache.titles();
     const user = services.user.current;
     this.initial = user ? surnameInitial(userEmail(user)?.familyName) : null;
     // A class marked not attending, or a new alert time, changes which alerts are due.
@@ -296,6 +298,13 @@ export class WeekModel extends Observable {
     this.publishWidgetSnapshot();
   }
 
+  /** Re-read the saved headings after a refresh downloaded new ones. */
+  reloadTitles(): void {
+    this.titles = this.services.titleCache.titles();
+    this.applyFilter();
+    this.publishWidgetSnapshot();
+  }
+
   /** Fetch every loaded week again — the rotation behind them changed. */
   async reloadAll(): Promise<void> {
     this.rawByWeekNumber = new Map();
@@ -410,17 +419,18 @@ export class WeekModel extends Observable {
   }
 
   private applyFilter(): void {
-    // Changes first, then splits: a class added for one band of a split is split like any other.
+    // Headings, then changes, then splits: a class added for one band of a split is split
+    // like any other, and an added class keeps its own name rather than the module's heading.
     const filtered = new Map<number, TimetableEvent[]>();
     for (const [number, events] of this.rawByWeekNumber) {
       const weekStart = this.weeks.find((w) => w.number === number)?.firstDay ?? null;
       filtered.set(number, ModuleSplits.apply(
-        TimetableChanges.apply(events, this.changes, this.audience, weekStart), this.splits, this.initial,
+        TimetableChanges.apply(ModuleTitles.apply(events, this.titles), this.changes, this.audience, weekStart), this.splits, this.initial,
       ));
     }
     this.eventsByWeekNumber = filtered;
     this.loadedModuleKeys = sameList(this.loadedModuleKeys, this.moduleKeys());
-    this.moduleNames = DeadlineRules.moduleNames([...this.rawByWeekNumber.values()].flat());
+    this.moduleNames = DeadlineRules.moduleNames(ModuleTitles.apply([...this.rawByWeekNumber.values()].flat(), this.titles));
     const week = this.currentWeek;
     const current = week ? filtered.get(week.number) ?? [] : [];
     this.events = current;

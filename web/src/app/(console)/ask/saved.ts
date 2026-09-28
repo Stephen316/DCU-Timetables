@@ -35,16 +35,17 @@ export type SavedView = {
     title: string | null; version: number; members: number; savedAt: string;
     groups: ClassGroup[];
   } | null;
+  heading: { title: string; shortTitle: string | null; savedAt: string } | null;
 };
 
 export async function listSaved(programme: string, module: string):
   Promise<{ ok: true; view: SavedView } | { ok: false; error: string }> {
   if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
-  if (!programme || !module) return { ok: true, view: { rotation: null, splits: [], classList: null } };
+  if (!programme || !module) return { ok: true, view: { rotation: null, splits: [], classList: null, heading: null } };
 
   const db = await supabaseServer();
 
-  const [rot, splits, roster] = await Promise.all([
+  const [rot, splits, roster, title] = await Promise.all([
     db.from("lab_rotations")
       .select("title, version, created_at, lab_rotation_sessions(week, date, day, start_time, end_time, module, activity, groups, room)")
       .eq("course_key", programme).maybeSingle(),
@@ -52,8 +53,9 @@ export async function listSaved(programme: string, module: string):
       .select("module_key, activity, note, created_at, module_split_ranges(from_letter, to_letter, day, start_time, end_time, room, label)")
       .eq("module_key", module).order("activity"),
     db.from("rosters").select("title, version, members, created_at").eq("course_key", programme).maybeSingle(),
+    db.from("module_titles").select("title, short_title, updated_at").eq("module_key", module).maybeSingle(),
   ]);
-  const failed = rot.error ?? splits.error ?? roster.error;
+  const failed = rot.error ?? splits.error ?? roster.error ?? title.error;
   if (failed) return { ok: false, error: failed.message };
 
   let rotation: SavedView["rotation"] = null;
@@ -103,6 +105,7 @@ export async function listSaved(programme: string, module: string):
           .sort((a, b) => a.from.localeCompare(b.from)),
       })),
       classList,
+      heading: title.data ? { title: title.data.title, shortTitle: title.data.short_title, savedAt: title.data.updated_at } : null,
     },
   };
 }
@@ -110,7 +113,8 @@ export async function listSaved(programme: string, module: string):
 export type SavedTarget =
   | { kind: "split"; module: string; activity: string }
   | { kind: "rotation"; programme: string }
-  | { kind: "classList"; programme: string };
+  | { kind: "classList"; programme: string }
+  | { kind: "heading"; module: string };
 
 /// Removes one entry from the Saved list. Each kind has its own definer function, which
 /// checks the caller is an admin and writes the audit row.
@@ -119,7 +123,9 @@ export async function deleteSaved(target: SavedTarget): Promise<{ ok: true } | {
   const db = await supabaseServer();
 
   const { error } =
-    target.kind === "split"
+    target.kind === "heading"
+      ? await db.rpc("delete_module_title", { p_module_key: target.module })
+      : target.kind === "split"
       ? await db.rpc("delete_module_split", { p_module_key: target.module, p_activity: target.activity })
       : await db.rpc(target.kind === "rotation" ? "delete_lab_rotation" : "delete_roster",
                      { p_course_key: target.programme });

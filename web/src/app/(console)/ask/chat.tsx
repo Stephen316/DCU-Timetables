@@ -12,6 +12,7 @@ import { SavedPanel } from "./saved-panel";
 import { LibraryPanel } from "./library-panel";
 import type { Reused } from "./library";
 import { describeChange, weekday } from "@/lib/changes/change";
+import { describeHeading } from "@/lib/proposals/heading";
 
 /// What the transcript shows. The attachment and proposal number are display only — the
 /// history sent back to the model is the words, as before.
@@ -39,6 +40,7 @@ function target(p: Proposal): string {
   if (p.kind === "split") return `split ${p.rule.moduleKey} ${p.rule.activity}`;
   // Changes add up rather than replace; only an identical one is "the same thing".
   if (p.kind === "change") return `change ${JSON.stringify(p.change)}`;
+  if (p.kind === "heading") return `heading ${p.heading.moduleKey}`;
   return `${p.kind} ${p.courseKey}`;
 }
 
@@ -46,6 +48,7 @@ function describe(p: Proposal): string {
   if (p.kind === "split") return `${p.rule.moduleKey || "?"} ${p.rule.activity} split`;
   if (p.kind === "roster") return `${p.courseKey || "?"} class list · ${p.rows.length} students`;
   if (p.kind === "change") return describeChange(p.change);
+  if (p.kind === "heading") return describeHeading(p.heading);
   return `${p.courseKey || "?"} rotation · ${p.sessions.filter((s) => s.groups?.length).length} sessions`;
 }
 
@@ -227,6 +230,8 @@ export function Ask() {
             ? `${proposal.rule.moduleKey} ${proposal.rule.activity} split saved. Phones pick it up when the app next opens.`
             : proposal.kind === "change"
               ? "Change saved. Phones pick it up when the app next opens."
+            : proposal.kind === "heading"
+              ? `${proposal.heading.moduleKey} heading saved. Phones pick it up when the app next opens.`
             : proposal.kind === "roster"
               ? `Class list saved — ${proposal.rows.length} students. Phones re-check on their next launch.`
               : `Rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`,
@@ -474,6 +479,7 @@ function ProposalCard({ item, others, onAccept, onDiscard, disabled }: {
           {p.kind === "split" ? <SplitPanel p={p} />
             : p.kind === "roster" ? <RosterPanel p={p} />
             : p.kind === "change" ? <ChangePanel p={p} />
+            : p.kind === "heading" ? <HeadingPanel p={p} />
             : <RotationPanel p={p} />}
 
           {item.status !== "saved" && savedTwin && (
@@ -555,6 +561,29 @@ function ChangePanel({ p }: { p: Extract<Proposal, { kind: "change" }> }) {
           {c.note && <tr><th>Note</th><td>{c.note}</td></tr>}
         </tbody>
       </table>
+      {p.findings.map((f, i) => (
+        <p key={i} className={f.level === "error" ? "tag off" : f.level === "warn" ? "tag warn" : "tag ok"}>{f.message}</p>
+      ))}
+    </>
+  );
+}
+
+function HeadingPanel({ p }: { p: Extract<Proposal, { kind: "heading" }> }) {
+  const h = p.heading;
+  return (
+    <>
+      <h2>
+        {h.moduleKey || <span className="tag off">no module</span>}{" "}
+        <span className="dim">{h.title === null ? "back to DCU's name" : "heading in the app"}</span>
+      </h2>
+      <table>
+        <tbody>
+          <tr><th>Now</th><td>{p.current.saved ?? p.current.dcu ?? <span className="dim">DCU's name</span>}</td></tr>
+          <tr><th>Day view</th><td>{h.title ?? p.current.dcu ?? <span className="dim">DCU's name</span>}</td></tr>
+          <tr><th>Week grid</th><td>{h.shortTitle ?? (h.title ? <span className="dim">{h.title}, shortened by the app</span> : <span className="dim">DCU's name, shortened by the app</span>)}</td></tr>
+        </tbody>
+      </table>
+      <p className="dim" style={{ fontSize: 12 }}>The class&rsquo;s own page keeps DCU&rsquo;s full name and code.</p>
       {p.findings.map((f, i) => (
         <p key={i} className={f.level === "error" ? "tag off" : f.level === "warn" ? "tag warn" : "tag ok"}>{f.message}</p>
       ))}

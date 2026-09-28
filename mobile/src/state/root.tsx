@@ -2,7 +2,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { AppState } from 'react-native';
 import { decodeProfile, StudentProfile, TimetableAudience } from '../core/profile';
 import { categoryCode, TimetableCategory } from '../core/timetableEvent';
-import { AllocationRefresh, LabRotationRefresh, ModuleSplitRefresh, TimetableChangeRefresh } from '../data/courseData';
+import { AllocationRefresh, LabRotationRefresh, ModuleSplitRefresh, ModuleTitleRefresh, TimetableChangeRefresh } from '../data/courseData';
 import { TimetableSource } from '../data/dcuApi';
 import { AuthenticatedUser, userEmail } from '../data/session';
 import { PrefKey } from '../data/storage';
@@ -153,6 +153,9 @@ export function RootProvider({ children }: { children: ReactNode }) {
       // By module, not course: they reach anyone whose timetable has the module.
       if (services.moduleSplits && (await ModuleSplitRefresh.run(services.moduleSplits, services.splitCache))) {
         services.events.emit('moduleSplitsChanged');
+      }
+      if (services.moduleTitles && (await ModuleTitleRefresh.run(services.moduleTitles, services.titleCache))) {
+        services.events.emit('moduleTitlesChanged');
       }
 
       if (!savedProfile) {

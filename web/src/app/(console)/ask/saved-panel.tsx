@@ -53,7 +53,7 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
   const scope = module ? `${programmeName} · ${module}${moduleFor(module) ? ` · ${moduleFor(module)!.title}` : ""}` : programmeName;
   // A rotation with no sessions for the module does not apply to it.
   const rotation = view?.rotation?.sessions.length ? view.rotation : null;
-  const empty = view && !rotation && view.splits.length === 0 && !view.classList;
+  const empty = view && !rotation && view.splits.length === 0 && !view.classList && !view.heading;
 
   return (
     <section className="saved" aria-labelledby="saved-heading">
@@ -96,6 +96,20 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
               </tbody>
             </table>
           </div>
+        </Entry>
+      )}
+
+      {module && view?.heading && (
+        <Entry
+          title={`${module} · heading`}
+          meta={`${view.heading.title}${view.heading.shortTitle ? ` · “${view.heading.shortTitle}” on the week grid` : ""} · ${when(view.heading.savedAt)}`}
+          deleting={deleting === "heading"}
+          onDelete={() => remove("heading", { kind: "heading", module },
+            `Delete the ${module} heading? Students see DCU's name for it again when the app next opens.`)}
+        >
+          <p className="dim" style={{ fontSize: 12 }}>
+            Shown in place of DCU&rsquo;s name on the day view, the week grid, the widget and the deadlines list.
+          </p>
         </Entry>
       )}
 

@@ -3,6 +3,7 @@ import {
   profileFromAllocation, StudentProfile, TimetableChange,
 } from '../core/profile';
 import { ModuleSplit, splitFromRow } from '../core/splits';
+import { ModuleTitle, ModuleTitles } from '../core/timetableEvent';
 import { rows, SupabaseREST } from './rest';
 import { PrefKey, Prefs } from './storage';
 
@@ -406,6 +407,58 @@ export const ModuleSplitRefresh = {
       return false;
     }
     if (JSON.stringify(fresh) === JSON.stringify(cache.splits())) return false;
+    cache.store(fresh);
+    return true;
+  },
+};
+
+// MARK: - Module headings
+
+/** The headings saved in the console (`module_titles`), for every module. */
+export interface ModuleTitleStore {
+  titles(): Promise<ModuleTitle[]>;
+}
+
+export class SupabaseModuleTitleStore implements ModuleTitleStore {
+  constructor(private readonly rest: SupabaseREST) {}
+
+  /** Every module's: a handful of rows, and which modules a student takes is known only later. */
+  async titles(): Promise<ModuleTitle[]> {
+    // Signed in or not at all: the anon key reads an empty table, which would wipe the cache.
+    const json = await this.rest.json('GET', '/rest/v1/module_titles', describe, {
+      auth: 'userOnly',
+      query: [['select', 'module_key,title,short_title'], ['order', 'module_key']],
+    });
+    return rows(json).flatMap((r) => {
+      const title = ModuleTitles.fromRow(r);
+      return title ? [title] : [];
+    });
+  }
+}
+
+/** The last headings downloaded, so they hold with no signal. */
+export class ModuleTitleCache {
+  constructor(private readonly prefs: Prefs) {}
+
+  titles(): ModuleTitle[] {
+    return this.prefs.getJSON<ModuleTitle[]>(PrefKey.moduleTitles, []);
+  }
+
+  store(titles: ModuleTitle[]): void {
+    this.prefs.setJSON(PrefKey.moduleTitles, titles);
+  }
+}
+
+export const ModuleTitleRefresh = {
+  /** True when the headings differ from what is cached. A failed request keeps the cache. */
+  async run(store: ModuleTitleStore, cache: ModuleTitleCache): Promise<boolean> {
+    let fresh: ModuleTitle[];
+    try {
+      fresh = await store.titles();
+    } catch {
+      return false;
+    }
+    if (JSON.stringify(fresh) === JSON.stringify(cache.titles())) return false;
     cache.store(fresh);
     return true;
   },

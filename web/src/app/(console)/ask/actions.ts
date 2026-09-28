@@ -10,7 +10,8 @@ import { correctTable } from "@/lib/mistral/correct";
 import { applyToRoster, applyToRotation, rosterTable, rotationTable, ROSTER_COLUMNS, ROTATION_COLUMNS } from "@/lib/corrections/apply";
 import type { RotationSession } from "@/lib/extraction/rotation";
 import { normalise } from "@/lib/extraction/normalise";
-import { interpretMessage, type ChangeArgs } from "@/lib/mistral/split";
+import { interpretMessage, type ChangeArgs, type HeadingArgs } from "@/lib/mistral/split";
+import { checkHeading, checkHeadingProvenance, type Heading } from "@/lib/proposals/heading";
 import { classes, dublin, weeks } from "@/lib/dcu/timetable";
 import { checkChangeProvenance, describeChange, fromRow, type TimetableChange } from "@/lib/changes/change";
 import { saveChange } from "../timetable/actions";
@@ -144,9 +145,12 @@ export async function ask(form: FormData): Promise<AskResult> {
       };
     }
 
-    if (out.changes.length) {
+    if (out.changes.length || out.headings.length) {
       const source = [...history.map((t) => t.text), message].join("\n");
-      const proposals = await Promise.all(out.changes.map((a) => changeProposal(scope, a, source)));
+      const proposals = await Promise.all([
+        ...out.changes.map((a) => changeProposal(scope, a, source)),
+        ...out.headings.slice(0, 1).map((a) => headingProposal(scope, a, source)),
+      ]);
       return { ok: true, reply: out.reply, meta, proposals };
     }
 
@@ -199,7 +203,40 @@ async function changeContext(scope: Scope): Promise<string> {
     lines.push("", "Changes already saved:");
     for (const c of saved.map(fromRow)) lines.push(`- ${describeChange(c)}: ${c.dates.join(", ")}`);
   }
+  const heading = await savedHeading(scope.module);
+  lines.push("", heading
+    ? `Heading shown in the app for ${scope.module}: "${heading.title}"${heading.shortTitle ? `, and "${heading.shortTitle}" on the week grid` : ""}.`
+    : `${scope.module} shows under DCU's own name in the app; no heading has been set.`);
   return lines.join("\n");
+}
+
+async function savedHeading(moduleKey: string): Promise<{ title: string; shortTitle: string | null } | null> {
+  const db = await supabaseServer();
+  const { data } = await db.from("module_titles").select("title, short_title").eq("module_key", moduleKey).maybeSingle();
+  return data ? { title: data.title, shortTitle: data.short_title } : null;
+}
+
+/// The selection wins, as for a split: what the model read as the module is compared in
+/// checkScope. Only the words the administrator used can be saved (checkHeadingProvenance).
+async function headingProposal(scope: Scope, a: HeadingArgs, source: string): Promise<Proposal> {
+  const heading: Heading = {
+    moduleKey: scope.module,
+    title: a.title?.trim() || null,
+    shortTitle: a.title?.trim() ? a.shortTitle?.trim() || null : null,
+  };
+  const saved = scope.module ? await savedHeading(scope.module).catch(() => null) : null;
+  return {
+    kind: "heading", scope, heading, source,
+    current: { dcu: moduleFor(scope.module)?.title ?? null, saved: saved?.title ?? null },
+    findings: [
+      ...checkScope(scope, { module: a.module }),
+      ...checkHeading(heading),
+      ...checkHeadingProvenance(heading, source),
+      ...(heading.title === null && !saved
+        ? [{ level: "info" as const, message: `${scope.module} already shows DCU's name; this changes nothing.` }]
+        : []),
+    ],
+  };
 }
 
 async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Promise<Proposal> {
@@ -511,6 +548,18 @@ export async function accept(proposal: Proposal) {
     if (blocker) return { ok: false, error: blocker.message };
     // Re-checks the change, including against DCU's timetable, before it saves.
     return saveChange(proposal.change);
+  }
+
+  if (proposal.kind === "heading") {
+    const h = proposal.heading;
+    const blocker = [...checkScope(proposal.scope), ...checkHeading(h), ...checkHeadingProvenance(h, proposal.source ?? "")]
+      .find((f) => f.level === "error");
+    if (blocker) return { ok: false, error: blocker.message };
+    // Definer functions, as the other saves: the admin check and the audit row in one place.
+    const { error } = h.title === null
+      ? await db.rpc("delete_module_title", { p_module_key: h.moduleKey })
+      : await db.rpc("save_module_title", { p_module_key: h.moduleKey, p_title: h.title, p_short_title: h.shortTitle });
+    return error ? { ok: false, error: error.message } : { ok: true };
   }
 
   if (proposal.kind === "roster") {

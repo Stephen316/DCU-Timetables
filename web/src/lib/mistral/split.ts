@@ -3,7 +3,7 @@
 // prose instead of filling every field.
 
 import { historyMessages, post, textOf, withRetry } from "./api";
-import { CHANGE_TOOL, SPLIT_TOOL, SYSTEM } from "@/lib/proposals/prompt";
+import { CHANGE_TOOL, HEADING_TOOL, SPLIT_TOOL, SYSTEM } from "@/lib/proposals/prompt";
 import { toJsonSchema } from "@/lib/extraction/json-schema";
 import type { SplitRule } from "@/lib/proposals/rules";
 
@@ -17,6 +17,9 @@ export type ChangeArgs = {
   end?: string | null; title?: string | null; room?: string | null; activityCode?: string | null;
   note?: string | null;
 };
+
+/// What the model proposed as a module's heading, as it said it.
+export type HeadingArgs = { module?: string; title?: string | null; shortTitle?: string | null };
 
 /// `context` is what is known and saved for the selected module, sent as its own system
 /// message so it is never mistaken for — or checked for provenance as — the admin's words.
@@ -40,7 +43,7 @@ export async function interpretMessage(opts: {
       ...historyMessages(history.slice(-12)),
       { role: "user", content: text },
     ],
-    tools: [SPLIT_TOOL, CHANGE_TOOL].map((t) => ({
+    tools: [SPLIT_TOOL, CHANGE_TOOL, HEADING_TOOL].map((t) => ({
       type: "function",
       function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) },
     })),
@@ -57,11 +60,13 @@ export async function interpretMessage(opts: {
     ranges?: Partial<SplitRule["ranges"][number]>[];
   }) | null;
   const changes = args(CHANGE_TOOL.name) as ChangeArgs[];
+  const headings = args(HEADING_TOOL.name) as HeadingArgs[];
 
   return {
     reply: textOf(message?.content).trim() || undefined,
     split,
     changes,
+    headings,
     model: res.model,
     usage: { input: res.usage?.prompt_tokens, output: res.usage?.completion_tokens },
   };

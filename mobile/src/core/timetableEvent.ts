@@ -33,7 +33,38 @@ export interface TimetableEvent {
   staff: string[];
   activity: ActivityCode;
   weekLabels: string[];
+  /**
+   * The heading an admin chose for the module in the console, in place of DCU's name, and a
+   * shorter one for the week grid. Put on by `ModuleTitles.apply`; never stored.
+   */
+  heading?: string;
+  shortHeading?: string | null;
 }
+
+/** A module's heading, as saved in the console (`module_titles`). */
+export interface ModuleTitle {
+  moduleKey: string;
+  title: string;
+  shortTitle: string | null;
+}
+
+export const ModuleTitles = {
+  /** Headings onto DCU's classes. Run before changes, so an added class keeps its own name. */
+  apply(events: TimetableEvent[], titles: ModuleTitle[]): TimetableEvent[] {
+    if (titles.length === 0) return events;
+    const byModule = new Map(titles.map((t) => [t.moduleKey, t]));
+    return events.map((e) => {
+      const t = e.activity.moduleCode ? byModule.get(e.activity.moduleCode) : undefined;
+      return t ? { ...e, heading: t.title, shortHeading: t.shortTitle } : e;
+    });
+  },
+
+  fromRow(row: Record<string, unknown>): ModuleTitle | null {
+    const { module_key: moduleKey, title, short_title: shortTitle } = row;
+    if (typeof moduleKey !== 'string' || typeof title !== 'string' || !title.trim()) return null;
+    return { moduleKey, title: title.trim(), shortTitle: typeof shortTitle === 'string' && shortTitle.trim() ? shortTitle.trim() : null };
+  },
+};
 
 export function moduleCodeOf(event: TimetableEvent): string | null {
   return event.activity.moduleCode;
@@ -47,9 +78,11 @@ export function titleOf(event: TimetableEvent): string {
 /**
  * The title without the code DCU puts in front of the module's name — "EEG1006[1] Materials
  * Engineering" reads "Materials Engineering". For the day view; the class's own page keeps
- * the code. A name that is only the code, or doesn't start with it, is left whole.
+ * the code. A name that is only the code, or doesn't start with it, is left whole. A
+ * heading set in the console wins over DCU's name.
  */
 export function shortTitleOf(event: TimetableEvent): string {
+  if (event.heading) return event.heading;
   const name = event.moduleName;
   const code = event.activity.moduleCode;
   if (!name || !code || !name.startsWith(code)) return titleOf(event);
@@ -72,6 +105,8 @@ const ABBREVIATIONS: Record<string, string> = {
  * Professional Development" reads "Fund. of Prof. Dev.". Words it doesn't know are kept.
  */
 export function compactTitleOf(event: TimetableEvent): string {
+  // The admin's own short heading is used as it stands; anything else is shortened.
+  if (event.shortHeading) return event.shortHeading;
   return shortTitleOf(event)
     .split(/\s+/)
     .filter((word) => word.toLowerCase() !== 'the')

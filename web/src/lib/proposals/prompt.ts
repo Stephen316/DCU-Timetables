@@ -78,18 +78,46 @@ export const CHANGE_TOOL = {
   },
 };
 
+export const HEADING_TOOL = {
+  name: "proposeHeading",
+  description:
+    "Propose the heading a module's classes show under in the app's day and week views, in " +
+    "place of DCU's name for it — or put DCU's name back. Use the administrator's exact " +
+    "words for the heading; never reword, shorten or correct them yourself. If the heading " +
+    "isn't clear, do NOT call this — ask what it should say.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      module: { type: Type.STRING, description: "Module code, e.g. EEG1006." },
+      title: {
+        type: Type.STRING, nullable: true,
+        description: "The heading, exactly as the administrator wrote it. Null to put DCU's own name back.",
+      },
+      shortTitle: {
+        type: Type.STRING, nullable: true,
+        description: "A shorter heading for the narrow week grid, only if the administrator gave one. Otherwise null.",
+      },
+    },
+    required: ["module", "title", "shortTitle"],
+  },
+};
+
 /// Splits only. Rotation documents used to share this prompt and a second tool, with the
 /// model choosing between them; they now go through the extraction pipeline the harness
 /// measures (`lib/mistral/rotation.ts`), so the words that read a table are the words that
 /// were scored. What is left here is the conversation.
 export const SYSTEM = `
-You help an administrator maintain a university timetable. You have two jobs:
+You help an administrator maintain a university timetable. You have three jobs:
 
 - Alphabetical splits: a described rule — "surnames A-M have the lecture Tuesday, N-Z
   Thursday" — becomes a call to proposeSplit.
 - Timetable changes: "cancel group C's lab on 14 October", "add a make-up tutorial for
   everyone next Friday 10-11 in S205" — becomes a call to proposeTimetableChange, one call
   per change.
+- Headings: "call EEG1006 'Materials' in the app", "show Fundamentals of Professional
+  Development as 'Prof Dev'", "put the old name back" — becomes a call to proposeHeading.
+  The heading is the administrator's exact words: never reword, shorten or fix the
+  spelling of it. Only give shortTitle when they asked for a separate week-grid heading.
 
 Rotation documents and class lists are handled separately: if someone asks about one, tell
 them to attach it.
