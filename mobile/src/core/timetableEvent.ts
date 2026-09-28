@@ -44,6 +44,41 @@ export function titleOf(event: TimetableEvent): string {
   return event.moduleName ?? event.activity.moduleCode ?? event.activity.raw;
 }
 
+/**
+ * The title without the code DCU puts in front of the module's name — "EEG1006[1] Materials
+ * Engineering" reads "Materials Engineering". For the day view; the class's own page keeps
+ * the code. A name that is only the code, or doesn't start with it, is left whole.
+ */
+export function shortTitleOf(event: TimetableEvent): string {
+  const name = event.moduleName;
+  const code = event.activity.moduleCode;
+  if (!name || !code || !name.startsWith(code)) return titleOf(event);
+  return /^\S+\s+(\S.*)$/.exec(name)?.[1] ?? name;
+}
+
+/** Long words in DCU's module names, as a timetable would shorten them. */
+const ABBREVIATIONS: Record<string, string> = {
+  engineering: 'Eng.', fundamentals: 'Fund.', professional: 'Prof.', development: 'Dev.',
+  technical: 'Tech.', technology: 'Tech.', mathematics: 'Maths', introduction: 'Intro.',
+  laboratory: 'Lab', programming: 'Prog.', management: 'Mgmt', electronic: 'Elec.',
+  electronics: 'Elec.', electrical: 'Elec.', mechanical: 'Mech.', manufacturing: 'Mfg.',
+  computer: 'Comp.', computing: 'Comp.', communication: 'Comms', communications: 'Comms',
+  chemistry: 'Chem.', statistics: 'Stats', principles: 'Princ.', applications: 'Apps',
+  environmental: 'Env.', information: 'Info.',
+};
+
+/**
+ * The short title squeezed for a narrow block on the week grid: "Fundamentals of
+ * Professional Development" reads "Fund. of Prof. Dev.". Words it doesn't know are kept.
+ */
+export function compactTitleOf(event: TimetableEvent): string {
+  return shortTitleOf(event)
+    .split(/\s+/)
+    .filter((word) => word.toLowerCase() !== 'the')
+    .map((word) => (word.toLowerCase() === 'and' ? '&' : ABBREVIATIONS[word.toLowerCase()] ?? word))
+    .join(' ');
+}
+
 export function staffText(event: TimetableEvent): string | null {
   return event.staff.length === 0 ? null : event.staff.join(', ');
 }

@@ -6,6 +6,7 @@ import {
 import { locationDisplay, parseRoom, roomDisplayText } from '../src/core/roomLocation';
 import { ClashDetector, DaySchedule, DaySlot, DefaultDay, NextClassWindow, WeekGrid, gapLabel } from '../src/core/schedule';
 import { DublinTime, parseISO, isoSeconds } from '../src/core/time';
+import { compactTitleOf, shortTitleOf } from '../src/core/timetableEvent';
 import { at, event, utc } from './helpers';
 
 describe('Activity codes', () => {
@@ -39,6 +40,39 @@ describe('Activity codes', () => {
     expect(a.moduleCode).toBe('CHM1006');
     expect(a.group).toBe('01'); // trailing comma stripped
     expect(a.cohort).toBeNull(); // second code is not a cohort
+  });
+});
+
+describe('Short class title', () => {
+  const start = at(2026, 9, 28, 10);
+  const titled = (code: string, moduleName: string | null) => shortTitleOf(event(code, start, undefined, { moduleName }));
+
+  test("drops the module code DCU puts in front of the name", () => {
+    expect(titled('EEG1006[1]OC/L1/01', 'EEG1006[1] Materials Engineering')).toBe('Materials Engineering');
+    expect(titled('EEG1000[1]OC/L1/01', 'EEG1000[1,2] Fundamentals of Professional Development')).toBe('Fundamentals of Professional Development');
+  });
+
+  test('keeps a name that has no code in front, or nothing after it', () => {
+    expect(titled('CA106[1]OC/L1/01', 'Computer Systems')).toBe('Computer Systems');
+    expect(titled('EEG1006[1]OC/L1/01', 'EEG1006[1]')).toBe('EEG1006[1]');
+    expect(titled('EEG1006[1]OC/L1/01', null)).toBe('EEG1006');
+  });
+});
+
+describe('Compact class title', () => {
+  const start = at(2026, 9, 28, 10);
+  const compact = (code: string, moduleName: string) => compactTitleOf(event(code, start, undefined, { moduleName }));
+
+  test('shortens the long words in a module name for the week grid', () => {
+    expect(compact('EEG1000[1]OC/L1/01', 'EEG1000[1,2] Fundamentals of Professional Development')).toBe('Fund. of Prof. Dev.');
+    expect(compact('EEG1001[1]OC/L1/01', 'EEG1001[1,2] Project & Technical Drawing')).toBe('Project & Tech. Drawing');
+    expect(compact('EEG1006[1]OC/L1/01', 'EEG1006[1] Materials Engineering')).toBe('Materials Eng.');
+    expect(compact('EEG1007[1]OC/L1/01', 'EEG1007[1] Introduction to the Mathematics and Physics')).toBe('Intro. to Maths & Physics');
+  });
+
+  test('keeps words it has no short form for', () => {
+    expect(compact('CA106[1]OC/L1/01', 'Computer Systems')).toBe('Comp. Systems');
+    expect(compact('BIO1000[1]OC/L1/01', 'BIO1000[1] How life works 1')).toBe('How life works 1');
   });
 });
 

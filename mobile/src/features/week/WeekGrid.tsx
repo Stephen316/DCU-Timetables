@@ -4,7 +4,7 @@ import { ClassHighlight, Deadline, deadlineKindLabel, displayTitle, highlightRea
 import { locationDisplay, parsedLocations } from '../../core/roomLocation';
 import { WeekGrid as Placement, PlacedEvent } from '../../core/schedule';
 import { addDays, formatTime, formatWeekdayDayMonth, isSameDay, isWeekend, startOfDay, startOfWeek, weekdayShort } from '../../core/time';
-import { TimetableEvent, titleOf } from '../../core/timetableEvent';
+import { compactTitleOf, TimetableEvent, titleOf } from '../../core/timetableEvent';
 import { DeadlineMark, Icon, Txt } from '../../ui/components';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
 import { moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
@@ -13,6 +13,9 @@ import { usePagerDrag } from './Pager';
 
 const HOUR_HEIGHT = 58;
 const GUTTER = 40;
+/** One line of `caption2` text in a block, and the block's padding and border above and below it. */
+const LINE_HEIGHT = 13.5;
+const BLOCK_INSET = 8;
 
 /**
  * A week laid out as a timetable grid: days across, hours down, classes as blocks.
@@ -151,6 +154,11 @@ function Block({
   const border = highlight ? highlightTint(highlight, theme) : isClashing ? withAlpha(theme.tint.off, 0.55) : 'transparent';
   const first = parsedLocations(event)[0];
   const room = first ? first.buildingName ?? first.code : null;
+  // The title wraps into whatever height the class has; the room takes the last line only
+  // when that still leaves the title two.
+  const lines = Math.max(1, Math.floor((height - BLOCK_INSET) / LINE_HEIGHT));
+  const showsRoom = room !== null && lines >= 3;
+  const titleLines = showsRoom ? lines - 1 : lines;
   const spoken = [
     highlight ? highlightReason(highlight) : null,
     ...due.map((d) => `Due at this class, ${deadlineKindLabel(d.kind)}: ${displayTitle(d)}`),
@@ -181,8 +189,10 @@ function Block({
     >
       <View style={[styles.bar, { backgroundColor: tint }]} />
       <View style={styles.blockText}>
-        <Txt type="caption2" numberOfLines={1} style={styles.bold} maxFontSizeMultiplier={1.4}>{event.activity.moduleCode ?? titleOf(event)}</Txt>
-        {height > 44 && room ? (
+        <Txt type="caption2" numberOfLines={titleLines} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.bold} maxFontSizeMultiplier={1.4}>
+          {compactTitleOf(event)}
+        </Txt>
+        {showsRoom ? (
           <Txt type="caption2" numberOfLines={1} color={theme.inkSecondary} maxFontSizeMultiplier={1.4}>{room}</Txt>
         ) : null}
       </View>

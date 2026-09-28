@@ -5,7 +5,7 @@ import { activitySummary } from '../../core/activityCode';
 import { locationDisplay } from '../../core/roomLocation';
 import { DaySchedule, DaySlot, gapLabel, NextClassWindow, slotID } from '../../core/schedule';
 import { formatDayMonth, formatTime, isToday, isTomorrow, weekdayName } from '../../core/time';
-import { eventTypeLabel, staffText, TimetableEvent, titleOf } from '../../core/timetableEvent';
+import { eventTypeLabel, shortTitleOf, staffText, TimetableEvent } from '../../core/timetableEvent';
 import { DeadlineMark, Icon, Label, Txt } from '../../ui/components';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
 import { Space, useTheme } from '../../ui/theme';
@@ -153,7 +153,7 @@ function ClassStop({
   const spoken = [
     news ? highlightReason(news) : stop.kind === 'next' ? nextLine : null,
     ...dueLines.map((line) => `Due at this class, ${line}`),
-    titleOf(event),
+    shortTitleOf(event),
     `${formatTime(event.start)} to ${formatTime(event.end)}`,
     activitySummary(event.activity),
     place,
@@ -180,7 +180,7 @@ function ClassStop({
           ) : null}
 
           <View style={styles.titleLine}>
-            <Txt type="headline" style={styles.title}>{titleOf(event)}</Txt>
+            <Txt type="headline" style={styles.title}>{shortTitleOf(event)}</Txt>
             {due.length > 0 ? <View style={styles.mark}><DeadlineMark /></View> : null}
             {isSkipped ? <Icon name="notAttending" size={16} color={theme.inkSecondary} /> : null}
             {isClashing ? <Icon name="warning" size={16} color={theme.tint.off} /> : null}
