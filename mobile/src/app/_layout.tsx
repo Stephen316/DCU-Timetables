@@ -49,6 +49,16 @@ function Themed({ children }: { children: ReactNode }) {
     if (Platform.OS !== 'web') Appearance.setColorScheme(setting === 'light' || setting === 'dark' ? setting : 'unspecified');
   }, [setting]);
 
+  // In a browser the page behind the app shows under the status bar and around Safari's
+  // toolbar; paint it the app's canvas, which can differ from the phone's setting.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    document.documentElement.style.backgroundColor = palette.canvas;
+    document.body.style.backgroundColor = palette.canvas;
+    document.documentElement.style.colorScheme = scheme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', palette.canvas);
+  }, [scheme, palette]);
+
   const navigationTheme = useMemo(() => {
     const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
     return {

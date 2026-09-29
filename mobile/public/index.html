@@ -11,6 +11,8 @@
     <meta name="apple-mobile-web-app-title" content="Timetable" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- The app repaints these from its own theme once it loads; this covers the first frame. -->
+    <meta name="theme-color" content="#212129" />
     <script>
       // The app is served from a sub-path on GitHub Pages and Expo's template has no base-path
       // placeholder, so the links above are relative. This page only ever loads at the app's
@@ -24,6 +26,13 @@
       html,
       body {
         height: 100%;
+        background-color: #eee8d5;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background-color: #212129;
+        }
       }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
