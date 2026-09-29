@@ -183,8 +183,6 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
               />
               {addressLooksWrong ? (
                 <Txt type="caption" color={theme.inkSecondary}>{address.trim()} is not a valid email address</Txt>
-              ) : email ? (
-                <Txt type="caption" color={theme.inkSecondary}>Signing in as {email.displayName}</Txt>
               ) : null}
             </Row>
             <Row>
@@ -199,6 +197,9 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
                 returnKeyType={mode === 'signIn' ? 'go' : 'next'}
                 onSubmitEditing={() => mode === 'signIn' && canSubmit && submit()}
               />
+              {email && !addressLooksWrong ? (
+                <Txt type="caption" color={theme.inkSecondary}>Signing in as {email.displayName}</Txt>
+              ) : null}
             </Row>
             {mode === 'createAccount' ? (
               <Row>
