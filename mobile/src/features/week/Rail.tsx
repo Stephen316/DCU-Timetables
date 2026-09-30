@@ -20,7 +20,9 @@ export type RailStop =
   | { kind: 'next'; live: boolean }
   | { kind: 'past' }
   /** Carries news: cancelled, moved, a test, something due. Drawn in that news's colour. */
-  | { kind: 'flagged'; color: string };
+  | { kind: 'flagged'; color: string }
+  /** A class of the course that isn't in the student's timetable, shown while they edit it. */
+  | { kind: 'ghost' };
 
 /** Where a row sits in the day, which decides whether the rail runs above and below its stop. */
 export interface RailPosition {
@@ -67,7 +69,7 @@ export function RailRow({ start, end, stop, position, divider = false, online = 
 }) {
   const theme = useTheme();
   const stacked = useLargeText();
-  const timeColour = stop.kind === 'next' ? theme.accent : stop.kind === 'past' ? theme.inkSecondary : theme.ink;
+  const timeColour = stop.kind === 'next' ? theme.accent : stop.kind === 'past' || stop.kind === 'ghost' ? theme.inkSecondary : theme.ink;
   const railX = (stacked ? 0 : GUTTER) + COLUMN / 2;
   const stopY = Space.m + STOP_CENTRE;
 
@@ -164,6 +166,8 @@ function StopMark({ stop }: { stop: RailStop }) {
       );
     case 'flagged':
       return <View style={[centred(STOP), { backgroundColor: stop.color }]} />;
+    case 'ghost':
+      return <View style={[centred(STOP), { backgroundColor: theme.canvas, borderWidth: LINE, borderColor: theme.rail, borderStyle: 'dashed' }]} />;
   }
 }
 

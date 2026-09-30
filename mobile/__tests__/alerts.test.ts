@@ -1,5 +1,4 @@
 import { ClassAlerts } from '../src/core/classAlerts';
-import { CancellationRules } from '../src/core/cancellation';
 import { TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar } from '../src/core/timetableEvent';
 import { MemoryAlertScheduler } from '../src/data/alerts';
 import { TimetableSource } from '../src/data/dcuApi';
@@ -85,7 +84,7 @@ describe('Class alerts from the week model', () => {
 
   afterEach(() => jest.useRealTimers());
 
-  test('schedules the loaded classes, follows the settings and "not attending", and sign-out clears them', async () => {
+  test('schedules the loaded classes, follows the settings and the classes removed, and sign-out clears them', async () => {
     jest.useFakeTimers({ now: at(2026, 9, 28, 8), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
     const alerts = new MemoryAlertScheduler();
     const services = await createServices({ kv: new MemoryKV(), secrets: { get: async () => null, set: async () => {}, remove: async () => {} }, env: {}, alerts });
@@ -97,7 +96,7 @@ describe('Class alerts from the week model', () => {
     services.prefs.setJSON(PrefKey.classAlerts, { first: 5, second: null });
     expect(alerts.scheduled.map((a) => a.id)).toEqual(['mon@5', 'tue@5']);
 
-    services.prefs.setJSON(PrefKey.skipped, [CancellationRules.eventKey(monday)]);
+    model.edit('remove', 'once', monday);
     expect(alerts.scheduled.map((a) => a.id)).toEqual(['tue@5']);
 
     // Nothing changed, so nothing is rescheduled.

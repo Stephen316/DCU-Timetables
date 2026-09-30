@@ -57,9 +57,9 @@ export const ClassAlerts = {
   },
 
   /**
-   * Every alert still to fire, soonest first, up to `limit`. A class the student won't be at
-   * — marked not attending, or reported cancelled — doesn't alert. The same time chosen twice
-   * alerts once.
+   * Every alert still to fire, soonest first, up to `limit`. A class reported cancelled
+   * doesn't alert, and one the student removed from their timetable isn't in `events`. The
+   * same time chosen twice alerts once.
    */
   plan(events: TimetableEvent[], settings: AlertSettings, now: Date, isOff: (event: TimetableEvent) => boolean): PlannedAlert[] {
     const offsets = [...new Set([settings.first, settings.second].filter((o): o is number => o !== null))];

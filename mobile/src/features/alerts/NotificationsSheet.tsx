@@ -53,7 +53,7 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
           header="Second alert"
           selected={settings.second}
           onChoose={(o) => choose('second', o)}
-          footer="Alerts cover this week and next — the weeks the app has loaded — so open it at least once a week. Classes you've marked as not attending, and ones reported cancelled, don't alert you."
+          footer="Alerts cover this week and next — the weeks the app has loaded — so open it at least once a week. Classes reported cancelled don't alert you."
         />
       </ListScroll>
     </Sheet>

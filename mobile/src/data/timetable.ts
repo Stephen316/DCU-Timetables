@@ -82,8 +82,22 @@ export class ProfileTimetableSource implements TimetableSource {
     return events.sort((a, b) => a.start.getTime() - b.start.getTime());
   }
 
+  /**
+   * The other groups' rotation sessions, for a student who wants to go to one. From the
+   * rotation alone, so it needs no network. No room: the student's own rooms are for their
+   * group's sessions, and the rotation doesn't say which rooms the others use.
+   */
+  async otherEvents(_category: TimetableCategory, weeks: TeachingWeek[]): Promise<TimetableEvent[]> {
+    const rotation = currentRotation(this.rotationCache);
+    if (!rotation) return [];
+    const wanted = new Set(weeks.map((w) => w.number));
+    return rotation.sessions
+      .filter((s) => wanted.has(s.week) && !s.groups.includes(this.profile.group))
+      .flatMap((s) => this.rotationEvent(s, rotation, false) ?? []);
+  }
+
   /** The rotation PDF's times are Irish clock times, so the dates are built in Dublin time. */
-  private rotationEvent(session: LabSession, rotation: LabRotation): TimetableEvent | null {
+  private rotationEvent(session: LabSession, rotation: LabRotation, mine = true): TimetableEvent | null {
     const start = DublinTime.date(session.date, session.start);
     const end = DublinTime.date(session.date, session.end);
     if (!start || !end) return null;
@@ -91,8 +105,8 @@ export class ProfileTimetableSource implements TimetableSource {
     const activity = session.activity;
     const lower = activity.toLowerCase();
     let room: string[] = [];
-    if (lower.includes('workshop')) room = this.profile.workshop ? [this.profile.workshop] : [];
-    else if (lower.includes('drawing')) room = this.profile.drawing ? [this.profile.drawing] : [];
+    if (mine && lower.includes('workshop')) room = this.profile.workshop ? [this.profile.workshop] : [];
+    else if (mine && lower.includes('drawing')) room = this.profile.drawing ? [this.profile.drawing] : [];
 
     const moduleName = LabRotations.name(rotation, session.module);
     return {

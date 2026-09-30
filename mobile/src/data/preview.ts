@@ -72,6 +72,16 @@ export const PreviewData = {
     return [...events, ...PreviewData.today, ...nextWeek];
   },
 
+  /** Another group's labs and tutorials, for Edit timetable to offer as ghosts. */
+  get otherGroups(): TimetableEvent[] {
+    const e = PreviewData.event;
+    const at = PreviewData.at;
+    return [0, 1, 2, 3, 4, 7, 8, 9, 10, 11].flatMap((day) => [
+      e(`o${day}a`, 'Programming Lab', 'CA117[1]OC/P1/04', at(day, 10), 1, 'GLA.L102'),
+      e(`o${day}b`, 'Maths Tutorial', 'MS121[1]OC/T1/02', at(day, 16), 1, 'GLA.QG13'),
+    ]);
+  },
+
   deadlines(): Deadline[] {
     const now = new Date();
     // Due at today's practical, so the day view shows the "!" and the class page its banner.
@@ -102,13 +112,20 @@ class PreviewTimetableSource implements TimetableSource {
   }
 
   async events(_category: TimetableCategory, weeks: { firstDay: Date }[]): Promise<TimetableEvent[]> {
-    const all = PreviewData.week;
-    return weeks.flatMap((w) => {
-      const start = startOfDay(w.firstDay).getTime();
-      const end = addDays(w.firstDay, 7).getTime();
-      return all.filter((e) => e.start.getTime() >= start && e.start.getTime() < end);
-    });
+    return inWeeks(PreviewData.week, weeks);
   }
+
+  async otherEvents(_category: TimetableCategory, weeks: { firstDay: Date }[]): Promise<TimetableEvent[]> {
+    return inWeeks(PreviewData.otherGroups, weeks);
+  }
+}
+
+function inWeeks(all: TimetableEvent[], weeks: { firstDay: Date }[]): TimetableEvent[] {
+  return weeks.flatMap((w) => {
+    const start = startOfDay(w.firstDay).getTime();
+    const end = addDays(w.firstDay, 7).getTime();
+    return all.filter((e) => e.start.getTime() >= start && e.start.getTime() < end);
+  });
 }
 
 /** Four reports on today's Networks lecture — enough to flag it — and nothing else. */

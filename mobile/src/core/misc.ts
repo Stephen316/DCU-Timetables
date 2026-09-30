@@ -82,21 +82,6 @@ export class LecturerDirectory {
   }
 }
 
-// MARK: - Attendance
-
-/**
- * Classes the student has marked "I won't attend". Device-local and never shared: a
- * private choice about one person's day, and uploading it would turn the app into an
- * attendance record.
- */
-export const Attendance = {
-  storageKey: 'skippedEvents',
-
-  toggling(key: string, keys: string[]): string[] {
-    return keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key];
-  },
-};
-
 // MARK: - Pagers
 
 /**

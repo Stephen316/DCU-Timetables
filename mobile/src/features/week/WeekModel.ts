@@ -9,10 +9,12 @@ import { ClashDetector, DefaultDay } from '../../core/schedule';
 import { addDays, startOfDay } from '../../core/time';
 import { ModuleTitle, ModuleTitles, TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/timetableEvent';
 import { ModuleAbbreviation, ModuleAbbreviations } from '../../core/abbreviations';
+import { EditRepeat, TimetableEdit, TimetableEdits } from '../../core/timetableEdits';
 import { errorMessage } from '../../data/rest';
 import { userEmail } from '../../data/session';
 import { Services } from '../../data/services';
 import { PrefKey } from '../../data/storage';
+import { TimetableEditStore } from '../../data/timetableEdits';
 import { TimetableSource } from '../../data/dcuApi';
 import { WidgetSnapshotPublisher } from '../../data/widgets';
 import { Observable } from '../../state/hooks';
@@ -48,6 +50,12 @@ export class WeekModel extends Observable {
   weeks: TeachingWeek[] = [];
   /** Filtered events keyed by week number, for the weeks the pager can reach. */
   eventsByWeekNumber = new Map<number, TimetableEvent[]>();
+  /**
+   * The course's classes that aren't the student's, by week: another group's lab, the other
+   * band of a split, one removed for their group, one they dropped. Edit timetable shows
+   * them as ghosts to add.
+   */
+  ghostsByWeekNumber = new Map<number, TimetableEvent[]>();
   /** Crowd-sourced tallies and verdicts for the visible week, keyed by event key. */
   cancellations = new Map<string, CancellationStatus>();
   /** Deadlines for every module seen, so a class can be outlined on the day one falls. */
@@ -63,6 +71,9 @@ export class WeekModel extends Observable {
    */
   private knownStatuses = new Map<string, CancellationStatus>();
   private rawByWeekNumber = new Map<number, TimetableEvent[]>();
+  /** What the source keeps back as another group's (`TimetableSource.otherEvents`), by week. */
+  private rawOthersByWeekNumber = new Map<number, TimetableEvent[]>();
+  private edits: TimetableEdit[];
   private changes: TimetableChange[];
   private splits: ModuleSplit[];
   private titles: ModuleTitle[];
@@ -98,9 +109,9 @@ export class WeekModel extends Observable {
     this.abbreviations = services.abbreviationCache.abbreviations();
     const user = services.user.current;
     this.initial = user ? surnameInitial(userEmail(user)?.familyName) : null;
-    // A class marked not attending, or a new alert time, changes which alerts are due.
+    this.edits = TimetableEditStore.edits(services.prefs);
     this.unsubscribe.push(
-      services.prefs.subscribe(PrefKey.skipped, () => this.scheduleAlerts()),
+      services.prefs.subscribe(PrefKey.timetableEdits, () => this.reloadEdits()),
       services.prefs.subscribe(PrefKey.classAlerts, () => this.scheduleAlerts()),
     );
   }
@@ -216,6 +227,18 @@ export class WeekModel extends Observable {
     return grouped(this.eventsByWeekNumber.get(this.weeks[resolved].number) ?? []);
   }
 
+  /** Any week's ghosts grouped by day, for Edit timetable. */
+  ghostsByDayForWeekIndex(index: number): DayEvents[] {
+    const resolved = PagerIndex.resolve(index, this.weeks.length);
+    if (resolved === null) return [];
+    return grouped(this.ghostsByWeekNumber.get(this.weeks[resolved].number) ?? []);
+  }
+
+  /** Adds a class to the student's timetable, or drops one from it, once or every week. */
+  edit(kind: TimetableEdit['kind'], repeat: EditRepeat, event: TimetableEvent): void {
+    TimetableEditStore.add(this.services.prefs, TimetableEdits.make(kind, repeat, event));
+  }
+
   /** Every event loaded this session, for opening a class's page by id. */
   eventWithID(id: string): TimetableEvent | null {
     for (const list of this.eventsByWeekNumber.values()) {
@@ -308,6 +331,13 @@ export class WeekModel extends Observable {
     this.publishWidgetSnapshot();
   }
 
+  /** Re-read the student's own edits: they added or dropped a class. */
+  reloadEdits(): void {
+    this.edits = TimetableEditStore.edits(this.services.prefs);
+    this.applyFilter();
+    this.publishWidgetSnapshot();
+  }
+
   /**
    * Re-read the week-grid abbreviations after a refresh downloaded new ones. The widget
    * doesn't show them, so it isn't sent a new snapshot.
@@ -320,6 +350,7 @@ export class WeekModel extends Observable {
   /** Fetch every loaded week again — the rotation behind them changed. */
   async reloadAll(): Promise<void> {
     this.rawByWeekNumber = new Map();
+    this.rawOthersByWeekNumber = new Map();
     await this.loadCurrentWeek();
   }
 
@@ -390,14 +421,11 @@ export class WeekModel extends Observable {
    */
   scheduleAlerts(force = false): void {
     if (!this.started || this.disposed) return;
-    const prefs = this.services.prefs;
-    const skipped = new Set(prefs.getJSON<string[]>(PrefKey.skipped, []));
-    const settings = ClassAlerts.settings(prefs.getJSON<unknown>(PrefKey.classAlerts, null));
+    const settings = ClassAlerts.settings(this.services.prefs.getJSON<unknown>(PrefKey.classAlerts, null));
     const events = [...this.eventsByWeekNumber.values()].flat();
-    const plan = ClassAlerts.plan(events, settings, new Date(), (e) => {
-      const key = CancellationRules.eventKey(e);
-      return skipped.has(key) || (this.knownStatuses.get(key)?.isFlagged ?? false);
-    });
+    const plan = ClassAlerts.plan(
+      events, settings, new Date(), (e) => this.knownStatuses.get(CancellationRules.eventKey(e))?.isFlagged ?? false,
+    );
     const signature = JSON.stringify(plan);
     if (!force && signature === this.alertPlan) return;
     this.alertPlan = signature;
@@ -412,6 +440,9 @@ export class WeekModel extends Observable {
   }
 
   private async load(week: TeachingWeek, isCurrent: boolean): Promise<void> {
+    // Only ever something to add, so a failure just means no ghosts.
+    const others = await this.source.otherEvents?.(this.programme, [week]).catch(() => null);
+    if (others) this.rawOthersByWeekNumber.set(week.number, others);
     const cached = await this.services.timetableCache.snapshot(this.programme.identity, week.number);
     if (cached) {
       this.rawByWeekNumber.set(week.number, cached.events);
@@ -433,18 +464,24 @@ export class WeekModel extends Observable {
   private applyFilter(): void {
     // Headings and abbreviations, then changes, then splits: a class added for one band of a
     // split is split like any other, and an added class keeps its own name rather than the
-    // module's heading or abbreviation.
+    // module's heading or abbreviation. The student's own edits go last, over all of it.
+    const named = (events: TimetableEvent[]) => ModuleAbbreviations.apply(ModuleTitles.apply(events, this.titles), this.abbreviations);
     const filtered = new Map<number, TimetableEvent[]>();
+    const ghosts = new Map<number, TimetableEvent[]>();
     for (const [number, events] of this.rawByWeekNumber) {
       const weekStart = this.weeks.find((w) => w.number === number)?.firstDay ?? null;
-      filtered.set(number, ModuleSplits.apply(
-        TimetableChanges.apply(
-          ModuleAbbreviations.apply(ModuleTitles.apply(events, this.titles), this.abbreviations), this.changes, this.audience, weekStart,
-        ),
-        this.splits, this.initial,
-      ));
+      const all = named(events);
+      const mine = ModuleSplits.apply(TimetableChanges.apply(all, this.changes, this.audience, weekStart), this.splits, this.initial);
+      // What the course runs that the rules above took off this student's week, and what
+      // the source kept back as another group's.
+      const kept = new Set(mine.map((e) => e.id));
+      const others = [...all.filter((e) => !kept.has(e.id)), ...named(this.rawOthersByWeekNumber.get(number) ?? [])];
+      const edited = TimetableEdits.apply(mine, others, this.edits);
+      filtered.set(number, edited.events);
+      ghosts.set(number, edited.ghosts);
     }
     this.eventsByWeekNumber = filtered;
+    this.ghostsByWeekNumber = ghosts;
     this.loadedModuleKeys = sameList(this.loadedModuleKeys, this.moduleKeys());
     this.moduleNames = DeadlineRules.moduleNames(ModuleTitles.apply([...this.rawByWeekNumber.values()].flat(), this.titles));
     const week = this.currentWeek;

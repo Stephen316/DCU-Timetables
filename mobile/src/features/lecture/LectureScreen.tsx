@@ -4,34 +4,30 @@ import { CANCELLATION_NET_THRESHOLD, CANCELLATION_THRESHOLD, ReportStance, VERDI
 import {
   CONFIRM_THRESHOLD, Deadline, deadlineKindLabel, DeadlineRules, displayTitle, gradeWeightLabel, isSatInClass,
 } from '../../core/deadline';
-import { Attendance, Lecturer, lecturerDisplayName, lecturerInitials } from '../../core/misc';
+import { Lecturer, lecturerDisplayName, lecturerInitials } from '../../core/misc';
 import { locationDisplay } from '../../core/roomLocation';
 import { formatComplete, formatTime, formatWeekdayDayMonth } from '../../core/time';
 import { eventTypeLabel, groupLabelOf, TimetableEvent, titleOf } from '../../core/timetableEvent';
-import { PrefKey } from '../../data/storage';
-import { useModel, usePrefJSON, useServices } from '../../state/hooks';
+import { useModel, useServices } from '../../state/hooks';
 import {
-  ActionRow, ConfirmSheet, DeadlineMark, IconName, Label, LabeledRow, ListScroll, Row, Section, ToggleRow, Txt,
+  ActionRow, ConfirmSheet, DeadlineMark, IconName, Label, LabeledRow, ListScroll, Row, Section, Txt,
 } from '../../ui/components';
 import { Space, useTheme, withAlpha } from '../../ui/theme';
 import { DeadlineForm, DeadlineRow } from '../deadlines/DeadlineRows';
 import { LectureModel } from './LectureModel';
 
 /**
- * Everything known about one class, on its own page. Three kinds of information share it
- * and are kept visually distinct because they carry different weight: what the university
- * says (times, room, staff), what other students say (reports, deadlines), and what this
- * student has decided (not attending).
+ * Everything known about one class, on its own page. Two kinds of information share it and
+ * are kept visually distinct because they carry different weight: what the university says
+ * (times, room, staff), and what other students say (reports, deadlines).
  */
 export function LectureScreen({ event, isClashing, known }: { event: TimetableEvent; isClashing: boolean; known: Deadline[] }) {
   const services = useServices();
   const theme = useTheme();
   const model = useModel(useMemo(() => new LectureModel(services, event, known), [services, event, known]));
-  const [skipped, setSkipped] = usePrefJSON<string[]>(PrefKey.skipped, []);
   const [showingForm, setShowingForm] = useState(false);
   /** Non-null while the "are you sure?" card is up, holding the side being reported. */
   const [pendingReport, setPendingReport] = useState<ReportStance | null>(null);
-  const isSkipping = skipped.includes(model.eventKey);
   const status = model.status;
 
   useEffect(() => {
@@ -65,7 +61,6 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           <Row>
             <Txt type="pageTitle">{titleOf(event)}</Txt>
             <Txt type="subheadline" color={theme.inkSecondary}>{groupLabelOf(event)}</Txt>
-            {isSkipping ? <Label icon="notAttending" text="You're not attending this" type="caption" color={theme.inkSecondary} /> : null}
           </Row>
         </Section>
 
@@ -104,12 +99,6 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           ) : (
             model.lecturers.map((l) => <LecturerRow key={l.name} lecturer={l} />)
           )}
-        </Section>
-
-        <Section footer="Only you see this. It doesn't report the class as cancelled.">
-          <ToggleRow value={isSkipping} onChange={() => setSkipped(Attendance.toggling(model.eventKey, skipped))}>
-            <Label icon="notAttending" text="I won't attend this" />
-          </ToggleRow>
         </Section>
 
         <Section

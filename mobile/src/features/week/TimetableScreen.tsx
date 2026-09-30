@@ -7,13 +7,14 @@ import { WeekdayIndex } from '../../core/misc';
 import { TimetableEvent } from '../../core/timetableEvent';
 import { listenForAlertTaps } from '../../data/notifications';
 import { PrefKey } from '../../data/storage';
-import { useAppEvent, useModel, useNow, usePrefBool, usePrefJSON } from '../../state/hooks';
+import { useAppEvent, useModel, useNow, usePrefBool } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
-import { ActionSheet, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
+import { ActionSheet, BarButton, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 import { AccountSheet } from '../account/AccountSheet';
 import { NotificationsSheet } from '../alerts/NotificationsSheet';
 import { DayPage } from './DayPage';
+import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
 import { Pager } from './Pager';
 import { WeekGridView } from './WeekGrid';
 
@@ -25,8 +26,10 @@ export function TimetableScreen() {
   const model = useModel(useWeekModel());
   const now = useNow();
   const [showsCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
-  const [skipped] = usePrefJSON<string[]>(PrefKey.skipped, []);
   const [sheet, setSheet] = useState<'menu' | 'account' | 'alerts' | null>(null);
+  /** Edit timetable: the course's other classes show as ghosts, and a tap adds or removes. */
+  const [editing, setEditing] = useState(false);
+  const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
 
   useEffect(() => {
     void model.start();
@@ -55,10 +58,10 @@ export function TimetableScreen() {
   useAppEvent('labRotationChanged', () => void model.reloadAll());
 
   const open = (event: TimetableEvent) => router.push({ pathname: '/class/[id]', params: { id: event.id } });
-
-  const skippedSet = new Set(skipped);
+  const askToEdit = (event: TimetableEvent, kind: EditKind) => setPendingEdit({ event, kind });
 
   const menu: SheetAction[] = [
+    { label: 'Edit timetable', icon: 'edit', onPress: () => setEditing(true) },
     { label: 'Account', icon: 'account', onPress: () => setSheet('account') },
     { label: 'Notifications', icon: 'bell', onPress: () => setSheet('alerts') },
     { label: 'Sign out', icon: 'swap', onPress: signOut },
@@ -84,11 +87,14 @@ export function TimetableScreen() {
         renderPage={(i) => (
           <WeekGridView
             eventsByDay={model.eventsByDayForWeekIndex(i)}
+            ghostsByDay={editing ? model.ghostsByDayForWeekIndex(i) : []}
+            editing={editing}
             weekStart={model.weeks[i]?.firstDay ?? null}
             clashingIDs={model.clashingIDs}
             highlight={(e) => model.highlight(e)}
             dueAt={(e) => model.dueAt(e)}
             onSelect={open}
+            onEdit={askToEdit}
             now={now}
           />
         )}
@@ -113,13 +119,15 @@ export function TimetableScreen() {
             <DayPage
               day={day}
               events={day ? model.eventsByDayForWeekIndex(week).find((d) => isSameDay(d.day, day))?.events ?? [] : []}
+              ghosts={day && editing ? model.ghostsByDayForWeekIndex(week).find((d) => isSameDay(d.day, day))?.events ?? [] : []}
+              editing={editing}
               now={now}
               clashingIDs={model.clashingIDs}
               highlight={(e) => model.highlight(e)}
               dueAt={(e) => model.dueAt(e)}
-              skipped={skippedSet}
               isLoading={model.isLoading}
               onSelect={open}
+              onEdit={askToEdit}
             />
           );
         }}
@@ -136,13 +144,17 @@ export function TimetableScreen() {
           onPress={() => setShowsCalendar(!showsCalendar)}
         />
         <View style={styles.titleBlock} accessible accessibilityRole="header">
-          <Txt type="headline" numberOfLines={1}>{shell?.title ?? ''}</Txt>
+          <Txt type="headline" numberOfLines={1}>{editing ? 'Edit timetable' : shell?.title ?? ''}</Txt>
           <View style={styles.subtitle}>
             <Txt type="caption" color={theme.inkSecondary}>{model.weekLabel}</Txt>
-            {model.campusName ? <Label icon="place" text={model.campusName} type="caption" color={theme.inkSecondary} /> : null}
+            {model.campusName && !editing ? <Label icon="place" text={model.campusName} type="caption" color={theme.inkSecondary} /> : null}
           </View>
         </View>
-        <IconButton icon="more" label="More" onPress={() => setSheet('menu')} />
+        {editing ? (
+          <View style={styles.done}><BarButton title="Done" bold onPress={() => setEditing(false)} /></View>
+        ) : (
+          <IconButton icon="more" label="More" onPress={() => setSheet('menu')} />
+        )}
       </View>
 
       <View style={styles.fill}>
@@ -155,6 +167,11 @@ export function TimetableScreen() {
       <ActionSheet visible={sheet === 'menu'} onClose={() => setSheet(null)} actions={menu} />
       <AccountSheet visible={sheet === 'account'} onClose={() => setSheet(null)} />
       <NotificationsSheet visible={sheet === 'alerts'} onClose={() => setSheet(null)} />
+      <EditChoiceSheet
+        pending={pendingEdit}
+        onChoose={({ event, kind }, repeat) => model.edit(kind, repeat, event)}
+        onClose={() => setPendingEdit(null)}
+      />
     </View>
   );
 }
@@ -164,4 +181,6 @@ const styles = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.xs, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   titleBlock: { flex: 1, alignItems: 'center' },
   subtitle: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  // As wide as the button on the other side, so the title stays centred.
+  done: { minWidth: 44, alignItems: 'flex-end', paddingRight: Space.xs },
 });

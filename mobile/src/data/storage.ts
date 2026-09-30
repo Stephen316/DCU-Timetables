@@ -110,7 +110,10 @@ export const PrefKey = {
   selectedProgramme: 'selectedProgramme',
   /** `accountID:programmeIdentity` last sent to the account, so it goes up once, not per launch. */
   programmeSaved: 'programmeSaved',
+  /** The old "I won't attend" list. Read once, to carry it over into `timetableEdits`. */
   skipped: 'skippedEvents',
+  /** `TimetableEdit[]`: classes the student added to or dropped from their own timetable. */
+  timetableEdits: 'timetableEdits',
   allocationTried: 'allocationTried',
   weekShowsCalendar: 'weekShowsCalendar',
   appearance: 'appearance',

@@ -54,7 +54,7 @@ const ICONS = {
   swap: 'swap-horizontal-outline',
   idCard: 'id-card-outline',
   offline: 'cloud-offline-outline',
-  notAttending: 'person-remove-outline',
+  remove: 'remove-circle-outline',
   done: 'checkmark-done-circle',
   delete: 'trash-outline',
   edit: 'create-outline',

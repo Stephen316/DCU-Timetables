@@ -1,4 +1,4 @@
-import { Attendance, LecturerDirectory, lecturerDisplayName, lecturerInitials, makeLecturer, PagerDragState, PagerIndex, WeekdayIndex } from '../src/core/misc';
+import { LecturerDirectory, lecturerDisplayName, lecturerInitials, makeLecturer, PagerDragState, PagerIndex, WeekdayIndex } from '../src/core/misc';
 import { parseActivityCode } from '../src/core/activityCode';
 import {
   AccountRules, makeAccountProfile, parseDCUEmail, parseRole, PasswordValidation, PublicIdentifier, StudentNumber,
@@ -325,13 +325,6 @@ describe('Lecturers and attendance', () => {
     expect(lecturerInitials(makeLecturer('Ó Briain, Seán'))).toBe('SB');
     expect(lecturerInitials(makeLecturer('Cher'))).toBe('C');
     expect(lecturerInitials(makeLecturer(''))).toBe('?');
-  });
-
-  test('toggling adds then removes', () => {
-    const key = 'EEG1001|2026-09-17T09:00:00Z';
-    const once = Attendance.toggling(key, []);
-    expect(once).toEqual([key]);
-    expect(Attendance.toggling(key, once)).toEqual([]);
   });
 });
 

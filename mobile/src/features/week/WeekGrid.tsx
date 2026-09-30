@@ -10,6 +10,7 @@ import { highlightIcon, highlightTint } from '../../ui/meaning';
 import { moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
 import { usePagerDrag } from './Pager';
+import { EditKind } from './editing';
 
 const HOUR_HEIGHT = 58;
 const GUTTER = 40;
@@ -23,25 +24,32 @@ const BLOCK_INSET = 8;
  * Overlapping classes share the column width.
  */
 export function WeekGridView({
-  eventsByDay, weekStart, clashingIDs, highlight, dueAt, onSelect, now,
+  eventsByDay, ghostsByDay, editing, weekStart, clashingIDs, highlight, dueAt, onSelect, onEdit, now,
 }: {
   eventsByDay: DayEvents[];
+  /** The course's classes that aren't the student's, shown while editing. */
+  ghostsByDay: DayEvents[];
+  /** Edit timetable is on: a tap adds a ghost or removes a class instead of opening it. */
+  editing: boolean;
   weekStart: Date | null;
   clashingIDs: Set<string>;
   highlight: (event: TimetableEvent) => ClassHighlight | null;
   dueAt: (event: TimetableEvent) => Deadline[];
   onSelect: (event: TimetableEvent) => void;
+  onEdit: (event: TimetableEvent, kind: EditKind) => void;
   now: Date;
 }) {
   const theme = useTheme();
   const pagerDrag = usePagerDrag();
-  const all = eventsByDay.flatMap((d) => d.events);
+  const shownDays = editing ? [...eventsByDay, ...ghostsByDay] : eventsByDay;
+  const all = shownDays.flatMap((d) => d.events);
+  const ghostIDs = new Set(editing ? ghostsByDay.flatMap((d) => d.events.map((e) => e.id)) : []);
 
   // Mon–Fri, plus a weekend day only when something is scheduled on it.
-  const anchor = eventsByDay[0]?.day ?? weekStart;
+  const anchor = shownDays[0]?.day ?? weekStart;
   const days: Date[] = anchor
     ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))
-        .filter((d) => !isWeekend(d) || eventsByDay.some((e) => isSameDay(e.day, d)))
+        .filter((d) => !isWeekend(d) || shownDays.some((e) => isSameDay(e.day, d)))
     : [];
 
   const hours = (() => {
@@ -62,19 +70,27 @@ export function WeekGridView({
         gridHeight={gridHeight}
         now={now}
         renderColumn={(day, width) => {
-          const placed = Placement.place(eventsByDay.find((d) => isSameDay(d.day, day))?.events ?? []);
-          return placed.map((item) => (
-            <Block
-              key={item.event.id}
-              item={item}
-              dayWidth={width}
-              top={offsetY(item.event.start)}
-              highlight={highlight(item.event)}
-              due={dueAt(item.event)}
-              isClashing={clashingIDs.has(item.event.id)}
-              onPress={() => !pagerDrag.isSuppressingTaps() && onSelect(item.event)}
-            />
-          ));
+          const placed = Placement.place(shownDays.filter((d) => isSameDay(d.day, day)).flatMap((d) => d.events));
+          return placed.map((item) => {
+            const edit: EditKind | undefined = !editing ? undefined : ghostIDs.has(item.event.id) ? 'add' : 'remove';
+            return (
+              <Block
+                key={`${edit ?? ''}${item.event.id}`}
+                item={item}
+                dayWidth={width}
+                top={offsetY(item.event.start)}
+                highlight={edit === 'add' ? null : highlight(item.event)}
+                due={edit === 'add' ? [] : dueAt(item.event)}
+                isClashing={!editing && clashingIDs.has(item.event.id)}
+                edit={edit}
+                onPress={() => {
+                  if (pagerDrag.isSuppressingTaps()) return;
+                  if (edit) onEdit(item.event, edit);
+                  else onSelect(item.event);
+                }}
+              />
+            );
+          });
         }}
       />
     </View>
@@ -161,7 +177,7 @@ function NowLine({ days, hours, dayWidth, now }: { days: Date[]; hours: number[]
 }
 
 function Block({
-  item, dayWidth, top, highlight, due, isClashing, onPress,
+  item, dayWidth, top, highlight, due, isClashing, edit, onPress,
 }: {
   item: PlacedEvent;
   dayWidth: number;
@@ -169,10 +185,13 @@ function Block({
   highlight: ClassHighlight | null;
   due: Deadline[];
   isClashing: boolean;
+  /** Set while editing: what a tap does to the student's timetable. */
+  edit?: EditKind;
   onPress: () => void;
 }) {
   const theme = useTheme();
   const { event } = item;
+  const ghost = edit === 'add';
   const width = dayWidth / item.columnCount;
   const height = Math.max(26, (event.end.getTime() - event.start.getTime()) / 3_600_000 * HOUR_HEIGHT);
   const tint = moduleTint(theme, event.activity.moduleCode ?? titleOf(event));
@@ -187,6 +206,7 @@ function Block({
   const showsRoom = room !== null && lines >= 3;
   const titleLines = showsRoom ? lines - 1 : lines;
   const spoken = [
+    ghost ? 'Not in your timetable' : null,
     highlight ? highlightReason(highlight) : null,
     ...due.map((d) => `Due at this class, ${deadlineKindLabel(d.kind)}: ${displayTitle(d)}`),
     titleOf(event),
@@ -200,6 +220,7 @@ function Block({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={spoken}
+      accessibilityHint={edit === 'add' ? 'Adds it to your timetable' : edit === 'remove' ? 'Removes it from your timetable' : undefined}
       style={({ pressed }) => [
         styles.block,
         {
@@ -207,16 +228,18 @@ function Block({
           top: top + 1,
           width: Math.max(width - 2, 10),
           height: height - 2,
-          backgroundColor: withAlpha(tint, 0.18),
-          borderColor: border,
+          // A ghost is only an outline: there, but not yet the student's.
+          backgroundColor: withAlpha(tint, ghost ? 0.05 : 0.18),
+          borderColor: ghost ? withAlpha(tint, 0.7) : border,
           borderWidth: highlight ? 2 : 1.5,
+          borderStyle: ghost ? 'dashed' : 'solid',
           opacity: pressed ? 0.7 : 1,
         },
       ]}
     >
       {isOnline(event) ? <Hatch color={withAlpha(theme.tint.online, 0.28)} spacing={7} origin={{ x: item.column * width + 1, y: top + 1 }} /> : null}
-      <View style={[styles.bar, { backgroundColor: tint }]} />
-      <View style={styles.blockText}>
+      {ghost ? null : <View style={[styles.bar, { backgroundColor: tint }]} />}
+      <View style={[styles.blockText, ghost && styles.faded]}>
         <Txt type="caption2" numberOfLines={titleLines} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.bold} maxFontSizeMultiplier={1.4}>
           {compactTitleOf(event)}
         </Txt>
@@ -224,6 +247,11 @@ function Block({
           <Txt type="caption2" numberOfLines={1} color={theme.inkSecondary} maxFontSizeMultiplier={1.4}>{room}</Txt>
         ) : null}
       </View>
+      {edit ? (
+        <View style={[styles.editMark, { backgroundColor: theme.canvas }]}>
+          <Icon name={edit} size={14} color={edit === 'add' ? theme.accent : theme.tint.off} />
+        </View>
+      ) : null}
       {/* The "!" wins the corner: the border already says a class is off, but only this says something's due. */}
       {due.length > 0 ? (
         <View style={styles.corner}>
@@ -262,6 +290,9 @@ const styles = StyleSheet.create({
   bar: { width: 2.5 },
   blockText: { flex: 1, paddingHorizontal: 3, paddingVertical: 2 },
   corner: { position: 'absolute', top: 1, right: 1 },
+  faded: { opacity: 0.5 },
+  // Bottom right, clear of the title: the end of the room is the least a block would lose.
+  editMark: { position: 'absolute', bottom: 1, right: 1, borderRadius: 7 },
   now: { position: 'absolute', left: 0, right: 0, height: 0 },
   nowAcross: { position: 'absolute', top: -StyleSheet.hairlineWidth / 2, height: StyleSheet.hairlineWidth },
   nowToday: { position: 'absolute', top: -1, height: 2 },
