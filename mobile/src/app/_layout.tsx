@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createAppServices } from '../data/platform';
 import { Services } from '../data/services';
 import { PrefKey } from '../data/storage';
+import { startWebUpdateChecks } from '../data/webUpdate';
 import { ServicesContext, usePref } from '../state/hooks';
 import { RootProvider, useRoot } from '../state/root';
 import { dark, light, ThemeContext } from '../ui/theme';
@@ -22,6 +23,9 @@ export default function RootLayout() {
       .then(setServices)
       .finally(() => void SplashScreen.hideAsync());
   }, []);
+
+  // The web build on a Home Screen is never reloaded by iOS, so it updates itself.
+  useEffect(() => startWebUpdateChecks(), []);
 
   if (!services) return null;
   return (
