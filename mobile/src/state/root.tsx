@@ -5,6 +5,8 @@ import { categoryCode, TimetableCategory } from '../core/timetableEvent';
 import { AllocationRefresh, LabRotationRefresh, ModuleSplitRefresh, ModuleTitleRefresh, TimetableChangeRefresh } from '../data/courseData';
 import { ModuleAbbreviationRefresh } from '../data/abbreviations';
 import { TimetableSource } from '../data/dcuApi';
+import { takeAuthLink } from '../data/authLink';
+import { errorMessage } from '../data/rest';
 import { AuthenticatedUser, userEmail } from '../data/session';
 import { PrefKey } from '../data/storage';
 import { bundledRotation, ProfileTimetableSource, ROTATION_COURSE_KEY } from '../data/timetable';
@@ -12,7 +14,7 @@ import { WeekModel } from '../features/week/WeekModel';
 import { useAppEvent, usePref, usePrefJSON, useServices } from './hooks';
 
 /** Which screen the app is on, decided from what the device remembers. */
-export type Flow = 'signIn' | 'studentID' | 'programmePicker' | 'shell';
+export type Flow = 'signIn' | 'newPassword' | 'studentID' | 'programmePicker' | 'shell';
 
 /** The signed-in app's timetable: whose it is and where it comes from. */
 export interface ShellConfig {
@@ -31,8 +33,12 @@ interface RootState {
   user: AuthenticatedUser | null;
   shell: ShellConfig | null;
   model: WeekModel | null;
+  /** Why an email link went nowhere, for the sign-in screen to explain. */
+  notice: string | null;
   signedIn(user: AuthenticatedUser): void;
   signOut(): void;
+  /** Leaves the reset screen a recovery link opened, changed password or not. */
+  passwordResetDone(): void;
 }
 
 const RootContext = createContext<RootState | null>(null);
@@ -64,10 +70,20 @@ export function RootProvider({ children }: { children: ReactNode }) {
   const [triedRaw, setTried] = usePrefJSON<Record<string, number>>(PrefKey.allocationTried, {});
   const [programmeSaved, setProgrammeSaved] = usePref(PrefKey.programmeSaved);
   const profile = useMemo(() => decodeProfile(profileRaw), [profileRaw]);
+  /**
+   * A confirmation or password-reset link comes back to the website with the session in
+   * the URL, which the site's index page hands to the app. Read at the first render, not
+   * in an effect, because the address is cleared as it is read.
+   */
+  const [link] = useState(takeAuthLink);
+  /** Set by a password-reset link, which signs the student in before anything is chosen. */
+  const [resetting, setResetting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(link?.kind === 'failed' ? link.message : null);
 
   const signOut = useCallback(() => {
     services.signOut();
     setUser(null);
+    setResetting(false);
   }, [services]);
 
   // The session can die while the app is open; when it does the student is no longer
@@ -75,11 +91,35 @@ export function RootProvider({ children }: { children: ReactNode }) {
   useAppEvent('authSessionExpired', () => setUser(null));
   useAppEvent('signOutRequested', signOut);
 
+  /**
+   * Finishing that link — the account behind it is read back before the app trusts it — is
+   * what saves the student retyping an email and password they have just proved they own.
+   */
+  useEffect(() => {
+    if (link?.kind !== 'session' || !services.auth) return;
+    let cancelled = false;
+    void services.auth
+      .completeEmailLink(link.tokens)
+      .then((next) => {
+        if (cancelled) return;
+        services.user.save(next);
+        setUser(next);
+        if (link.type === 'recovery') setResetting(true);
+      })
+      .catch((error) => {
+        if (!cancelled) setNotice(errorMessage(error, "That link didn't work. Sign in with your email and password."));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [link, services]);
+
   const flow: Flow =
     user === null ? 'signIn'
-      : !studentID ? 'studentID'
-        : profile || programme ? 'shell'
-          : 'programmePicker';
+      : resetting ? 'newPassword'
+        : !studentID ? 'studentID'
+          : profile || programme ? 'shell'
+            : 'programmePicker';
 
   // MARK: The timetable behind the shell
 
@@ -246,9 +286,11 @@ export function RootProvider({ children }: { children: ReactNode }) {
     [services],
   );
 
+  const passwordResetDone = useCallback(() => setResetting(false), []);
+
   const value = useMemo<RootState>(
-    () => ({ flow, user, shell, model, signedIn, signOut }),
-    [flow, user, shell, model, signedIn, signOut],
+    () => ({ flow, user, shell, model, notice, signedIn, signOut, passwordResetDone }),
+    [flow, user, shell, model, notice, signedIn, signOut, passwordResetDone],
   );
   return <RootContext.Provider value={value}>{children}</RootContext.Provider>;
 }

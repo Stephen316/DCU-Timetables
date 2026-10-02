@@ -204,17 +204,17 @@ describe('Supabase requests', () => {
 
   test('the saved programme is read on its own and sent through the RPC', async () => {
     const programme = { identity: 'uuid-1', name: 'CASE1 (Computer Science-1)', categoryTypeIdentity: 'type-1' };
-    const { calls, fn } = fakeFetch((c) => ({ body: c.url.includes('rpc') ? null : [{ programme }] }));
+    const { calls, fn } = fakeFetch((c) => ({ body: c.url.includes('rpc') ? null : [{ saved_programme: programme }] }));
     const store = new SupabaseProfileStore(await signedInREST(fn));
     expect(await store.savedProgramme()).toEqual(programme);
-    expect(query(calls[0].url)).toEqual({ select: 'programme', id: 'eq.user-1' });
+    expect(query(calls[0].url)).toEqual({ select: 'saved_programme', id: 'eq.user-1' });
     await store.saveProgramme(programme);
     expect(calls[1]).toMatchObject({ url: 'https://proj.supabase.co/rest/v1/rpc/set_programme', body: { p_programme: programme } });
   });
 
   // An account from before the column existed, or one that never picked, gets the search.
   test('no saved programme, or a malformed one, reads as none', async () => {
-    for (const row of [{ programme: null }, { programme: { name: 'CASE1' } }, {}]) {
+    for (const row of [{ saved_programme: null }, { saved_programme: { name: 'CASE1' } }, {}]) {
       const { fn } = fakeFetch(() => ({ body: [row] }));
       expect(await new SupabaseProfileStore(await signedInREST(fn)).savedProgramme()).toBeNull();
     }
@@ -322,6 +322,59 @@ describe('Auth requests', () => {
     const { fn } = fakeFetch(() => ({ body: { id: 'u1', email: 'x' } }));
     const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
     expect(await service.signUp(email, 'Password1')).toEqual({ kind: 'needsEmailConfirmation' });
+  });
+
+  const tokens = { accessToken: 'link-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 };
+
+  test('an email link is finished by reading back the account it signed in', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: { id: 'u1', email: 'aoife.murphy5@mail.dcu.ie' } }));
+    const session = new SupabaseSession(memorySecrets(), () => undefined, fn);
+    const user = await new SupabaseAuthService(config, session, fn).completeEmailLink(tokens);
+    // The fragment carries neither the id nor the address, and the call is also what proves
+    // the tokens in a URL anyone could paste are real.
+    expect(calls[0]).toMatchObject({ url: 'https://proj.supabase.co/auth/v1/user', method: 'GET' });
+    expect(calls[0].headers.Authorization).toBe('Bearer link-token');
+    expect(user).toEqual({ id: 'u1', address: 'aoife.murphy5@mail.dcu.ie' });
+    expect(session.userID).toBe('u1');
+  });
+
+  test('tokens the server will not vouch for sign nobody in', async () => {
+    const { fn } = fakeFetch(() => ({ status: 401, body: { msg: 'invalid JWT: unable to parse or verify signature' } }));
+    const session = new SupabaseSession(memorySecrets(), () => undefined, fn);
+    const service = new SupabaseAuthService(config, session, fn);
+    // Supabase's wording is for a developer; the student is told what to do instead.
+    await expect(service.completeEmailLink(tokens)).rejects.toThrow("That link didn't work.");
+    expect(session.userID).toBeNull();
+  });
+
+  test('a link that could not be sent at all says so, because that one is fixable', async () => {
+    const fn = (async () => { throw new TypeError('Network request failed'); }) as unknown as typeof fetch;
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.completeEmailLink(tokens)).rejects.toThrow("Couldn't reach the server.");
+  });
+
+  test('the new password is set as the student the reset link signed in', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: { id: 'u1' } }));
+    const session = new SupabaseSession(memorySecrets(), () => undefined, fn);
+    await session.save({ accessToken: 'recovery-token', refreshToken: 'r', userID: 'u1', expiresAt: Date.now() + 3_600_000 });
+    await new SupabaseAuthService(config, session, fn).setPassword('Password2');
+    expect(calls[0]).toMatchObject({ url: 'https://proj.supabase.co/auth/v1/user', method: 'PUT', body: { password: 'Password2' } });
+    expect(calls[0].headers.Authorization).toBe('Bearer recovery-token');
+  });
+
+  test('a reset with no session left says the link expired, not that something went wrong', async () => {
+    const { calls, fn } = fakeFetch();
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.setPassword('Password2')).rejects.toThrow('Your reset link has expired.');
+    expect(calls).toHaveLength(0);
+  });
+
+  test('reusing the old password is explained rather than passed through', async () => {
+    const { fn } = fakeFetch(() => ({ status: 422, body: { error_code: 'same_password', msg: 'New password should be different from the old password.' } }));
+    const session = new SupabaseSession(memorySecrets(), () => undefined, fn);
+    await session.save({ accessToken: 'recovery-token', refreshToken: 'r', userID: 'u1', expiresAt: Date.now() + 3_600_000 });
+    const service = new SupabaseAuthService(config, session, fn);
+    await expect(service.setPassword('Password1')).rejects.toThrow('That is the password you already have.');
   });
 });
 
