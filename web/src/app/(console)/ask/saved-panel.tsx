@@ -6,9 +6,9 @@ import { moduleFor, programmeFor } from "@/lib/proposals/courses";
 import { Spinner } from "../spinner";
 
 /// What applies to the selected course and module, under the chat: the course's rotation if
-/// it has sessions for the module, the module's splits, and the course's class list. Nothing
-/// until a module is picked — tables for anything else are offered under "Reuse a saved
-/// table" instead. Each entry opens to show what was saved — the thing a new proposal
+/// it has sessions for the module, the module's splits, and the course's class list if the
+/// module is one of the rotation's. Nothing until a module is picked — tables for anything
+/// else are offered under "Reuse a saved table" instead. Each entry opens to show what was saved — the thing a new proposal
 /// would replace.
 export function SavedPanel({ programme, programmeName: name, module, refresh }: {
   programme: string; programmeName?: string; module: string; refresh: number;

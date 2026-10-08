@@ -58,6 +58,15 @@ export async function listSaved(programme: string, module: string):
   const failed = rot.error ?? splits.error ?? roster.error ?? title.error;
   if (failed) return { ok: false, error: failed.message };
 
+  // A class list places students in the rotation — its group picks their sessions, its
+  // workshop and drawing columns their rooms — so it applies to the rotation's modules and
+  // is listed under those alone. Listed under every module, it was deleted from one it
+  // didn't belong to, taking every student's group with it (8 Oct 2026). With no rotation
+  // saved the phone uses its bundled one, which the console can't see, so it shows everywhere.
+  const rotationModules = new Set(
+    ((rot.data?.lab_rotation_sessions ?? []) as { module: string | null }[]).map((s) => s.module),
+  );
+
   let rotation: SavedView["rotation"] = null;
   if (rot.data) {
     const all: SavedSession[] = (rot.data.lab_rotation_sessions ?? []).map((s: Record<string, unknown>) => ({
@@ -75,7 +84,7 @@ export async function listSaved(programme: string, module: string):
   }
 
   let classList: SavedView["classList"] = null;
-  if (roster.data) {
+  if (roster.data && (rotationModules.size === 0 || rotationModules.has(module))) {
     const { data: rows, error } = await db.from("course_allocations")
       .select("grp, subgroup, day, workshop, drawing").eq("course_key", programme);
     if (error) return { ok: false, error: error.message };
