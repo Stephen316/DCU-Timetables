@@ -4,6 +4,7 @@ An iPhone app to help DCU students keep track of all their modules, classes, and
 deadlines — built on DCU's live public timetable API. React Native with Expo, in
 [`mobile/`](mobile); the home-screen widgets are SwiftUI, in
 [`mobile/targets/widgets`](mobile/targets/widgets). The admin console is in [`web/`](web).
+The Mac app, a native window around the web build, is in [`mac/`](mac).
 
 ## What it does
 

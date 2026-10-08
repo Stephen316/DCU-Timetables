@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform as RNPlatform } from 'react-native';
 import { ExpoAlertScheduler } from './notifications';
 import { Handovers, HANDOVER_PREFS, WEB_SESSION_KEY } from './handover';
+import { MacShell } from './macShell';
 import { createPreviewServices } from './preview';
 import { createServices, Services } from './services';
 import { SecretStore } from './session';
@@ -92,7 +93,8 @@ async function createWebServices(kv: AsyncKV): Promise<Services> {
       }
     },
   };
-  services = await createServices({ kv, secrets, env: env() });
+  // In the Mac app, class alerts go to the Mac; in a browser there's nothing to fire them.
+  services = await createServices({ kv, secrets, env: env(), alerts: MacShell.alerts() ?? undefined });
   for (const key of HANDOVER_PREFS) services.prefs.subscribe(key, publish);
   publish();
   return services;

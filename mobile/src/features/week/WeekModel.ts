@@ -7,7 +7,7 @@ import { ModuleSplit, ModuleSplits, surnameInitial } from '../../core/splits';
 import { campusName, parsedLocations } from '../../core/roomLocation';
 import { ClashDetector, DefaultDay } from '../../core/schedule';
 import { addDays, startOfDay } from '../../core/time';
-import { ModuleTitle, ModuleTitles, TeachingWeek, TimetableCategory, TimetableEvent } from '../../core/timetableEvent';
+import { ModuleTitle, ModuleTitles, TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar } from '../../core/timetableEvent';
 import { ModuleAbbreviation, ModuleAbbreviations } from '../../core/abbreviations';
 import { EditRepeat, TimetableEdit, TimetableEdits } from '../../core/timetableEdits';
 import { errorMessage } from '../../data/rest';
@@ -270,6 +270,15 @@ export class WeekModel extends Observable {
   stepIndex(delta: number): void {
     if (this.weeks.length === 0) return;
     this.setWeekIndex(PagerIndex.step(this.weekIndex, delta, this.weeks.length));
+  }
+
+  /** The week grid's Today: this week, or next from Friday evening, as the app opens on. */
+  showCurrentWeek(now: Date = new Date()): void {
+    const current = new WeekCalendar(this.weeks, []).current(now);
+    const index = current ? this.weeks.indexOf(current) : -1;
+    if (index < 0) return;
+    this.setWeekIndex(index);
+    this.resetToDefaultDay(now);
   }
 
   setWeekIndex(index: number): void {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AppState, Linking, StyleSheet, View } from 'react-native';
 import { AlertOffset, AlertSettings, ClassAlerts } from '../../core/classAlerts';
 import { AlertPermission } from '../../data/alerts';
+import { MacShell } from '../../data/macShell';
 import { PrefKey } from '../../data/storage';
 import { usePrefJSON, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
@@ -43,8 +44,12 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
             <ActionRow title="Turn On Notifications" icon="bell" onPress={() => void allow()} />
           </Section>
         ) : permission === 'denied' ? (
-          <Section footer="Notifications for DCU Timetable are turned off in Settings, so none of these alerts will appear.">
-            <ActionRow title="Open Settings" icon="bell" onPress={() => void Linking.openSettings()} />
+          <Section footer={`Notifications for DCU Timetable are turned off in ${MacShell.isPresent() ? 'System Settings' : 'Settings'}, so none of these alerts will appear.`}>
+            <ActionRow
+              title={MacShell.isPresent() ? 'Open System Settings' : 'Open Settings'}
+              icon="bell"
+              onPress={() => (MacShell.isPresent() ? MacShell.openNotificationSettings() : void Linking.openSettings())}
+            />
           </Section>
         ) : null}
 

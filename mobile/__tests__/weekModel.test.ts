@@ -108,6 +108,23 @@ describe('Week model', () => {
     expect(m.weekIndex).toBe(2);
   });
 
+  test("the Mac app's Today goes back to this week from anywhere in the year", async () => {
+    jest.useFakeTimers({ now: at(2026, 9, 23, 9), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
+    const { model } = await setup([]);
+    const m = model();
+    await m.start();
+    await settle();
+    m.stepIndex(1);
+    expect(m.weekIndex).toBe(2);
+    m.showCurrentWeek();
+    expect(m.weekIndex).toBe(1);
+    m.stepIndex(-1);
+    m.showCurrentWeek(at(2026, 9, 25, 19));
+    // Friday evening: the week the app would open on, next week's Monday.
+    expect(m.weekIndex).toBe(2);
+    expect(m.dayIndex).toBe(0);
+  });
+
   test('swiping the day view past Friday lands on next Monday, and back from Monday on last Friday', async () => {
     // Wednesday, so a week change that fell back to the default day would land there.
     jest.useFakeTimers({ now: at(2026, 9, 23, 9), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });

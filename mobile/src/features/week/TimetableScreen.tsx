@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addDays, isSameDay, startOfDay } from '../../core/time';
 import { WeekdayIndex } from '../../core/misc';
 import { TimetableEvent } from '../../core/timetableEvent';
+import { listenForMacAlertTaps, MacShell } from '../../data/macShell';
 import { listenForAlertTaps } from '../../data/notifications';
 import { PrefKey } from '../../data/storage';
 import { useAppEvent, useModel, useNow, usePrefBool } from '../../state/hooks';
@@ -15,7 +16,7 @@ import { AccountSheet } from '../account/AccountSheet';
 import { NotificationsSheet } from '../alerts/NotificationsSheet';
 import { DayPage } from './DayPage';
 import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
-import { Pager } from './Pager';
+import { Pager, PagerControl } from './Pager';
 import { WeekGridView } from './WeekGrid';
 
 /** The timetable tab: the day on the rail, or the week as a grid. */
@@ -25,7 +26,11 @@ export function TimetableScreen() {
   const { shell, signOut } = useRoot();
   const model = useModel(useWeekModel());
   const now = useNow();
-  const [showsCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
+  const [prefersCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
+  // The Mac app is the week and the deadlines: the day list is a phone's view.
+  const [onMac] = useState(() => MacShell.isPresent());
+  const showsCalendar = onMac || prefersCalendar;
+  const weekPager = useRef<PagerControl>(null);
   const [sheet, setSheet] = useState<'menu' | 'account' | 'alerts' | null>(null);
   /** Edit timetable: the course's other classes show as ghosts, and a tap adds or removes. */
   const [editing, setEditing] = useState(false);
@@ -50,6 +55,7 @@ export function TimetableScreen() {
 
   // A tapped class alert opens that class, as a Calendar alert opens its event.
   useEffect(() => listenForAlertTaps((id) => router.push({ pathname: '/class/[id]', params: { id } })), []);
+  useEffect(() => listenForMacAlertTaps((id) => router.push({ pathname: '/class/[id]', params: { id } })), []);
 
   useAppEvent('timetableChangesChanged', () => model.reloadChanges());
   useAppEvent('moduleSplitsChanged', () => model.reloadSplits());
@@ -84,6 +90,7 @@ export function TimetableScreen() {
         count={Math.max(model.weeks.length, 1)}
         index={model.weekIndex}
         onIndexChange={(i) => model.setWeekIndex(i)}
+        controlRef={weekPager}
         renderPage={(i) => (
           <WeekGridView
             eventsByDay={model.eventsByDayForWeekIndex(i)}
@@ -138,11 +145,18 @@ export function TimetableScreen() {
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       <View style={[styles.bar, { paddingTop: insets.top, borderBottomColor: theme.separator, backgroundColor: theme.canvas }]}>
-        <IconButton
-          icon={showsCalendar ? 'list' : 'calendar'}
-          label={showsCalendar ? 'Show list' : 'Show weekly calendar'}
-          onPress={() => setShowsCalendar(!showsCalendar)}
-        />
+        {onMac ? (
+          <View style={styles.side}>
+            <IconButton icon="back" label="Previous week" onPress={() => weekPager.current?.turn(-1)} />
+            <IconButton icon="forward" label="Next week" onPress={() => weekPager.current?.turn(1)} />
+          </View>
+        ) : (
+          <IconButton
+            icon={showsCalendar ? 'list' : 'calendar'}
+            label={showsCalendar ? 'Show list' : 'Show weekly calendar'}
+            onPress={() => setShowsCalendar(!showsCalendar)}
+          />
+        )}
         <View style={styles.titleBlock} accessible accessibilityRole="header">
           <Txt type="headline" numberOfLines={1}>{editing ? 'Edit timetable' : shell?.title ?? ''}</Txt>
           <View style={styles.subtitle}>
@@ -151,7 +165,12 @@ export function TimetableScreen() {
           </View>
         </View>
         {editing ? (
-          <View style={styles.done}><BarButton title="Done" bold onPress={() => setEditing(false)} /></View>
+          <View style={[styles.done, onMac && styles.side, onMac && styles.sideRight]}><BarButton title="Done" bold onPress={() => setEditing(false)} /></View>
+        ) : onMac ? (
+          <View style={[styles.side, styles.sideRight]}>
+            <BarButton title="Today" onPress={() => model.showCurrentWeek()} />
+            <IconButton icon="more" label="More" onPress={() => setSheet('menu')} />
+          </View>
         ) : (
           <IconButton icon="more" label="More" onPress={() => setSheet('menu')} />
         )}
@@ -183,4 +202,7 @@ const styles = StyleSheet.create({
   subtitle: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   // As wide as the button on the other side, so the title stays centred.
   done: { minWidth: 44, alignItems: 'flex-end', paddingRight: Space.xs },
+  // The Mac's pairs: the same width each side, for the same reason.
+  side: { flexDirection: 'row', alignItems: 'center', minWidth: 120 },
+  sideRight: { justifyContent: 'flex-end' },
 });
