@@ -17,7 +17,8 @@ import { checkChangeProvenance, describeChange, fromRow, type TimetableChange } 
 import { saveChange } from "../timetable/actions";
 import { review } from "@/lib/changes/review";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
-import { PROGRAMME_CODE, checkScope, moduleFor, programmeFor, type Scope } from "@/lib/proposals/courses";
+import { PROGRAMME_CODE, programmeFor, type Programme, type Scope } from "@/lib/proposals/courses";
+import { phoneCohortProblem, resolveCourse, scopeCheck } from "@/lib/proposals/catalogue";
 import type { Proposal } from "@/lib/proposals/types";
 import type { Finding } from "@/lib/extraction/rotation";
 import { validateRotation } from "@/lib/extraction/rotation";
@@ -91,8 +92,8 @@ export async function ask(form: FormData): Promise<AskResult> {
 
     // Stating the selection removes the clarifying round-trip — the first reply to a
     // well-formed split used to be "which module is this for?".
-    const programme = programmeFor(scope.programme);
-    const title = moduleFor(scope.module)?.title;
+    const programme = await courseOf(scope);
+    const title = programme?.modules.find((m) => m.code === scope.module)?.title;
     const scopeLine = programme && scope.module
       ? `The administrator has selected ${programme.name} (${programme.key}), module ` +
         `${scope.module}${title ? ` (${title})` : ""}. This request is for that module. Do ` +
@@ -137,7 +138,7 @@ export async function ask(form: FormData): Promise<AskResult> {
         proposal: {
           kind: "split", scope, rule, source,
           problems: [
-            ...checkScope(scope, { module: a.moduleKey }),
+            ...(await scopeCheck(scope, { module: a.moduleKey })),
             ...checkRule(rule),
             ...checkProvenance(rule, source),
           ],
@@ -161,12 +162,18 @@ export async function ask(form: FormData): Promise<AskResult> {
   }
 }
 
+/// The selected course with its modules, or undefined when it can't be had — DCU down, or no
+/// such course. Only ever used for wording; every check that blocks saving resolves it again.
+async function courseOf(scope: Scope): Promise<Programme | undefined> {
+  return resolveCourse(scope.programme).catch(() => undefined);
+}
+
 /// What the model is shown about the selected module so it can turn "week 5" or "every
 /// Tuesday" into dates and find the class being removed: today, the teaching weeks, DCU's
 /// classes for the module, and what is saved. None of it is personal data — the class list
 /// is deliberately not here.
 async function changeContext(scope: Scope): Promise<string> {
-  if (!programmeFor(scope.programme) || !scope.module) return "";
+  if (!scope.programme || !scope.module) return "";
   const today = dublin(new Date().toISOString());
   const lines = [`Context for ${scope.programme}, module ${scope.module}. Today is ${today.day} ${today.date}.`];
 
@@ -205,31 +212,39 @@ async function changeContext(scope: Scope): Promise<string> {
   }
   const heading = await savedHeading(scope.module);
   lines.push("", heading
-    ? `Heading shown in the app for ${scope.module}: "${heading.title}"${heading.shortTitle ? `, and "${heading.shortTitle}" on the week grid` : ""}.`
+    ? `Heading shown in the app for ${scope.module}: "${heading.title}".`
     : `${scope.module} shows under DCU's own name in the app; no heading has been set.`);
   return lines.join("\n");
 }
 
-async function savedHeading(moduleKey: string): Promise<{ title: string; shortTitle: string | null } | null> {
+async function savedHeading(moduleKey: string): Promise<{ title: string } | null> {
   const db = await supabaseServer();
-  const { data } = await db.from("module_titles").select("title, short_title").eq("module_key", moduleKey).maybeSingle();
-  return data ? { title: data.title, shortTitle: data.short_title } : null;
+  const { data } = await db.from("module_titles").select("title").eq("module_key", moduleKey).maybeSingle();
+  return data ? { title: data.title } : null;
+}
+
+/// The week grid's name from the Abbreviations page, which a heading leaves in place.
+async function savedAbbreviation(moduleKey: string): Promise<string | null> {
+  const db = await supabaseServer();
+  const { data } = await db.from("module_abbreviations").select("abbreviation").eq("module_key", moduleKey).maybeSingle();
+  return data?.abbreviation ?? null;
 }
 
 /// The selection wins, as for a split: what the model read as the module is compared in
 /// checkScope. Only the words the administrator used can be saved (checkHeadingProvenance).
 async function headingProposal(scope: Scope, a: HeadingArgs, source: string): Promise<Proposal> {
-  const heading: Heading = {
-    moduleKey: scope.module,
-    title: a.title?.trim() || null,
-    shortTitle: a.title?.trim() ? a.shortTitle?.trim() || null : null,
-  };
-  const saved = scope.module ? await savedHeading(scope.module).catch(() => null) : null;
+  const heading: Heading = { moduleKey: scope.module, title: a.title?.trim() || null };
+  const [saved, abbreviation] = scope.module
+    ? await Promise.all([savedHeading(scope.module).catch(() => null), savedAbbreviation(scope.module).catch(() => null)])
+    : [null, null];
   return {
     kind: "heading", scope, heading, source,
-    current: { dcu: moduleFor(scope.module)?.title ?? null, saved: saved?.title ?? null },
+    current: {
+      dcu: (await courseOf(scope))?.modules.find((m) => m.code === scope.module)?.title ?? null,
+      saved: saved?.title ?? null, abbreviation,
+    },
     findings: [
-      ...checkScope(scope, { module: a.module }),
+      ...(await scopeCheck(scope, { module: a.module })),
       ...checkHeading(heading),
       ...checkHeadingProvenance(heading, source),
       ...(heading.title === null && !saved
@@ -263,7 +278,7 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
       ...(change.group && PROGRAMME_CODE.test(change.group)
         ? [{ level: "error" as const, message: `A change for ${change.group} alone is made on the Timetable page, not here.` }]
         : []),
-      ...checkScope(scope, { module: a.module }),
+      ...(await scopeCheck(scope, { module: a.module })),
       ...(await review(change)),
       ...checkChangeProvenance(change, source),
     ],
@@ -280,6 +295,11 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
 ///   rotation    -> the transcription the harness measured
 ///   -> a proposal on the panel: the review screen (n34). Accept saves it.
 async function readUpload(file: File, scope: Scope, started: number, note: string): Promise<AskResult> {
+  // An upload is a class list or a rotation, and neither reaches phones outside the fixed
+  // courses. Said before the file is read, not after paying to read it.
+  if (scope.programme && !programmeFor(scope.programme)) {
+    return { ok: false, error: phoneCohortProblem(scope, "class list")[0].message.replace("A class list", "A class list or lab rotation") };
+  }
   const input = normalise(file.name, file.type, Buffer.from(await file.arrayBuffer()));
   if (input.kind === "unsupported") return { ok: false, error: input.error };
 
@@ -380,7 +400,7 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
         courseKey: scope.programme,
         title: run.title,
         sessions: run.sessions,
-        findings: [...checkScope(scope), ...checks],
+        findings: [...(await scopeCheck(scope)), ...phoneCohortProblem(scope, "lab rotation"), ...checks],
         log: [],
       },
     };
@@ -441,7 +461,7 @@ async function correctDocument(doc: DocProposal, message: string, history: Turn[
     ok: true, reply: out.reply, meta: meta(out.usage),
     proposal: {
       ...doc, sessions: applied.sessions, log,
-      findings: [...checkScope(doc.scope), ...log, ...validateRotation(applied.sessions)],
+      findings: [...(await scopeCheck(doc.scope)), ...phoneCohortProblem(doc.scope, "lab rotation"), ...log, ...validateRotation(applied.sessions)],
     },
   };
 }
@@ -499,8 +519,8 @@ function rosterProposal(
 
 /// A class list belongs to a programme, not a module — the module selection plays no part.
 function rosterScope(scope: Scope) {
-  return programmeFor(scope.programme)
-    ? []
+  return scope.programme
+    ? phoneCohortProblem(scope, "class list")
     : [{ level: "error" as const, message: "Pick the programme this class list is for." }];
 }
 
@@ -526,7 +546,7 @@ export async function accept(proposal: Proposal) {
 
   if (proposal.kind === "split") {
     const problems = [
-      ...checkScope(proposal.scope),
+      ...(await scopeCheck(proposal.scope)),
       ...checkRule(proposal.rule),
       ...checkProvenance(proposal.rule, proposal.source ?? ""),
     ];
@@ -543,7 +563,7 @@ export async function accept(proposal: Proposal) {
   }
 
   if (proposal.kind === "change") {
-    const blocker = [...checkScope(proposal.scope), ...checkChangeProvenance(proposal.change, proposal.source ?? "")]
+    const blocker = [...(await scopeCheck(proposal.scope)), ...checkChangeProvenance(proposal.change, proposal.source ?? "")]
       .find((f) => f.level === "error");
     if (blocker) return { ok: false, error: blocker.message };
     // Re-checks the change, including against DCU's timetable, before it saves.
@@ -552,13 +572,13 @@ export async function accept(proposal: Proposal) {
 
   if (proposal.kind === "heading") {
     const h = proposal.heading;
-    const blocker = [...checkScope(proposal.scope), ...checkHeading(h), ...checkHeadingProvenance(h, proposal.source ?? "")]
+    const blocker = [...(await scopeCheck(proposal.scope)), ...checkHeading(h), ...checkHeadingProvenance(h, proposal.source ?? "")]
       .find((f) => f.level === "error");
     if (blocker) return { ok: false, error: blocker.message };
     // Definer functions, as the other saves: the admin check and the audit row in one place.
     const { error } = h.title === null
       ? await db.rpc("delete_module_title", { p_module_key: h.moduleKey })
-      : await db.rpc("save_module_title", { p_module_key: h.moduleKey, p_title: h.title, p_short_title: h.shortTitle });
+      : await db.rpc("save_module_title", { p_module_key: h.moduleKey, p_title: h.title });
     return error ? { ok: false, error: error.message } : { ok: true };
   }
 
@@ -579,7 +599,7 @@ export async function accept(proposal: Proposal) {
   // A session with no groups reaches no one — a blank cell the reader emitted, or one it
   // could not read. The review listed them in a single warning; they are not written.
   const sessions = proposal.sessions.filter((s) => s.groups?.length);
-  const blocker = [...checkScope(proposal.scope), ...validateRotation(sessions)]
+  const blocker = [...(await scopeCheck(proposal.scope)), ...phoneCohortProblem(proposal.scope, "lab rotation"), ...validateRotation(sessions)]
     .find((f) => f.level === "error");
   if (blocker) return { ok: false, error: blocker.message };
   if (!proposal.courseKey) return { ok: false, error: "No course — ask it which course this is for." };

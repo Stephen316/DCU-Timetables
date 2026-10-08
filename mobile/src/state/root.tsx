@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { decodeProfile, StudentProfile, TimetableAudience } from '../core/profile';
+import { cohortForCourseKey, decodeProfile, StudentProfile, TimetableAudience } from '../core/profile';
 import { categoryCode, TimetableCategory } from '../core/timetableEvent';
 import { AllocationRefresh, LabRotationRefresh, ModuleSplitRefresh, ModuleTitleRefresh, TimetableChangeRefresh } from '../data/courseData';
 import { ModuleAbbreviationRefresh } from '../data/abbreviations';
@@ -219,7 +219,8 @@ export function RootProvider({ children }: { children: ReactNode }) {
 
       if (!savedProfile) {
         // No list for this programme's course means nothing to look up: it stays as picked.
-        if (!course) return;
+        // Class lists are Engineering's only, so another course has nothing to ask about.
+        if (!course || !cohortForCourseKey(course)) return;
         const outcome = await AllocationRefresh.adopt(userEmail(current)?.displayName ?? '', tried, store, course);
         if (outcome.kind === 'adopted') {
           // The picked programme is kept underneath, so a profile later dropped from the

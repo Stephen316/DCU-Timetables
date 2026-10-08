@@ -10,7 +10,9 @@ import { Spinner } from "../spinner";
 /// until a module is picked — tables for anything else are offered under "Reuse a saved
 /// table" instead. Each entry opens to show what was saved — the thing a new proposal
 /// would replace.
-export function SavedPanel({ programme, module, refresh }: { programme: string; module: string; refresh: number }) {
+export function SavedPanel({ programme, programmeName: name, module, refresh }: {
+  programme: string; programmeName?: string; module: string; refresh: number;
+}) {
   const [view, setView] = useState<SavedView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,7 +51,7 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
     }
   }
 
-  const programmeName = programmeFor(programme)?.name ?? programme;
+  const programmeName = name ?? programmeFor(programme)?.name ?? programme;
   const scope = module ? `${programmeName} · ${module}${moduleFor(module) ? ` · ${moduleFor(module)!.title}` : ""}` : programmeName;
   // A rotation with no sessions for the module does not apply to it.
   const rotation = view?.rotation?.sessions.length ? view.rotation : null;
@@ -102,13 +104,14 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
       {module && view?.heading && (
         <Entry
           title={`${module} · heading`}
-          meta={`${view.heading.title}${view.heading.shortTitle ? ` · “${view.heading.shortTitle}” on the week grid` : ""} · ${when(view.heading.savedAt)}`}
+          meta={`${view.heading.title} · ${when(view.heading.savedAt)}`}
           deleting={deleting === "heading"}
           onDelete={() => remove("heading", { kind: "heading", module },
             `Delete the ${module} heading? Students see DCU's name for it again when the app next opens.`)}
         >
           <p className="dim" style={{ fontSize: 12 }}>
-            Shown in place of DCU&rsquo;s name on the day view, the week grid, the widget and the deadlines list.
+            Shown in place of DCU&rsquo;s name on the day view, the widget and the deadlines list, and on the week grid
+            where the module has no abbreviation.
           </p>
         </Entry>
       )}

@@ -162,6 +162,64 @@ async function fetchClasses(moduleCodes: string[], weekNumbers: number[]): Promi
 
 const PROGRAMME_TYPE = "241e4d36-60e0-49f8-b27e-99416745d98d";
 
+/// One course code in DCU's programme list, with every variant DCU files under it: "AC3" is
+/// two programmes there (AC3 and its AT stream), "BED2" is thirty-six. The app knows a
+/// student's programme by its code alone, so a course here is a code too.
+export type DcuProgramme = { code: string; names: string[]; identities: string[] };
+
+/// Every programme on DCU's timetable, grouped by code — about 490 codes from 940 entries,
+/// measured 8 Oct 2026. Cached for a day: the list changes once a year.
+export async function programmeCatalogue(): Promise<DcuProgramme[]> {
+  return cachedCatalogue();
+}
+
+const cachedCatalogue = unstable_cache(fetchCatalogue, ["dcu-programme-catalogue"], { revalidate: 86_400 });
+
+type Page = { Results?: { Identity: string; Name: string }[]; TotalPages?: number };
+
+/// DCU serves the list 20 at a time, whatever page size is asked for. Asked for all 47 pages
+/// at once it timed out on 6 of them (8 Oct 2026), so pages go four at a time, each tried
+/// three times. A list with a page missing is never returned: a course absent from the
+/// picker looks like a course that doesn't exist.
+async function fetchCatalogue(): Promise<DcuProgramme[]> {
+  const page = async (n: number): Promise<Page> => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const res = await call<Page | string>(
+          `Public/CategoryTypes/${PROGRAMME_TYPE}/Categories/FilterWithCache/${INSTITUTION}`,
+          { body: [], query: { query: "", itemsPerPage: "20", pageNumber: String(n), returnOccurrences: "false" } },
+        );
+        // A timeout comes back as 200 with a string body, not as an error status.
+        if (typeof res === "object" && Array.isArray(res.Results)) return res;
+        throw new Error(`DCU's timetable didn't return page ${n} of its programmes.`);
+      } catch (e) {
+        if (attempt >= 3) throw e;
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+      }
+    }
+  };
+
+  const first = await page(1);
+  const total = first.TotalPages ?? 1;
+  const results = [...(first.Results ?? [])];
+  const rest = Array.from({ length: total - 1 }, (_, i) => i + 2);
+  for (let i = 0; i < rest.length; i += 4) {
+    for (const p of await Promise.all(rest.slice(i, i + 4).map(page))) results.push(...(p.Results ?? []));
+  }
+
+  const byCode = new Map<string, DcuProgramme>();
+  for (const r of results) {
+    const code = r.Name.trim().split(/\s+/)[0].toUpperCase();
+    const entry = byCode.get(code) ?? { code, names: [], identities: [] };
+    if (!entry.identities.includes(r.Identity)) {
+      entry.identities.push(r.Identity);
+      entry.names.push(r.Name.trim());
+    }
+    byCode.set(code, entry);
+  }
+  return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code));
+}
+
 /// Every module on a programme's timetable for the year, with its name exactly as DCU gives
 /// it, codes and all. These are the modules a student of the programme sees on the app's
 /// week grid. That includes some a course's own list lacks: EEG1's first-year chemistry
@@ -176,13 +234,8 @@ export async function programmeModules(programmeCode: string): Promise<{ code: s
 const cachedProgrammeModules = unstable_cache(fetchProgrammeModules, ["dcu-programme-modules"], { revalidate: 3600 });
 
 async function fetchProgrammeModules(programmeCode: string): Promise<{ code: string; name: string }[]> {
-  const found = await call<{ Results: { Identity: string; Name: string }[] }>(
-    `Public/CategoryTypes/${PROGRAMME_TYPE}/Categories/FilterWithCache/${INSTITUTION}`,
-    { body: [], query: { query: programmeCode, itemsPerPage: "50", pageNumber: "1", returnOccurrences: "false" } },
-  );
-  // "ECE1 (Engineering-1)" is ECE1's; "MECE1" is another programme the search also returns.
-  const programme = found.Results.find((r) => r.Name.trim().split(/\s+/)[0].toUpperCase() === programmeCode);
-  if (!programme) throw new Error(`DCU's timetable has no programme ${programmeCode}.`);
+  const identities = await identitiesFor(programmeCode);
+  if (!identities.length) throw new Error(`DCU's timetable has no programme ${programmeCode}.`);
 
   const vo = await viewOptions();
   if (!vo.Weeks.length) return [];
@@ -198,7 +251,7 @@ async function fetchProgrammeModules(programmeCode: string): Promise<{ code: str
           TimePeriods: [{ Description: "All Day", StartTime: "00:00", EndTime: "23:59", IsDefault: true }],
           DatePeriods: [{ Description: "Range", StartDateTime: vo.Weeks[0].FirstDayInWeek, EndDateTime: end, IsDefault: true, Type: null }],
         },
-        CategoryTypesWithIdentities: [{ CategoryTypeIdentity: PROGRAMME_TYPE, CategoryIdentities: [programme.Identity] }],
+        CategoryTypesWithIdentities: [{ CategoryTypeIdentity: PROGRAMME_TYPE, CategoryIdentities: identities }],
         FetchBookings: false,
         FetchPersonalEvents: false,
         PersonalIdentities: [],
@@ -215,6 +268,21 @@ async function fetchProgrammeModules(programmeCode: string): Promise<{ code: str
     if (MODULE_KEY.test(code) && name && !names.has(code)) names.set(code, name);
   }
   return [...names].map(([code, name]) => ({ code, name })).sort((a, b) => a.code.localeCompare(b.code));
+}
+
+/// Every variant of a code — a student on any of BED2's thirty-six sees the course's classes.
+/// From the catalogue when it can be had; otherwise one search, which returns at most 20.
+async function identitiesFor(programmeCode: string): Promise<string[]> {
+  try {
+    return (await programmeCatalogue()).find((p) => p.code === programmeCode)?.identities ?? [];
+  } catch {
+    const found = await call<{ Results: { Identity: string; Name: string }[] }>(
+      `Public/CategoryTypes/${PROGRAMME_TYPE}/Categories/FilterWithCache/${INSTITUTION}`,
+      { body: [], query: { query: programmeCode, itemsPerPage: "50", pageNumber: "1", returnOccurrences: "false" } },
+    );
+    // "ECE1 (Engineering-1)" is ECE1's; "MECE1" is another programme the search also returns.
+    return found.Results.filter((r) => r.Name.trim().split(/\s+/)[0].toUpperCase() === programmeCode).map((r) => r.Identity);
+  }
 }
 
 type EventDTO = {

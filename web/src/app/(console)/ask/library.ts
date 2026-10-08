@@ -2,7 +2,8 @@
 
 import { consoleOpen } from "@/lib/auth/gate";
 import { supabaseServer } from "@/lib/supabase/server";
-import { PROGRAMMES, checkScope, moduleFor, type Scope } from "@/lib/proposals/courses";
+import { PROGRAMMES, type Scope } from "@/lib/proposals/courses";
+import { phoneCohortProblem, resolveCourse, scopeCheck } from "@/lib/proposals/catalogue";
 import { checkProvenance, checkRule, splitSource, type SplitRule } from "@/lib/proposals/rules";
 import { validateRotation, type RotationSession } from "@/lib/extraction/rotation";
 import type { Proposal } from "@/lib/proposals/types";
@@ -128,7 +129,7 @@ export async function reuseRotation(from: string, scope: Scope): Promise<Reused>
       `${scope.programme || "the selected programme"} as a new version.`,
     proposal: {
       kind: "rotation", scope, courseKey: scope.programme, title: data.title, sessions, log,
-      findings: [...checkScope(scope), ...log, ...validateRotation(sessions)],
+      findings: [...(await scopeCheck(scope)), ...phoneCohortProblem(scope, "lab rotation"), ...log, ...validateRotation(sessions)],
     },
   };
 }
@@ -162,7 +163,7 @@ export async function reuseSplit(from: { module: string; activity: string }, sco
   const source = splitSource(from.module, from.activity, rule.ranges);
 
   const same = from.module === scope.module;
-  const title = moduleFor(scope.module)?.title;
+  const title = (await resolveCourse(scope.programme).catch(() => undefined))?.modules.find((m) => m.code === scope.module)?.title;
   return {
     ok: true,
     reply: same
@@ -173,7 +174,7 @@ export async function reuseSplit(from: { module: string; activity: string }, sco
     proposal: {
       kind: "split", scope, rule, source,
       problems: [
-        ...checkScope(scope),
+        ...(await scopeCheck(scope)),
         ...checkRule(rule),
         ...checkProvenance(rule, source),
         ...(!same ? [{

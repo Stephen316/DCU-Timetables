@@ -293,10 +293,15 @@ export class TimetableAudience {
     BMED1: 'EEG1', CAM1: 'EEG1', CE1: 'EEG1', ECE1: 'EEG1', ME1: 'EEG1', SSE1: 'EEG1',
   };
 
-  /** A student on a programme they picked has no group, so only course-wide changes reach them. */
+  /**
+   * A student on a programme they picked has no group, so only course-wide changes reach
+   * them. Any other DCU programme is a course of its own in the console, saved under its
+   * code — "CASE3" — so its code is its course key.
+   */
   static forProgramme(code: string): TimetableAudience | null {
-    const course = TimetableAudience.programmeCourses[code.toUpperCase()];
-    return course ? new TimetableAudience(course) : null;
+    const upper = code.trim().toUpperCase();
+    if (!upper) return null;
+    return new TimetableAudience(TimetableAudience.programmeCourses[upper] ?? upper);
   }
 
   static forProfile(profile: StudentProfile): TimetableAudience {

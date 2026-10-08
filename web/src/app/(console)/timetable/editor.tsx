@@ -545,7 +545,7 @@ function GroupInput({ value, onChange, groups, programmes, disabled }: {
 /// is one problem, not five.
 function findingsOf(changes: TimetableChange[]): Finding[] {
   const seen = new Set<string>();
-  return changes.flatMap(checkChange).filter((f) => !seen.has(f.message) && !!seen.add(f.message));
+  return changes.flatMap((c) => checkChange(c)).filter((f) => !seen.has(f.message) && !!seen.add(f.message));
 }
 
 // ---------------------------------------------------------------------------

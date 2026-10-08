@@ -2,6 +2,7 @@ import "server-only";
 import { classes, weeks } from "@/lib/dcu/timetable";
 import { checkChange, hitFindings, removalHits, type TimetableChange } from "@/lib/changes/change";
 import type { Finding } from "@/lib/extraction/rotation";
+import { resolveCourse } from "@/lib/proposals/catalogue";
 
 /// The teaching weeks the dates fall in, so a removal is checked against those weeks only.
 async function weeksFor(dates: string[]): Promise<number[]> {
@@ -17,7 +18,13 @@ async function weeksFor(dates: string[]): Promise<number[]> {
 /// date has a class to remove. For callers that have already checked the console is open;
 /// kept out of the `"use server"` file so it isn't itself a public action.
 export async function review(change: TimetableChange): Promise<Finding[]> {
-  const findings = checkChange(change);
+  let course;
+  try {
+    course = await resolveCourse(change.courseKey);
+  } catch {
+    return [{ level: "error", message: `DCU's timetable couldn't be reached to check ${change.courseKey}. Try again.` }];
+  }
+  const findings = checkChange(change, course);
   if (change.kind !== "remove" || findings.some((f) => f.level === "error")) return findings;
   try {
     const found = await classes([change.module], await weeksFor(change.dates));

@@ -38,10 +38,9 @@ export function weekday(date: string): string {
 }
 
 /// The same rules the table enforces, said in words before the database says them in codes.
-export function checkChange(c: TimetableChange): Finding[] {
+export function checkChange(c: TimetableChange, programme: Programme | undefined = programmeFor(c.courseKey)): Finding[] {
   const out: Finding[] = [];
   const err = (message: string) => out.push({ level: "error", message });
-  const programme = programmeFor(c.courseKey);
 
   if (!programme) err("Pick the programme this change is for.");
   if (!c.module) err("No module.");
@@ -129,6 +128,7 @@ export function groupProblem(group: string, programme: Programme | undefined): s
   if (LAB_GROUP.test(group)) return null;
   if (PROGRAMME_CODE.test(group)) {
     if (!programme || programme.covers.some((c) => c.code === group)) return null;
+    if (!programme.covers.length) return `${programme.key} has no programmes within it to make a change for.`;
     return `${group} isn't one of ${programme.key}'s programmes (${programme.covers.map((c) => c.code).join(", ")}).`;
   }
   return `"${group}" isn't a group — a letter, a letter and a number like C.2, or a programme like BMED1.`;

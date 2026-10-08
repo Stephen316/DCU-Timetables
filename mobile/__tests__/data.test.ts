@@ -395,9 +395,17 @@ describe('Timetable changes', () => {
     expect(TimetableChanges.apply(week, [remove()], null, null)).toEqual(week);
   });
 
-  test('picked Engineering programmes map to their course', () => {
+  test('picked Engineering programmes map to their course, and any other programme is its own', () => {
     expect(TimetableAudience.forProgramme('ECE1')?.courseKey).toBe('EEG1');
-    expect(TimetableAudience.forProgramme('CASE3')).toBeNull();
+    expect(TimetableAudience.forProgramme('case3')?.courseKey).toBe('CASE3');
+    expect(TimetableAudience.forProgramme(' ')).toBeNull();
+  });
+
+  test("a change saved for another programme reaches that programme's students only", () => {
+    const week = [ev(lab, '2026-10-14', '14:00')];
+    const case3 = TimetableAudience.forProgramme('CASE3');
+    expect(TimetableChanges.apply(week, [remove({ course: 'CASE3' })], case3, null)).toEqual([]);
+    expect(TimetableChanges.apply(week, [remove()], case3, null)).toEqual(week);
   });
 
   test('decodes a row', () => {

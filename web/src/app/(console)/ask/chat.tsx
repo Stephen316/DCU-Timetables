@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { ask, accept, type Turn, type AskResult } from "./actions";
 import type { Proposal } from "@/lib/proposals/types";
 import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
+import type { CourseOption } from "@/lib/proposals/catalogue";
+import { listCourses, listModules } from "./courses";
 import { Combobox } from "../combobox";
 import { csvField, ROSTER_HEADER } from "@/lib/roster/parse";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/upload";
@@ -58,9 +60,30 @@ function blocking(p: Proposal): boolean {
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx,.csv,.tsv,.txt,.md";
 
+/// The fixed courses, offered at once while DCU's list loads — and alone if it never does.
+const FIXED: CourseOption[] = PROGRAMMES.map((p) => ({
+  key: p.key, name: p.name,
+  hint: `${p.modules.length} modules · ${p.covers.map((c) => c.code).join(", ")}`,
+  keywords: p.covers.map((c) => `${c.code} ${c.name} ${c.cao}`).join(" "),
+}));
+
+type ModuleOption = { code: string; title: string; hint: string; aka?: string };
+
+function fixedModules(key: string): ModuleOption[] | null {
+  if (!PROGRAMMES.some((p) => p.key === key)) return null;
+  return modulesFor(key).map((m) => ({ code: m.code, title: m.title, hint: m.semester ? `Semester ${m.semester}` : "", aka: m.aka }));
+}
+
 export function Ask() {
   const [programme, setProgramme] = useState(PROGRAMMES[0]?.key ?? "");
   const [moduleKey, setModuleKey] = useState("");
+  // Every DCU course, once the server has the list; the fixed ones until then.
+  const [courses, setCourses] = useState<CourseOption[]>(FIXED);
+  const [coursesNote, setCoursesNote] = useState<string | null>(null);
+  // The selected course's modules: a fixed course's at once, a DCU course's once fetched.
+  const [modules, setModules] = useState<{ key: string; list: ModuleOption[] | null; error?: string }>(
+    () => ({ key: programme, list: fixedModules(programme) }),
+  );
   const [turns, setTurns] = useState<Shown[]>([]);
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -85,6 +108,26 @@ export function Ask() {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns, busy]);
+
+  useEffect(() => {
+    let current = true;
+    listCourses()
+      .then((r) => { if (!current) return; if (r.ok) setCourses(r.courses); else setCoursesNote(r.error); })
+      .catch(() => current && setCoursesNote("DCU's course list couldn't be loaded. Reload to try again."));
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
+    const fixed = fixedModules(programme);
+    if (fixed || !programme) { setModules({ key: programme, list: fixed ?? [] }); return; }
+    let current = true;
+    setModules({ key: programme, list: null });
+    listModules(programme)
+      .then((r) => current && setModules(r.ok ? { key: programme, list: r.modules } : { key: programme, list: [], error: r.error }))
+      .catch(() => current && setModules({ key: programme, list: [], error: `${programme}'s modules couldn't be loaded.` }));
+    // A newer selection supersedes this one; its answer must not land on top.
+    return () => { current = false; };
+  }, [programme]);
 
   // A one-second tick while something is pending, so the wait shows as time passing rather
   // than as a page that might have stopped.
@@ -265,18 +308,19 @@ export function Ask() {
             placeholder="Search programmes…"
             value={programme}
             disabled={busy}
-            options={PROGRAMMES.map((p) => ({
-              value: p.key,
-              label: p.name,
-              // Found by any of its programmes' codes or names, but offered as the one course:
-              // splitting by programme is done on the Timetable page.
-              keywords: p.covers.map((c) => `${c.code} ${c.name} ${c.cao}`).join(" "),
+            options={courses.map((c) => ({
+              value: c.key,
+              label: c.name,
+              hint: c.hint,
+              // General Engineering is found by any of its programmes' codes or names, but
+              // offered as the one course: splitting by programme is done on the Timetable page.
+              keywords: c.keywords,
             }))}
             onChange={(key) => {
               setProgramme(key);
               // A module from the old programme is not a module of the new one. Clearing
               // beats carrying a selection that the scope check would reject later.
-              if (!modulesFor(key).some((m) => m.code === moduleKey)) setModuleKey("");
+              if (!fixedModules(key)?.some((m) => m.code === moduleKey)) setModuleKey("");
             }}
           />
           <Combobox
@@ -284,16 +328,21 @@ export function Ask() {
             label="Module"
             placeholder="Search by code or name…"
             value={moduleKey}
-            disabled={busy}
-            options={modulesFor(programme).map((m) => ({
+            disabled={busy || modules.key !== programme || modules.list === null}
+            options={(modules.key === programme ? modules.list ?? [] : []).map((m) => ({
               value: m.code,
               label: m.title,
-              hint: `Semester ${m.semester}`,
+              hint: m.hint || undefined,
               keywords: m.aka,
             }))}
             onChange={setModuleKey}
           />
         </div>
+        {(modules.list === null || modules.error || coursesNote) && (
+          <p className={modules.error || coursesNote ? "tag warn" : "dim"} style={{ fontSize: 12, marginTop: -6 }}>
+            {modules.error ?? coursesNote ?? <><Spinner /> Loading {programme}&rsquo;s modules from DCU…</>}
+          </p>
+        )}
 
         <div className="chat">
           {notice && turns.length === 0 && <p className="tag ok">{notice}</p>}
@@ -421,7 +470,7 @@ export function Ask() {
           </p>
         )}
 
-        <SavedPanel programme={programme} module={moduleKey} refresh={refresh} />
+        <SavedPanel programme={programme} programmeName={courses.find((c) => c.key === programme)?.name} module={moduleKey} refresh={refresh} />
         <LibraryPanel programme={programme} module={moduleKey} refresh={refresh} disabled={busy} onReuse={reuse} />
       </div>
 
@@ -580,7 +629,9 @@ function HeadingPanel({ p }: { p: Extract<Proposal, { kind: "heading" }> }) {
         <tbody>
           <tr><th>Now</th><td>{p.current.saved ?? p.current.dcu ?? <span className="dim">DCU's name</span>}</td></tr>
           <tr><th>Day view</th><td>{h.title ?? p.current.dcu ?? <span className="dim">DCU's name</span>}</td></tr>
-          <tr><th>Week grid</th><td>{h.shortTitle ?? (h.title ? <span className="dim">{h.title}, shortened by the app</span> : <span className="dim">DCU's name, shortened by the app</span>)}</td></tr>
+          <tr><th>Week grid</th><td>{p.current.abbreviation
+            ? <>{p.current.abbreviation} <span className="dim">from the Abbreviations page</span></>
+            : <span className="dim">{h.title ?? "DCU's name"}, shortened by the app</span>}</td></tr>
         </tbody>
       </table>
       <p className="dim" style={{ fontSize: 12 }}>The class&rsquo;s own page keeps DCU&rsquo;s full name and code.</p>
