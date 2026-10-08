@@ -374,6 +374,10 @@ button.send { display: inline-flex; align-items: center; gap: 6px; min-width: 84
 .tt-edit .row { gap: 12px; }
 label.check { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text); white-space: nowrap; }
 label.check input { width: auto; }
+.tt-who-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.tt-who-head label { margin: 0; }
+.tt-who-head button.link { font-size: 12px; }
+.tt-who { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 
 /* Moving between console pages: shown at once, while the server renders the next one. */
 .page-loading { display: flex; align-items: center; gap: 8px; color: var(--muted); padding: 24px 0; }
