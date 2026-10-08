@@ -8,7 +8,7 @@ import { formatDayMonth, formatTime, isToday, isTomorrow, weekdayName } from '..
 import { eventTypeLabel, isOnline, shortTitleOf, staffText, TimetableEvent } from '../../core/timetableEvent';
 import { DeadlineMark, Icon, Label, Txt } from '../../ui/components';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
-import { Space, useTheme } from '../../ui/theme';
+import { Desktop, Space, useTheme } from '../../ui/theme';
 import { usePagerDrag } from './Pager';
 import { EditKind } from './editing';
 import { RailGap, RailRow, railPosition, RailStop } from './Rail';
@@ -246,7 +246,7 @@ function ClassStop({
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: Space.xxl },
+  content: { paddingBottom: Space.xxl, width: '100%', maxWidth: Desktop.readable, alignSelf: 'center' },
   heading: { paddingHorizontal: Space.l, paddingTop: Space.s, paddingBottom: Space.l, gap: Space.xxs },
   headingLine: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: Space.s },
   empty: { paddingHorizontal: Space.l, gap: Space.xs },

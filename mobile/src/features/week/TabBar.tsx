@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import { ComponentProps, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, LayoutChangeEvent, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { Txt } from '../../ui/components';
-import { MIN_TARGET, Radius, Space, useTheme } from '../../ui/theme';
+import { Desktop, MIN_TARGET, Radius, Space, useTheme } from '../../ui/theme';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -123,7 +123,8 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
 
 const styles = StyleSheet.create({
   bar: { paddingHorizontal: Space.l, paddingTop: Space.xs },
-  slider: { flexDirection: 'row' },
+  // Across a desktop window the two tabs would sit a screen apart; keep them together.
+  slider: { flexDirection: 'row', width: '100%', maxWidth: Desktop.dialog, alignSelf: 'center' },
   outline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1, borderRadius: Radius.control },
   tab: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xs, gap: Space.xxs },
   semibold: { fontWeight: '600' },

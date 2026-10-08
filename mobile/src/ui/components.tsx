@@ -5,7 +5,7 @@ import {
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MIN_TARGET, Radius, Space, Type, useTheme } from './theme';
+import { Desktop, MIN_TARGET, Radius, Space, Type, useTheme } from './theme';
 
 // MARK: - Icons
 
@@ -114,6 +114,11 @@ export function useLargeText(): boolean {
   return useWindowDimensions().fontScale >= 1.35;
 }
 
+/** A desktop-sized window: wider than any phone, so sheets float rather than fill it. */
+export function useWide(): boolean {
+  return useWindowDimensions().width >= Desktop.wide;
+}
+
 /** Lays out side by side, and stacks once the text is one of the accessibility sizes. */
 export function AdaptiveStack({ children, gap = Space.s, style }: { children: ReactNode; gap?: number; style?: StyleProp<ViewStyle> }) {
   const large = useLargeText();
@@ -139,7 +144,7 @@ export function ListScroll({
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={[styles.listContent, { paddingBottom: Space.xxl + (footer ? 0 : insets.bottom) }, contentStyle]}
+        contentContainerStyle={[styles.listContent, styles.readable, { paddingBottom: Space.xxl + (footer ? 0 : insets.bottom) }, contentStyle]}
         keyboardShouldPersistTaps="handled"
         refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={theme.inkSecondary} /> : undefined}
       >
@@ -540,6 +545,28 @@ export function Sheet({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const wide = useWide();
+  const content = (
+    <>
+      <View style={[styles.sheetBar, { borderBottomColor: theme.separator }]}>
+        <View style={styles.sheetBarSide}>{left}</View>
+        <Txt type="headline" numberOfLines={1} style={styles.sheetTitle} accessibilityRole="header">{title}</Txt>
+        <View style={[styles.sheetBarSide, styles.sheetBarRight]}>{right}</View>
+      </View>
+      {children}
+    </>
+  );
+  // A desktop window: a panel over the dimmed app, as a Mac app's sheet sits over its window.
+  if (wide && Platform.OS === 'web') {
+    return (
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => dismissable && onClose()} onDismiss={onDismissed}>
+        <View style={[styles.scrim, styles.centred]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => dismissable && onClose()} accessibilityLabel="Close" />
+          <View style={[styles.panel, { backgroundColor: theme.canvas, borderColor: theme.separator }]}>{content}</View>
+        </View>
+      </Modal>
+    );
+  }
   return (
     <Modal
       visible={visible}
@@ -549,12 +576,7 @@ export function Sheet({
       onDismiss={onDismissed}
     >
       <View style={[styles.fill, { backgroundColor: theme.canvas, paddingTop: Platform.OS === 'ios' ? 0 : insets.top }]}>
-        <View style={[styles.sheetBar, { borderBottomColor: theme.separator }]}>
-          <View style={styles.sheetBarSide}>{left}</View>
-          <Txt type="headline" numberOfLines={1} style={styles.sheetTitle} accessibilityRole="header">{title}</Txt>
-          <View style={[styles.sheetBarSide, styles.sheetBarRight]}>{right}</View>
-        </View>
-        {children}
+        {content}
       </View>
     </Modal>
   );
@@ -573,12 +595,20 @@ export function BottomCard({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // In a desktop window the card is a dialog in the middle, not a tray at the far bottom.
+  const wide = useWide();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => dismissable && onClose()} onDismiss={onDismissed}>
-      <View style={styles.scrim}>
+      <View style={[styles.scrim, wide && styles.centred]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => dismissable && onClose()} accessibilityLabel="Close" />
-        <View style={[styles.bottomCard, { backgroundColor: theme.surface, paddingBottom: Space.xl + insets.bottom }]}>
-          <View style={[styles.grabber, { backgroundColor: theme.rail }]} />
+        <View
+          style={[
+            styles.bottomCard,
+            { backgroundColor: theme.surface, paddingBottom: Space.xl + (wide ? 0 : insets.bottom) },
+            wide && styles.dialog,
+          ]}
+        >
+          {wide ? <View style={styles.dialogTop} /> : <View style={[styles.grabber, { backgroundColor: theme.rail }]} />}
           <ScrollView bounces={false} contentContainerStyle={styles.bottomCardContent}>{children}</ScrollView>
         </View>
       </View>
@@ -692,6 +722,7 @@ export const styles = StyleSheet.create({
   stackRow: { flexDirection: 'row', alignItems: 'center' },
   stackColumn: { flexDirection: 'column', alignItems: 'flex-start' },
   listContent: { paddingTop: Space.s },
+  readable: { width: '100%', maxWidth: Desktop.readable, alignSelf: 'center' },
   section: { marginHorizontal: Space.l, marginTop: Space.l },
   sectionHeader: { marginBottom: Space.xs + 2, marginHorizontal: Space.l },
   sectionFooter: { marginTop: Space.xs + 2, marginHorizontal: Space.l },
@@ -729,6 +760,13 @@ export const styles = StyleSheet.create({
   sheetTitle: { flex: 2, textAlign: 'center' },
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   bottomCard: { borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: Space.xl, maxHeight: '85%' },
+  centred: { justifyContent: 'center', alignItems: 'center', padding: Space.xl },
+  dialog: { width: '100%', maxWidth: Desktop.dialog, borderRadius: 16 },
+  dialogTop: { height: Space.xl },
+  panel: {
+    width: '100%', maxWidth: Desktop.panel, height: '100%', maxHeight: 760, borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
+  },
   bottomCardContent: { gap: Space.l },
   grabber: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginTop: Space.s, marginBottom: Space.l },
   confirmBody: { alignItems: 'center', gap: Space.m, paddingTop: Space.s },
