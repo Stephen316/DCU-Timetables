@@ -1,7 +1,9 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { consoleOpen } from "@/lib/auth/gate";
 import { supabaseServer } from "@/lib/supabase/server";
+import { fromRow, type SavedChange } from "@/lib/changes/change";
 
 /// What applies to one programme and module — the "Saved" list under the chat. Nothing
 /// without both: every table for every module is offered by the reuse dropdown instead
@@ -36,16 +38,20 @@ export type SavedView = {
     groups: ClassGroup[];
   } | null;
   heading: { title: string; savedAt: string } | null;
+  /// The module's removals and additions, one row per programme or group. Ask saves them
+  /// as well as the Timetable page, and the conversation that showed them saved is gone on
+  /// the next reload — which every deploy forces.
+  changes: SavedChange[];
 };
 
 export async function listSaved(programme: string, module: string):
   Promise<{ ok: true; view: SavedView } | { ok: false; error: string }> {
   if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
-  if (!programme || !module) return { ok: true, view: { rotation: null, splits: [], classList: null, heading: null } };
+  if (!programme || !module) return { ok: true, view: { rotation: null, splits: [], classList: null, heading: null, changes: [] } };
 
   const db = await supabaseServer();
 
-  const [rot, splits, roster, title] = await Promise.all([
+  const [rot, splits, roster, title, changes] = await Promise.all([
     db.from("lab_rotations")
       .select("title, version, created_at, lab_rotation_sessions(week, date, day, start_time, end_time, module, activity, groups, room)")
       .eq("course_key", programme).maybeSingle(),
@@ -54,8 +60,9 @@ export async function listSaved(programme: string, module: string):
       .eq("module_key", module).order("activity"),
     db.from("rosters").select("title, version, members, created_at").eq("course_key", programme).maybeSingle(),
     db.from("module_titles").select("title, updated_at").eq("module_key", module).maybeSingle(),
+    db.from("timetable_changes").select("*").eq("course_key", programme).eq("module", module).order("created_at"),
   ]);
-  const failed = rot.error ?? splits.error ?? roster.error ?? title.error;
+  const failed = rot.error ?? splits.error ?? roster.error ?? title.error ?? changes.error;
   if (failed) return { ok: false, error: failed.message };
 
   // A class list places students in the rotation — its group picks their sessions, its
@@ -115,6 +122,7 @@ export async function listSaved(programme: string, module: string):
       })),
       classList,
       heading: title.data ? { title: title.data.title, savedAt: title.data.updated_at } : null,
+      changes: (changes.data ?? []).map(fromRow),
     },
   };
 }
@@ -123,13 +131,21 @@ export type SavedTarget =
   | { kind: "split"; module: string; activity: string }
   | { kind: "rotation"; programme: string }
   | { kind: "classList"; programme: string }
-  | { kind: "heading"; module: string };
+  | { kind: "heading"; module: string }
+  | { kind: "change"; id: string };
 
 /// Removes one entry from the Saved list. Each kind has its own definer function, which
 /// checks the caller is an admin and writes the audit row.
 export async function deleteSaved(target: SavedTarget): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   const db = await supabaseServer();
+
+  if (target.kind === "change") {
+    const { error } = await db.rpc("delete_timetable_change", { p_id: target.id });
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/timetable");
+    return { ok: true };
+  }
 
   const { error } =
     target.kind === "heading"

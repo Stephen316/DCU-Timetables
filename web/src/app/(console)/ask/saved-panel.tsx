@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { deleteSaved, listSaved, type SavedTarget, type SavedView } from "./saved";
 import { moduleFor, programmeFor } from "@/lib/proposals/courses";
+import { describeChange } from "@/lib/changes/change";
 import { Spinner } from "../spinner";
 
 /// What applies to the selected course and module, under the chat: the course's rotation if
-/// it has sessions for the module, the module's splits, and the course's class list if the
-/// module is one of the rotation's. Nothing until a module is picked — tables for anything
-/// else are offered under "Reuse a saved table" instead. Each entry opens to show what was saved — the thing a new proposal
-/// would replace.
+/// it has sessions for the module, the module's splits and timetable changes, and the
+/// course's class list if the module is one of the rotation's. Nothing until a module is
+/// picked — tables for anything else are offered under "Reuse a saved table" instead. Each
+/// entry opens to show what was saved — the thing a new proposal would replace.
 export function SavedPanel({ programme, programmeName: name, module, refresh }: {
   programme: string; programmeName?: string; module: string; refresh: number;
 }) {
@@ -36,8 +37,8 @@ export function SavedPanel({ programme, programmeName: name, module, refresh }: 
     return () => { current = false; };
   }, [programme, module, refresh, reload]);
 
-  async function remove(key: string, target: SavedTarget, question: string) {
-    if (!window.confirm(question)) return;
+  async function remove(key: string, target: SavedTarget, question: string | null) {
+    if (question && !window.confirm(question)) return;
     setDeleting(key);
     setError(null);
     try {
@@ -55,7 +56,7 @@ export function SavedPanel({ programme, programmeName: name, module, refresh }: 
   const scope = module ? `${programmeName} · ${module}${moduleFor(module) ? ` · ${moduleFor(module)!.title}` : ""}` : programmeName;
   // A rotation with no sessions for the module does not apply to it.
   const rotation = view?.rotation?.sessions.length ? view.rotation : null;
-  const empty = view && !rotation && view.splits.length === 0 && !view.classList && !view.heading;
+  const empty = view && !rotation && view.splits.length === 0 && !view.classList && !view.heading && view.changes.length === 0;
 
   return (
     <section className="saved" aria-labelledby="saved-heading">
@@ -140,6 +141,32 @@ export function SavedPanel({ programme, programmeName: name, module, refresh }: 
         </Entry>
       ))}
 
+      {module && view && view.changes.length > 0 && (
+        <Entry
+          title={`${module} · timetable changes`}
+          meta={`${view.changes.length} saved · also under Saved changes on the Timetable page`}
+        >
+          <table>
+            <thead><tr><th>Change</th><th>Dates</th><th /></tr></thead>
+            <tbody>
+              {view.changes.map((c) => (
+                <tr key={c.id}>
+                  <td>{describeChange(c)}</td>
+                  <td className="dim">{c.dates.map(shortDate).join(", ")}</td>
+                  <td className="right">
+                    {/* One row, one programme: put back for it alone, as on the Timetable page. */}
+                    <button type="button" className="danger" disabled={deleting === `change:${c.id}`}
+                      onClick={() => remove(`change:${c.id}`, { kind: "change", id: c.id }, null)}>
+                      {deleting === `change:${c.id}` ? <Spinner /> : "Delete"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Entry>
+      )}
+
       {module && view?.classList && (
         <Entry
           title="Class list"
@@ -170,8 +197,9 @@ export function SavedPanel({ programme, programmeName: name, module, refresh }: 
   );
 }
 
-function Entry({ title, meta, deleting, onDelete, children }: {
-  title: string; meta: string; deleting: boolean; onDelete: () => void; children: React.ReactNode;
+/// `onDelete` deletes the whole entry; an entry whose rows are deleted one by one has none.
+function Entry({ title, meta, deleting = false, onDelete, children }: {
+  title: string; meta: string; deleting?: boolean; onDelete?: () => void; children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -183,14 +211,21 @@ function Entry({ title, meta, deleting, onDelete, children }: {
           <span className="saved-title">{title}</span>
           <span className="dim">{meta}</span>
         </button>
-        <button type="button" className="danger saved-delete" disabled={deleting} onClick={onDelete}
-                aria-label={`Delete ${title}`}>
-          {deleting ? <><Spinner /> Deleting…</> : "Delete"}
-        </button>
+        {onDelete && (
+          <button type="button" className="danger saved-delete" disabled={deleting} onClick={onDelete}
+                  aria-label={`Delete ${title}`}>
+            {deleting ? <><Spinner /> Deleting…</> : "Delete"}
+          </button>
+        )}
       </div>
       {open && <div className="saved-body">{children}</div>}
     </div>
   );
+}
+
+/// "2026-10-08" → "8 Oct".
+function shortDate(date: string): string {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-IE", { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
 function when(iso: string): string {
