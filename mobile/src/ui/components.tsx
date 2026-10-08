@@ -1,11 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, isValidElement, ReactNode, useRef } from 'react';
+import { Children, isValidElement, ReactNode, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, ColorValue, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
+  AccessibilityInfo, ActivityIndicator, Animated, ColorValue, Easing, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MIN_TARGET, Radius, Space, Type, useTheme } from './theme';
+import { Desktop, MIN_TARGET, Radius, Space, Type, useTheme } from './theme';
 
 // MARK: - Icons
 
@@ -27,9 +27,9 @@ const ICONS = {
   other: 'calendar-clear-outline',
   test: 'clipboard-outline',
   moved: 'arrow-redo-outline',
-  groups: 'people-outline',
   person: 'person-outline',
   account: 'person-circle-outline',
+  bell: 'notifications-outline',
   more: 'ellipsis-horizontal-circle-outline',
   back: 'chevron-back',
   forward: 'chevron-forward',
@@ -51,13 +51,13 @@ const ICONS = {
   runningOutline: 'checkmark-circle-outline',
   search: 'search',
   signOut: 'log-out-outline',
-  labs: 'construct-outline',
   swap: 'swap-horizontal-outline',
   idCard: 'id-card-outline',
   offline: 'cloud-offline-outline',
-  notAttending: 'person-remove-outline',
+  remove: 'remove-circle-outline',
   done: 'checkmark-done-circle',
   delete: 'trash-outline',
+  edit: 'create-outline',
   close: 'close',
 } as const;
 
@@ -99,8 +99,24 @@ export function Label({
  * The accessibility text sizes. Rows that sit side by side at default size stack at these,
  * rather than clipping a title to a few letters.
  */
+/** The system's Reduce Motion setting, kept current. */
+export function useReduceMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduce);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+    return () => subscription.remove();
+  }, []);
+  return reduce;
+}
+
 export function useLargeText(): boolean {
   return useWindowDimensions().fontScale >= 1.35;
+}
+
+/** A desktop-sized window: wider than any phone, so sheets float rather than fill it. */
+export function useWide(): boolean {
+  return useWindowDimensions().width >= Desktop.wide;
 }
 
 /** Lays out side by side, and stacks once the text is one of the accessibility sizes. */
@@ -128,7 +144,7 @@ export function ListScroll({
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={[styles.listContent, { paddingBottom: Space.xxl + (footer ? 0 : insets.bottom) }, contentStyle]}
+        contentContainerStyle={[styles.listContent, styles.readable, { paddingBottom: Space.xxl + (footer ? 0 : insets.bottom) }, contentStyle]}
         keyboardShouldPersistTaps="handled"
         refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={theme.inkSecondary} /> : undefined}
       >
@@ -353,13 +369,47 @@ export function IconButton({
 
 // MARK: - Controls
 
-/** A segmented control, for a few mutually exclusive choices. */
+/**
+ * A segmented control, for a few mutually exclusive choices — drawn as the tab bar is: an
+ * accent outline around the chosen segment that slides to the next one.
+ */
 export function Segmented<T extends string>({
   options, value, onChange, label,
 }: { options: { value: T; label: string }[]; value: T; onChange: (value: T) => void; label: string }) {
   const theme = useTheme();
+  const [width, setWidth] = useState(0);
+  const segmentWidth = options.length > 0 ? width / options.length : 0;
+  const index = Math.max(options.findIndex((option) => option.value === value), 0);
+  const [offset] = useState(() => new Animated.Value(0));
+  const lastWidth = useRef(0);
+
+  // A new width is a layout, not a move: jump there. A new choice slides.
+  useEffect(() => {
+    const target = index * segmentWidth;
+    if (lastWidth.current !== segmentWidth) {
+      lastWidth.current = segmentWidth;
+      offset.setValue(target);
+      return;
+    }
+    Animated.timing(offset, { toValue: target, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+  }, [index, segmentWidth, offset]);
+
+  // As the tab bar: white reads on the dark canvas, but would vanish on Solarized Light's cream.
+  const selectedInk = theme.scheme === 'dark' ? '#FFFFFF' : theme.ink;
+
   return (
-    <View style={[styles.segmented, { backgroundColor: theme.raised }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
+    <View
+      style={styles.segmented}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      accessibilityRole="radiogroup"
+      accessibilityLabel={label}
+    >
+      {segmentWidth > 0 ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.segmentOutline, { width: segmentWidth, borderColor: theme.accent, transform: [{ translateX: offset }] }]}
+        />
+      ) : null}
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -368,9 +418,11 @@ export function Segmented<T extends string>({
             onPress={() => onChange(option.value)}
             accessibilityRole="radio"
             accessibilityState={{ selected }}
-            style={[styles.segment, selected && [styles.segmentSelected, { backgroundColor: theme.surface }]]}
+            style={({ pressed }) => [styles.segment, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Txt type="subheadline" style={selected ? styles.semibold : undefined}>{option.label}</Txt>
+            <Txt type="subheadline" color={selected ? selectedInk : theme.inkSecondary} style={selected ? styles.semibold : undefined}>
+              {option.label}
+            </Txt>
           </Pressable>
         );
       })}
@@ -389,6 +441,74 @@ export function Spinner({ label }: { label?: string }) {
 }
 
 /** Nothing to show, said plainly — `ContentUnavailableView`. */
+/**
+ * Diagonal lines across whatever it's laid over — how an online class is marked. It sits
+ * behind the content and takes no touches.
+ *
+ * The lines sit at fixed places on the page, not on this view: `origin` is where this view
+ * is in a frame it shares with its neighbours, so two online classes back to back read as
+ * one run of lines rather than two that meet out of step.
+ */
+export function Hatch({ color, spacing, thickness = 1, angle = -35, origin = { x: 0, y: 0 }, style }: {
+  color: string;
+  /** Distance between lines, measured across them. */
+  spacing: number;
+  thickness?: number;
+  angle?: number;
+  origin?: { x: number; y: number };
+  style?: StyleProp<ViewStyle>;
+}) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  // A square as wide as the diagonal still covers the area once it's rotated.
+  const side = Math.ceil(Math.hypot(size.width, size.height));
+  // How far this view's centre is across the lines, in the shared frame; the first line goes
+  // where that puts it back in step with the page.
+  const radians = (angle * Math.PI) / 180;
+  const across = (origin.x + size.width / 2) * -Math.sin(radians) + (origin.y + size.height / 2) * Math.cos(radians);
+  const first = (((side / 2 - across) % spacing) + spacing) % spacing;
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[StyleSheet.absoluteFill, styles.hatch, style]}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width !== size.width || height !== size.height) setSize({ width, height });
+      }}
+    >
+      {side > 0 ? (
+        <View style={{
+          position: 'absolute', width: side, height: side,
+          left: (size.width - side) / 2, top: (size.height - side) / 2,
+          transform: [{ rotate: `${angle}deg` }],
+        }}>
+          {Array.from({ length: Math.ceil((side - first) / spacing) }, (_, i) => (
+            <View key={i} style={{ position: 'absolute', left: 0, width: side, top: first + i * spacing, height: thickness, backgroundColor: color }} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * A small blue "!" on a class that has something due at it. A mark of its own rather than
+ * the kind's icon, so one shape means "a deadline is here" at every size, the grid included.
+ */
+export function DeadlineMark({ size = 16 }: { size?: number }) {
+  const theme = useTheme();
+  return (
+    <View
+      style={[styles.deadlineMark, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.tint.test }]}
+      importantForAccessibility="no-hide-descendants"
+      accessibilityElementsHidden
+    >
+      <Text style={[styles.deadlineMarkText, { fontSize: size * 0.72, lineHeight: size }]} allowFontScaling={false}>!</Text>
+    </View>
+  );
+}
+
 export function EmptyState({
   icon, title, message, action,
 }: { icon: IconName; title: string; message?: string; action?: ReactNode }) {
@@ -410,11 +530,13 @@ export function EmptyState({
  * full screen elsewhere.
  */
 export function Sheet({
-  visible, title, onClose, left, right, children, dismissable = true,
+  visible, title, onClose, onDismissed, left, right, children, dismissable = true,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
+  /** Once it has finished sliding away (iOS), for work that should happen in view. */
+  onDismissed?: () => void;
   left?: ReactNode;
   right?: ReactNode;
   children: ReactNode;
@@ -423,20 +545,38 @@ export function Sheet({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const wide = useWide();
+  const content = (
+    <>
+      <View style={[styles.sheetBar, { borderBottomColor: theme.separator }]}>
+        <View style={styles.sheetBarSide}>{left}</View>
+        <Txt type="headline" numberOfLines={1} style={styles.sheetTitle} accessibilityRole="header">{title}</Txt>
+        <View style={[styles.sheetBarSide, styles.sheetBarRight]}>{right}</View>
+      </View>
+      {children}
+    </>
+  );
+  // A desktop window: a panel over the dimmed app, as a Mac app's sheet sits over its window.
+  if (wide && Platform.OS === 'web') {
+    return (
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => dismissable && onClose()} onDismiss={onDismissed}>
+        <View style={[styles.scrim, styles.centred]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => dismissable && onClose()} accessibilityLabel="Close" />
+          <View style={[styles.panel, { backgroundColor: theme.canvas, borderColor: theme.separator }]}>{content}</View>
+        </View>
+      </Modal>
+    );
+  }
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
       onRequestClose={() => dismissable && onClose()}
+      onDismiss={onDismissed}
     >
       <View style={[styles.fill, { backgroundColor: theme.canvas, paddingTop: Platform.OS === 'ios' ? 0 : insets.top }]}>
-        <View style={[styles.sheetBar, { borderBottomColor: theme.separator }]}>
-          <View style={styles.sheetBarSide}>{left}</View>
-          <Txt type="headline" numberOfLines={1} style={styles.sheetTitle} accessibilityRole="header">{title}</Txt>
-          <View style={[styles.sheetBarSide, styles.sheetBarRight]}>{right}</View>
-        </View>
-        {children}
+        {content}
       </View>
     </Modal>
   );
@@ -455,12 +595,20 @@ export function BottomCard({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  // In a desktop window the card is a dialog in the middle, not a tray at the far bottom.
+  const wide = useWide();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => dismissable && onClose()} onDismiss={onDismissed}>
-      <View style={styles.scrim}>
+      <View style={[styles.scrim, wide && styles.centred]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => dismissable && onClose()} accessibilityLabel="Close" />
-        <View style={[styles.bottomCard, { backgroundColor: theme.surface, paddingBottom: Space.xl + insets.bottom }]}>
-          <View style={[styles.grabber, { backgroundColor: theme.rail }]} />
+        <View
+          style={[
+            styles.bottomCard,
+            { backgroundColor: theme.surface, paddingBottom: Space.xl + (wide ? 0 : insets.bottom) },
+            wide && styles.dialog,
+          ]}
+        >
+          {wide ? <View style={styles.dialogTop} /> : <View style={[styles.grabber, { backgroundColor: theme.rail }]} />}
           <ScrollView bounces={false} contentContainerStyle={styles.bottomCardContent}>{children}</ScrollView>
         </View>
       </View>
@@ -567,12 +715,14 @@ export function ActionSheet({
 }
 
 export const styles = StyleSheet.create({
+  hatch: { overflow: 'hidden' },
   fill: { flex: 1 },
   flexText: { flexShrink: 1 },
   label: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   stackRow: { flexDirection: 'row', alignItems: 'center' },
   stackColumn: { flexDirection: 'column', alignItems: 'flex-start' },
   listContent: { paddingTop: Space.s },
+  readable: { width: '100%', maxWidth: Desktop.readable, alignSelf: 'center' },
   section: { marginHorizontal: Space.l, marginTop: Space.l },
   sectionHeader: { marginBottom: Space.xs + 2, marginHorizontal: Space.l },
   sectionFooter: { marginTop: Space.xs + 2, marginHorizontal: Space.l },
@@ -591,12 +741,14 @@ export const styles = StyleSheet.create({
   inlineTarget: { minHeight: MIN_TARGET, justifyContent: 'center' },
   inlineChip: { borderRadius: Radius.control, paddingHorizontal: Space.m, paddingVertical: Space.xs + Space.xxs },
   medium: { fontWeight: '500' },
+  deadlineMark: { alignItems: 'center', justifyContent: 'center' },
+  deadlineMarkText: { color: '#FFFFFF', fontWeight: '800', textAlign: 'center' },
   semibold: { fontWeight: '600' },
   barButton: { minHeight: MIN_TARGET, justifyContent: 'center', paddingHorizontal: Space.xs },
   iconButton: { minWidth: MIN_TARGET, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center' },
-  segmented: { flexDirection: 'row', borderRadius: Radius.control, padding: 2 },
-  segment: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.control - 2, paddingHorizontal: Space.s },
-  segmentSelected: { shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  segmented: { flexDirection: 'row' },
+  segment: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.s },
+  segmentOutline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1, borderRadius: Radius.control },
   spinner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.s, padding: Space.xl },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.s, padding: Space.xxl },
   emptyAction: { marginTop: Space.m },
@@ -608,6 +760,13 @@ export const styles = StyleSheet.create({
   sheetTitle: { flex: 2, textAlign: 'center' },
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   bottomCard: { borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: Space.xl, maxHeight: '85%' },
+  centred: { justifyContent: 'center', alignItems: 'center', padding: Space.xl },
+  dialog: { width: '100%', maxWidth: Desktop.dialog, borderRadius: 16 },
+  dialogTop: { height: Space.xl },
+  panel: {
+    width: '100%', maxWidth: Desktop.panel, height: '100%', maxHeight: 760, borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
+  },
   bottomCardContent: { gap: Space.l },
   grabber: { width: 36, height: 5, borderRadius: 3, alignSelf: 'center', marginTop: Space.s, marginBottom: Space.l },
   confirmBody: { alignItems: 'center', gap: Space.m, paddingTop: Space.s },

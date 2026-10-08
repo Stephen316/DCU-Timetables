@@ -3,11 +3,17 @@
 import { useEffect, useState } from "react";
 import { deleteSaved, listSaved, type SavedTarget, type SavedView } from "./saved";
 import { moduleFor, programmeFor } from "@/lib/proposals/courses";
+import { describeChange } from "@/lib/changes/change";
 import { Spinner } from "../spinner";
 
-/// What is already live for the selected programme and module, under the chat. Each entry
-/// opens to show what was saved — the thing a new proposal would replace.
-export function SavedPanel({ programme, module, refresh }: { programme: string; module: string; refresh: number }) {
+/// What applies to the selected course and module, under the chat: the course's rotation if
+/// it has sessions for the module, the module's splits and timetable changes, and the
+/// course's class list if the module is one of the rotation's. Nothing until a module is
+/// picked — tables for anything else are offered under "Reuse a saved table" instead. Each
+/// entry opens to show what was saved — the thing a new proposal would replace.
+export function SavedPanel({ programme, programmeName: name, module, refresh }: {
+  programme: string; programmeName?: string; module: string; refresh: number;
+}) {
   const [view, setView] = useState<SavedView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,6 +22,7 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
 
   useEffect(() => {
     let current = true;
+    if (!module) { setView(null); setError(null); return; }
     setLoading(true);
     setError(null);
     listSaved(programme, module)
@@ -30,8 +37,8 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
     return () => { current = false; };
   }, [programme, module, refresh, reload]);
 
-  async function remove(key: string, target: SavedTarget, question: string) {
-    if (!window.confirm(question)) return;
+  async function remove(key: string, target: SavedTarget, question: string | null) {
+    if (question && !window.confirm(question)) return;
     setDeleting(key);
     setError(null);
     try {
@@ -45,11 +52,11 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
     }
   }
 
-  const scope = module
-    ? `${module}${moduleFor(module) ? ` · ${moduleFor(module)!.title}` : ""}`
-    : programmeFor(programme)?.name ?? programme;
-  const programmeName = programmeFor(programme)?.name ?? programme;
-  const empty = view && !view.rotation && view.splits.length === 0 && !view.classList;
+  const programmeName = name ?? programmeFor(programme)?.name ?? programme;
+  const scope = module ? `${programmeName} · ${module}${moduleFor(module) ? ` · ${moduleFor(module)!.title}` : ""}` : programmeName;
+  // A rotation with no sessions for the module does not apply to it.
+  const rotation = view?.rotation?.sessions.length ? view.rotation : null;
+  const empty = view && !rotation && view.splits.length === 0 && !view.classList && !view.heading && view.changes.length === 0;
 
   return (
     <section className="saved" aria-labelledby="saved-heading">
@@ -60,51 +67,64 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
       </div>
 
       {error && <p className="err">{error}</p>}
-      {empty && !loading && (
+      {!module && (
+        <p className="dim" style={{ fontSize: 13 }}>Pick a module to see what is saved for it.</p>
+      )}
+      {module && empty && !loading && (
         <p className="dim" style={{ fontSize: 13 }}>
-          Nothing saved for {module ? "this module" : "this programme"} yet.
+          Nothing saved for {module} yet. A table saved for another module can be used here
+          from &ldquo;Reuse a saved table&rdquo;.
         </p>
       )}
 
-      {view?.rotation && (
+      {module && rotation && (
         <Entry
           title="Lab rotation"
-          meta={`${module ? `${view.rotation.sessions.length} of ${view.rotation.total}` : view.rotation.total} sessions · v${view.rotation.version} · ${when(view.rotation.savedAt)}`}
+          meta={`${rotation.sessions.length} of ${rotation.total} sessions · v${rotation.version} · ${when(rotation.savedAt)}`}
           deleting={deleting === "rotation"}
           onDelete={() => remove("rotation", { kind: "rotation", programme },
-            `Delete the lab rotation for ${programmeName}? All ${view.rotation!.total} sessions go, across every module — not only ${module || "the one shown"}. This can't be undone.`)}
+            `Delete the lab rotation for ${programmeName}? All ${rotation.total} sessions go, across every module — not only ${module}. This can't be undone.`)}
         >
-          {view.rotation.sessions.length === 0 ? (
-            <p className="dim" style={{ fontSize: 13 }}>
-              The programme&rsquo;s rotation has no sessions for {module}.
-            </p>
-          ) : (
-            <div className="saved-scroll">
-              <table>
-                <thead><tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Module</th><th>Activity</th><th>Groups</th></tr></thead>
-                <tbody>
-                  {view.rotation.sessions.map((s, i) => (
-                    <tr key={i}>
-                      <td>{s.week ?? "—"}</td><td className="mono">{s.date ?? "—"}</td><td>{s.day ?? "—"}</td>
-                      <td className="mono">{s.start && s.end ? `${s.start}–${s.end}` : "—"}</td>
-                      <td className="mono">{s.module ?? "—"}</td><td>{s.activity ?? "—"}</td><td>{s.groups.join(" ")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="saved-scroll">
+            <table>
+              <thead><tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Module</th><th>Activity</th><th>Groups</th></tr></thead>
+              <tbody>
+                {rotation.sessions.map((s, i) => (
+                  <tr key={i}>
+                    <td>{s.week ?? "—"}</td><td className="mono">{s.date ?? "—"}</td><td>{s.day ?? "—"}</td>
+                    <td className="mono">{s.start && s.end ? `${s.start}–${s.end}` : "—"}</td>
+                    <td className="mono">{s.module ?? "—"}</td><td>{s.activity ?? "—"}</td><td>{s.groups.join(" ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Entry>
       )}
 
-      {view?.splits.map((sp) => (
+      {module && view?.heading && (
+        <Entry
+          title={`${module} · heading`}
+          meta={`${view.heading.title} · ${when(view.heading.savedAt)}`}
+          deleting={deleting === "heading"}
+          onDelete={() => remove("heading", { kind: "heading", module },
+            `Delete the ${module} heading? Students see DCU's name for it again when the app next opens.`)}
+        >
+          <p className="dim" style={{ fontSize: 12 }}>
+            Shown in place of DCU&rsquo;s name on the day view, the widget and the deadlines list, and on the week grid
+            where the module has no abbreviation.
+          </p>
+        </Entry>
+      )}
+
+      {module && view?.splits.map((sp) => (
         <Entry
           key={`${sp.module}-${sp.activity}`}
           title={`${sp.module} · ${sp.activity} split`}
           meta={`${sp.ranges.length} band${sp.ranges.length === 1 ? "" : "s"} · ${when(sp.savedAt)}`}
           deleting={deleting === `split:${sp.module}:${sp.activity}`}
           onDelete={() => remove(`split:${sp.module}:${sp.activity}`, { kind: "split", module: sp.module, activity: sp.activity },
-            `Delete the ${sp.module} ${sp.activity} split? Students stop seeing which band they are in. This can't be undone.`)}
+            `Delete the ${sp.module} ${sp.activity} split? Students see every band's session again when the app next opens. This can't be undone.`)}
         >
           <table>
             <thead><tr><th>Surnames</th><th>Day</th><th>Time</th><th>Room</th></tr></thead>
@@ -121,7 +141,33 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
         </Entry>
       ))}
 
-      {view?.classList && (
+      {module && view && view.changes.length > 0 && (
+        <Entry
+          title={`${module} · timetable changes`}
+          meta={`${view.changes.length} saved · also under Saved changes on the Timetable page`}
+        >
+          <table>
+            <thead><tr><th>Change</th><th>Dates</th><th /></tr></thead>
+            <tbody>
+              {view.changes.map((c) => (
+                <tr key={c.id}>
+                  <td>{describeChange(c)}</td>
+                  <td className="dim">{c.dates.map(shortDate).join(", ")}</td>
+                  <td className="right">
+                    {/* One row, one programme: put back for it alone, as on the Timetable page. */}
+                    <button type="button" className="danger" disabled={deleting === `change:${c.id}`}
+                      onClick={() => remove(`change:${c.id}`, { kind: "change", id: c.id }, null)}>
+                      {deleting === `change:${c.id}` ? <Spinner /> : "Delete"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Entry>
+      )}
+
+      {module && view?.classList && (
         <Entry
           title="Class list"
           meta={`${view.classList.members} students · v${view.classList.version} · ${when(view.classList.savedAt)}`}
@@ -151,8 +197,9 @@ export function SavedPanel({ programme, module, refresh }: { programme: string; 
   );
 }
 
-function Entry({ title, meta, deleting, onDelete, children }: {
-  title: string; meta: string; deleting: boolean; onDelete: () => void; children: React.ReactNode;
+/// `onDelete` deletes the whole entry; an entry whose rows are deleted one by one has none.
+function Entry({ title, meta, deleting = false, onDelete, children }: {
+  title: string; meta: string; deleting?: boolean; onDelete?: () => void; children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -164,14 +211,21 @@ function Entry({ title, meta, deleting, onDelete, children }: {
           <span className="saved-title">{title}</span>
           <span className="dim">{meta}</span>
         </button>
-        <button type="button" className="danger saved-delete" disabled={deleting} onClick={onDelete}
-                aria-label={`Delete ${title}`}>
-          {deleting ? <><Spinner /> Deleting…</> : "Delete"}
-        </button>
+        {onDelete && (
+          <button type="button" className="danger saved-delete" disabled={deleting} onClick={onDelete}
+                  aria-label={`Delete ${title}`}>
+            {deleting ? <><Spinner /> Deleting…</> : "Delete"}
+          </button>
+        )}
       </div>
       {open && <div className="saved-body">{children}</div>}
     </div>
   );
+}
+
+/// "2026-10-08" → "8 Oct".
+function shortDate(date: string): string {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-IE", { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
 function when(iso: string): string {

@@ -2,6 +2,8 @@ import {
   Allocation, allocationFromRow, changeFromRow, cohortForCourseKey, LabRotation, LabRotations, LabSession,
   profileFromAllocation, StudentProfile, TimetableChange,
 } from '../core/profile';
+import { ModuleSplit, splitFromRow } from '../core/splits';
+import { ModuleTitle, ModuleTitles } from '../core/timetableEvent';
 import { rows, SupabaseREST } from './rest';
 import { PrefKey, Prefs } from './storage';
 
@@ -54,8 +56,6 @@ export interface AllocationStore {
   resolve(courseKey: string, subgroup: string | null): Promise<AllocationResolution>;
   /** The one allocation row for a resolved key. */
   allocation(courseKey: string, key: string): Promise<Allocation | null>;
-  /** The subgroups on a course's list, to ask a student with a shared name which is theirs. */
-  subgroups(courseKey: string): Promise<string[]>;
 }
 
 export class SupabaseAllocationStore implements AllocationStore {
@@ -89,14 +89,6 @@ export class SupabaseAllocationStore implements AllocationStore {
     });
     const row = rows(json)[0];
     return row ? allocationFromRow(row) : null;
-  }
-
-  async subgroups(courseKey: string): Promise<string[]> {
-    const json = await this.rest.json('GET', '/rest/v1/course_allocations', describe, {
-      query: [['select', 'subgroup'], ['course_key', `eq.${courseKey}`]],
-    });
-    const set = new Set(rows(json).flatMap((r) => (typeof r.subgroup === 'string' ? [r.subgroup] : [])));
-    return [...set].sort();
   }
 }
 
@@ -355,6 +347,119 @@ export const TimetableChangeRefresh = {
     }
     if (JSON.stringify(fresh) === JSON.stringify(cache.changes(courseKey))) return false;
     cache.store(fresh, courseKey);
+    return true;
+  },
+};
+
+// MARK: - Module splits
+
+/** The surname splits saved in the console (`module_splits`), for every module. */
+export interface ModuleSplitStore {
+  splits(): Promise<ModuleSplit[]>;
+}
+
+export class SupabaseModuleSplitStore implements ModuleSplitStore {
+  constructor(private readonly rest: SupabaseREST) {}
+
+  /**
+   * Every module's, not only this student's: the table holds a handful of rows, and the
+   * modules a student takes are only known once their weeks have loaded.
+   */
+  async splits(): Promise<ModuleSplit[]> {
+    // Signed in or not at all: the anon key reads an empty table, which would wipe the cache.
+    const json = await this.rest.json('GET', '/rest/v1/module_splits', describe, {
+      auth: 'userOnly',
+      query: [
+        ['select', 'module_key,activity,module_split_ranges(from_letter,to_letter,day,start_time,end_time,room,label)'],
+        ['order', 'module_key,activity'],
+      ],
+    });
+    return rows(json).flatMap((r) => {
+      const split = splitFromRow(r);
+      return split ? [split] : [];
+    });
+  }
+}
+
+/** The last splits downloaded, so they hold with no signal. */
+export class ModuleSplitCache {
+  constructor(private readonly prefs: Prefs) {}
+
+  splits(): ModuleSplit[] {
+    return this.prefs.getJSON<ModuleSplit[]>(PrefKey.moduleSplits, []);
+  }
+
+  store(splits: ModuleSplit[]): void {
+    this.prefs.setJSON(PrefKey.moduleSplits, splits);
+  }
+}
+
+export const ModuleSplitRefresh = {
+  /**
+   * True when the splits differ from what is cached. A failed request keeps the cache:
+   * offline must not put back the other band's lecture.
+   */
+  async run(store: ModuleSplitStore, cache: ModuleSplitCache): Promise<boolean> {
+    let fresh: ModuleSplit[];
+    try {
+      fresh = await store.splits();
+    } catch {
+      return false;
+    }
+    if (JSON.stringify(fresh) === JSON.stringify(cache.splits())) return false;
+    cache.store(fresh);
+    return true;
+  },
+};
+
+// MARK: - Module headings
+
+/** The headings saved in the console (`module_titles`), for every module. */
+export interface ModuleTitleStore {
+  titles(): Promise<ModuleTitle[]>;
+}
+
+export class SupabaseModuleTitleStore implements ModuleTitleStore {
+  constructor(private readonly rest: SupabaseREST) {}
+
+  /** Every module's: a handful of rows, and which modules a student takes is known only later. */
+  async titles(): Promise<ModuleTitle[]> {
+    // Signed in or not at all: the anon key reads an empty table, which would wipe the cache.
+    const json = await this.rest.json('GET', '/rest/v1/module_titles', describe, {
+      auth: 'userOnly',
+      query: [['select', 'module_key,title'], ['order', 'module_key']],
+    });
+    return rows(json).flatMap((r) => {
+      const title = ModuleTitles.fromRow(r);
+      return title ? [title] : [];
+    });
+  }
+}
+
+/** The last headings downloaded, so they hold with no signal. */
+export class ModuleTitleCache {
+  constructor(private readonly prefs: Prefs) {}
+
+  titles(): ModuleTitle[] {
+    return this.prefs.getJSON<ModuleTitle[]>(PrefKey.moduleTitles, []);
+  }
+
+  store(titles: ModuleTitle[]): void {
+    this.prefs.setJSON(PrefKey.moduleTitles, titles);
+  }
+}
+
+export const ModuleTitleRefresh = {
+  /** True when the headings differ from what is cached. A failed request keeps the cache. */
+  async run(store: ModuleTitleStore, cache: ModuleTitleCache): Promise<boolean> {
+    let fresh: ModuleTitle[];
+    try {
+      fresh = await store.titles();
+    } catch {
+      return false;
+    }
+    if (JSON.stringify(fresh) === JSON.stringify(cache.titles())) return false;
+    cache.store(fresh);
     return true;
   },
 };

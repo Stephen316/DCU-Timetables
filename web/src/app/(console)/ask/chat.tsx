@@ -4,12 +4,17 @@ import { useState, useRef, useEffect } from "react";
 import { ask, accept, type Turn, type AskResult } from "./actions";
 import type { Proposal } from "@/lib/proposals/types";
 import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
+import type { CourseOption } from "@/lib/proposals/catalogue";
+import { listCourses, listModules } from "./courses";
 import { Combobox } from "../combobox";
 import { csvField, ROSTER_HEADER } from "@/lib/roster/parse";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/upload";
 import { Spinner } from "../spinner";
 import { SavedPanel } from "./saved-panel";
-import { describeChange, weekday } from "@/lib/changes/change";
+import { LibraryPanel } from "./library-panel";
+import type { Reused } from "./library";
+import { audience, describeChange, weekday } from "@/lib/changes/change";
+import { describeHeading } from "@/lib/proposals/heading";
 
 /// What the transcript shows. The attachment and proposal number are display only — the
 /// history sent back to the model is the words, as before.
@@ -36,14 +41,16 @@ type Item = {
 function target(p: Proposal): string {
   if (p.kind === "split") return `split ${p.rule.moduleKey} ${p.rule.activity}`;
   // Changes add up rather than replace; only an identical one is "the same thing".
-  if (p.kind === "change") return `change ${JSON.stringify(p.change)}`;
+  if (p.kind === "change") return `change ${JSON.stringify([p.change, p.groups])}`;
+  if (p.kind === "heading") return `heading ${p.heading.moduleKey}`;
   return `${p.kind} ${p.courseKey}`;
 }
 
 function describe(p: Proposal): string {
   if (p.kind === "split") return `${p.rule.moduleKey || "?"} ${p.rule.activity} split`;
   if (p.kind === "roster") return `${p.courseKey || "?"} class list · ${p.rows.length} students`;
-  if (p.kind === "change") return describeChange(p.change);
+  if (p.kind === "change") return describeChange(p.change, whoFor(p));
+  if (p.kind === "heading") return describeHeading(p.heading);
   return `${p.courseKey || "?"} rotation · ${p.sessions.filter((s) => s.groups?.length).length} sessions`;
 }
 
@@ -53,9 +60,30 @@ function blocking(p: Proposal): boolean {
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx,.csv,.tsv,.txt,.md";
 
+/// The fixed courses, offered at once while DCU's list loads — and alone if it never does.
+const FIXED: CourseOption[] = PROGRAMMES.map((p) => ({
+  key: p.key, name: p.name,
+  hint: `${p.modules.length} modules · ${p.covers.map((c) => c.code).join(", ")}`,
+  keywords: p.covers.map((c) => `${c.code} ${c.name} ${c.cao}`).join(" "),
+}));
+
+type ModuleOption = { code: string; title: string; hint: string; aka?: string };
+
+function fixedModules(key: string): ModuleOption[] | null {
+  if (!PROGRAMMES.some((p) => p.key === key)) return null;
+  return modulesFor(key).map((m) => ({ code: m.code, title: m.title, hint: m.semester ? `Semester ${m.semester}` : "", aka: m.aka }));
+}
+
 export function Ask() {
   const [programme, setProgramme] = useState(PROGRAMMES[0]?.key ?? "");
   const [moduleKey, setModuleKey] = useState("");
+  // Every DCU course, once the server has the list; the fixed ones until then.
+  const [courses, setCourses] = useState<CourseOption[]>(FIXED);
+  const [coursesNote, setCoursesNote] = useState<string | null>(null);
+  // The selected course's modules: a fixed course's at once, a DCU course's once fetched.
+  const [modules, setModules] = useState<{ key: string; list: ModuleOption[] | null; error?: string }>(
+    () => ({ key: programme, list: fixedModules(programme) }),
+  );
   const [turns, setTurns] = useState<Shown[]>([]);
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -80,6 +108,26 @@ export function Ask() {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns, busy]);
+
+  useEffect(() => {
+    let current = true;
+    listCourses()
+      .then((r) => { if (!current) return; if (r.ok) setCourses(r.courses); else setCoursesNote(r.error); })
+      .catch(() => current && setCoursesNote("DCU's course list couldn't be loaded. Reload to try again."));
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
+    const fixed = fixedModules(programme);
+    if (fixed || !programme) { setModules({ key: programme, list: fixed ?? [] }); return; }
+    let current = true;
+    setModules({ key: programme, list: null });
+    listModules(programme)
+      .then((r) => current && setModules(r.ok ? { key: programme, list: r.modules } : { key: programme, list: [], error: r.error }))
+      .catch(() => current && setModules({ key: programme, list: [], error: `${programme}'s modules couldn't be loaded.` }));
+    // A newer selection supersedes this one; its answer must not land on top.
+    return () => { current = false; };
+  }, [programme]);
 
   // A one-second tick while something is pending, so the wait shows as time passing rather
   // than as a page that might have stopped.
@@ -193,6 +241,18 @@ export function Ask() {
     choose(null);
   }
 
+  /// A saved table, back on the panel as a proposal. A rotation becomes the document the
+  /// next messages correct, as an upload does; a split goes into the transcript in words, so
+  /// a follow-up about it reaches the model with the split in its history.
+  function reuse(r: Extract<Reused, { ok: true }>) {
+    const no = ++counter.current;
+    const isDoc = r.proposal.kind === "roster" || r.proposal.kind === "rotation";
+    setItems((all) => [...all, { no, proposal: r.proposal, status: "open", doc: isDoc ? no : undefined }]);
+    setTurns((t) => [...t, { role: "model", text: r.reply, proposalNos: [no] }]);
+    setLast(null);
+    setNotice(null);
+  }
+
   function update(no: number, change: Partial<Item>) {
     setItems((all) => all.map((i) => (i.no === no ? { ...i, ...change } : i)));
   }
@@ -210,9 +270,11 @@ export function Ask() {
         update(item.no, {
           status: "saved",
           message: proposal.kind === "split"
-            ? `${proposal.rule.moduleKey} ${proposal.rule.activity} saved.`
+            ? `${proposal.rule.moduleKey} ${proposal.rule.activity} split saved. Phones pick it up when the app next opens.`
             : proposal.kind === "change"
-              ? "Change saved. Phones pick it up when the app next opens."
+              ? `${proposal.groups.length > 1 ? `${proposal.groups.length} changes` : "Change"} saved. Phones pick ${proposal.groups.length > 1 ? "them" : "it"} up when the app next opens.`
+            : proposal.kind === "heading"
+              ? `${proposal.heading.moduleKey} heading saved. Phones pick it up when the app next opens.`
             : proposal.kind === "roster"
               ? `Class list saved — ${proposal.rows.length} students. Phones re-check on their next launch.`
               : `Rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`,
@@ -246,18 +308,19 @@ export function Ask() {
             placeholder="Search programmes…"
             value={programme}
             disabled={busy}
-            options={PROGRAMMES.map((p) => ({
-              value: p.key,
-              label: p.name,
-              // Found by any of its programmes' codes or names, but offered as the one course:
-              // splitting by programme is done on the Timetable page.
-              keywords: p.covers.map((c) => `${c.code} ${c.name} ${c.cao}`).join(" "),
+            options={courses.map((c) => ({
+              value: c.key,
+              label: c.name,
+              hint: c.hint,
+              // General Engineering is found by any of its programmes' codes or names, but
+              // offered as the one course: splitting by programme is done on the Timetable page.
+              keywords: c.keywords,
             }))}
             onChange={(key) => {
               setProgramme(key);
               // A module from the old programme is not a module of the new one. Clearing
               // beats carrying a selection that the scope check would reject later.
-              if (!modulesFor(key).some((m) => m.code === moduleKey)) setModuleKey("");
+              if (!fixedModules(key)?.some((m) => m.code === moduleKey)) setModuleKey("");
             }}
           />
           <Combobox
@@ -265,23 +328,29 @@ export function Ask() {
             label="Module"
             placeholder="Search by code or name…"
             value={moduleKey}
-            disabled={busy}
-            options={modulesFor(programme).map((m) => ({
+            disabled={busy || modules.key !== programme || modules.list === null}
+            options={(modules.key === programme ? modules.list ?? [] : []).map((m) => ({
               value: m.code,
               label: m.title,
-              hint: `Semester ${m.semester}`,
+              hint: m.hint || undefined,
               keywords: m.aka,
             }))}
             onChange={setModuleKey}
           />
         </div>
+        {(modules.list === null || modules.error || coursesNote) && (
+          <p className={modules.error || coursesNote ? "tag warn" : "dim"} style={{ fontSize: 12, marginTop: -6 }}>
+            {modules.error ?? coursesNote ?? <><Spinner /> Loading {programme}&rsquo;s modules from DCU…</>}
+          </p>
+        )}
 
         <div className="chat">
           {notice && turns.length === 0 && <p className="tag ok">{notice}</p>}
           {turns.length === 0 && (
             <p className="dim">
               Describe a change, or attach a document. For example: &ldquo;In EEG1001,
-              surnames A to M have the lecture Tuesday at 10, N to Z Thursday at 2&rdquo; —
+              surnames A to M have the lecture Tuesday at 10, N to Z Thursday at 2&rdquo;, or
+              &ldquo;only CE1 and ECE1 have Thursday&rsquo;s 10:00 tutorial this week&rdquo; —
               or attach a document — a lab rotation or a class list, as a PDF, photo,
               spreadsheet, Word file or CSV.
             </p>
@@ -402,7 +471,8 @@ export function Ask() {
           </p>
         )}
 
-        <SavedPanel programme={programme} module={moduleKey} refresh={refresh} />
+        <SavedPanel programme={programme} programmeName={courses.find((c) => c.key === programme)?.name} module={moduleKey} refresh={refresh} />
+        <LibraryPanel programme={programme} module={moduleKey} refresh={refresh} disabled={busy} onReuse={reuse} />
       </div>
 
       <div className="ask-panel">
@@ -459,6 +529,7 @@ function ProposalCard({ item, others, onAccept, onDiscard, disabled }: {
           {p.kind === "split" ? <SplitPanel p={p} />
             : p.kind === "roster" ? <RosterPanel p={p} />
             : p.kind === "change" ? <ChangePanel p={p} />
+            : p.kind === "heading" ? <HeadingPanel p={p} />
             : <RotationPanel p={p} />}
 
           {item.status !== "saved" && savedTwin && (
@@ -522,16 +593,23 @@ function SplitPanel({ p }: { p: Extract<Proposal, { kind: "split" }> }) {
   );
 }
 
+/// "group C", "BMED1, CAM1", "everyone on EEG1" — or no one, when what was asked for couldn't be worked out.
+function whoFor(p: Extract<Proposal, { kind: "change" }>): string {
+  if (!p.groups.length) return "no one";
+  return p.groups.map((g) => (g ? audience(g) : `everyone on ${p.change.courseKey}`)).join(", ");
+}
+
 function ChangePanel({ p }: { p: Extract<Proposal, { kind: "change" }> }) {
   const c = p.change;
   return (
     <>
       <h2>
         {c.kind === "remove" ? "Remove" : "Add"} {c.module}{" "}
-        <span className="dim">for {c.group ? `group ${c.group}` : "everyone on " + c.courseKey}</span>
+        <span className="dim">for {whoFor(p)}</span>
       </h2>
       <table>
         <tbody>
+          {p.keptFor.length > 0 && <tr><th>Kept for</th><td>{p.keptFor.join(", ")}</td></tr>}
           <tr><th>{c.kind === "remove" ? "Class" : "What"}</th>
             <td>{c.kind === "remove" ? <span className="mono">{c.activityCode ?? `every ${c.module} class`}</span> : c.title}</td></tr>
           <tr><th>Time</th><td className="mono">{c.start}{c.end ? `–${c.end}` : ""}</td></tr>
@@ -540,6 +618,31 @@ function ChangePanel({ p }: { p: Extract<Proposal, { kind: "change" }> }) {
           {c.note && <tr><th>Note</th><td>{c.note}</td></tr>}
         </tbody>
       </table>
+      {p.findings.map((f, i) => (
+        <p key={i} className={f.level === "error" ? "tag off" : f.level === "warn" ? "tag warn" : "tag ok"}>{f.message}</p>
+      ))}
+    </>
+  );
+}
+
+function HeadingPanel({ p }: { p: Extract<Proposal, { kind: "heading" }> }) {
+  const h = p.heading;
+  return (
+    <>
+      <h2>
+        {h.moduleKey || <span className="tag off">no module</span>}{" "}
+        <span className="dim">{h.title === null ? "back to DCU's name" : "heading in the app"}</span>
+      </h2>
+      <table>
+        <tbody>
+          <tr><th>Now</th><td>{p.current.saved ?? p.current.dcu ?? <span className="dim">DCU's name</span>}</td></tr>
+          <tr><th>Day view</th><td>{h.title ?? p.current.dcu ?? <span className="dim">DCU's name</span>}</td></tr>
+          <tr><th>Week grid</th><td>{p.current.abbreviation
+            ? <>{p.current.abbreviation} <span className="dim">from the Abbreviations page</span></>
+            : <span className="dim">{h.title ?? "DCU's name"}, shortened by the app</span>}</td></tr>
+        </tbody>
+      </table>
+      <p className="dim" style={{ fontSize: 12 }}>The class&rsquo;s own page keeps DCU&rsquo;s full name and code.</p>
       {p.findings.map((f, i) => (
         <p key={i} className={f.level === "error" ? "tag off" : f.level === "warn" ? "tag warn" : "tag ok"}>{f.message}</p>
       ))}

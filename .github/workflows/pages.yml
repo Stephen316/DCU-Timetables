@@ -1,12 +1,14 @@
-# Publishes site/ (privacy policy, terms, support) to GitHub Pages. The app and the App
-# Store listing link to these pages, so they must stay public. One-time setup: repository
-# Settings → Pages → Source: GitHub Actions.
+# Publishes site/ (privacy policy, terms, support) and the web build of the app, under app/,
+# to GitHub Pages. The app and the App Store listing link to the site pages, so they must
+# stay public. One-time setup: repository Settings → Pages → Source: GitHub Actions, and the
+# repository variables EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (both are
+# public by design; without them the app runs with sign-in switched off).
 name: Pages
 
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "mobile/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -21,14 +23,31 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      EXPO_NO_TELEMETRY: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      - run: npx expo export -p web --output-dir ../_site/app
+        working-directory: mobile
+        env:
+          EXPO_BASE_URL: /${{ github.event.repository.name }}/app
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      - run: cp -R site/. _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

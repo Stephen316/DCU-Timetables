@@ -33,7 +33,38 @@ export interface TimetableEvent {
   staff: string[];
   activity: ActivityCode;
   weekLabels: string[];
+  /**
+   * The heading an admin chose for the module in the console, in place of DCU's name. Put on
+   * by `ModuleTitles.apply`; never stored.
+   */
+  heading?: string;
+  /** The module's name on the week grid, from the console's Abbreviations page. Put on by `ModuleAbbreviations.apply`. */
+  abbreviation?: string;
 }
+
+/** A module's heading, as saved in the console (`module_titles`). */
+export interface ModuleTitle {
+  moduleKey: string;
+  title: string;
+}
+
+export const ModuleTitles = {
+  /** Headings onto DCU's classes. Run before changes, so an added class keeps its own name. */
+  apply(events: TimetableEvent[], titles: ModuleTitle[]): TimetableEvent[] {
+    if (titles.length === 0) return events;
+    const byModule = new Map(titles.map((t) => [t.moduleKey, t]));
+    return events.map((e) => {
+      const t = e.activity.moduleCode ? byModule.get(e.activity.moduleCode) : undefined;
+      return t ? { ...e, heading: t.title } : e;
+    });
+  },
+
+  fromRow(row: Record<string, unknown>): ModuleTitle | null {
+    const { module_key: moduleKey, title } = row;
+    if (typeof moduleKey !== 'string' || typeof title !== 'string' || !title.trim()) return null;
+    return { moduleKey, title: title.trim() };
+  },
+};
 
 export function moduleCodeOf(event: TimetableEvent): string | null {
   return event.activity.moduleCode;
@@ -42,6 +73,50 @@ export function moduleCodeOf(event: TimetableEvent): string | null {
 /** Best available title: module name, else module code, else the raw activity code. */
 export function titleOf(event: TimetableEvent): string {
   return event.moduleName ?? event.activity.moduleCode ?? event.activity.raw;
+}
+
+/**
+ * The title without the code DCU puts in front of the module's name — "EEG1006[1] Materials
+ * Engineering" reads "Materials Engineering". For the day view; the class's own page keeps
+ * the code. A name that is only the code, or doesn't start with it, is left whole. A
+ * heading set in the console wins over DCU's name.
+ */
+export function shortTitleOf(event: TimetableEvent): string {
+  if (event.heading) return event.heading;
+  const name = event.moduleName;
+  const code = event.activity.moduleCode;
+  if (!name || !code || !name.startsWith(code)) return titleOf(event);
+  return /^\S+\s+(\S.*)$/.exec(name)?.[1] ?? name;
+}
+
+/** Long words in DCU's module names, as a timetable would shorten them. */
+const ABBREVIATIONS: Record<string, string> = {
+  engineering: 'Eng.', fundamentals: 'Fund.', professional: 'Prof.', development: 'Dev.',
+  technical: 'Tech.', technology: 'Tech.', mathematics: 'Maths', introduction: 'Intro.',
+  laboratory: 'Lab', programming: 'Prog.', management: 'Mgmt', electronic: 'Elec.',
+  electronics: 'Elec.', electrical: 'Elec.', mechanical: 'Mech.', manufacturing: 'Mfg.',
+  computer: 'Comp.', computing: 'Comp.', communication: 'Comms', communications: 'Comms',
+  chemistry: 'Chem.', statistics: 'Stats', principles: 'Princ.', applications: 'Apps',
+  environmental: 'Env.', information: 'Info.',
+};
+
+/**
+ * The short title squeezed for a narrow block on the week grid: "Fundamentals of
+ * Professional Development" reads "Fund. of Prof. Dev.". Words it doesn't know are kept.
+ */
+export function compactTitleOf(event: TimetableEvent): string {
+  // The Abbreviations page is where the week grid's names are set; anything else is shortened.
+  if (event.abbreviation) return event.abbreviation;
+  return shortTitleOf(event)
+    .split(/\s+/)
+    .filter((word) => word.toLowerCase() !== 'the')
+    .map((word) => (word.toLowerCase() === 'and' ? '&' : ABBREVIATIONS[word.toLowerCase()] ?? word))
+    .join(' ');
+}
+
+/** Taught online, live or recorded — including a class that also has a room. */
+export function isOnline(event: TimetableEvent): boolean {
+  return event.type === 'synchronous' || event.type === 'asynchronous';
 }
 
 export function staffText(event: TimetableEvent): string | null {

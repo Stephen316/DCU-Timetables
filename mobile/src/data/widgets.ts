@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
 import { CancellationStatus } from '../core/cancellation';
-import { Deadline, DeadlineKind, DeadlineRules, isSatInClass } from '../core/deadline';
+import { Deadline, DeadlineKind, DeadlineRules, displayTitle, isSatInClass } from '../core/deadline';
 import { parsedLocations } from '../core/roomLocation';
 import { isoSeconds } from '../core/time';
-import { TimetableEvent, moduleCodeOf, titleOf } from '../core/timetableEvent';
+import { isOnline, moduleCodeOf, shortTitleOf, TimetableEvent } from '../core/timetableEvent';
 
 /**
  * What the home-screen widgets draw, flattened — the app's half of the Swift widget
@@ -36,6 +36,7 @@ export interface WidgetClass {
 export interface WidgetDeadline {
   id: string;
   title: string;
+  /** The module's name where a class gives it, else its code. Named `code` for the extension. */
   code: string;
   due: string;
   /** SF Symbol for the kind, resolved here so the extension needs no `DeadlineKind`. */
@@ -64,16 +65,18 @@ export function deadlineSFSymbol(kind: DeadlineKind): string {
 export const WidgetSnapshotPublisher = {
   /**
    * Rooms as bare codes ("FT301"), not "Polaris, Room 301": a widget row is one line of
-   * small text, and a truncated building name is worse than no building name.
+   * small text, and a truncated building name is worse than no building name. An online
+   * class with no room says so; otherwise the widget would put the module code there.
    */
   room(event: TimetableEvent): string {
-    return parsedLocations(event).map((l) => l.code).filter((c) => c.length > 0).join(' · ');
+    const rooms = parsedLocations(event).map((l) => l.code).filter((c) => c.length > 0).join(' · ');
+    return rooms === '' && isOnline(event) ? 'Online' : rooms;
   },
 
   widgetClass(event: TimetableEvent, status: CancellationStatus): WidgetClass {
     return {
       id: event.id,
-      title: titleOf(event),
+      title: shortTitleOf(event),
       code: moduleCodeOf(event) ?? event.activity.raw,
       room: WidgetSnapshotPublisher.room(event),
       // Whole seconds: Swift's `.iso8601` decoding refuses a fraction.
@@ -83,11 +86,11 @@ export const WidgetSnapshotPublisher = {
     };
   },
 
-  widgetDeadline(deadline: Deadline): WidgetDeadline {
+  widgetDeadline(deadline: Deadline, moduleNames: Map<string, string> = new Map()): WidgetDeadline {
     return {
       id: deadline.id,
-      title: deadline.title,
-      code: deadline.moduleKey,
+      title: displayTitle(deadline),
+      code: moduleNames.get(deadline.moduleKey) ?? deadline.moduleKey,
       due: isoSeconds(deadline.due),
       symbol: deadlineSFSymbol(deadline.kind),
       isSatInClass: isSatInClass(deadline.kind),
@@ -99,6 +102,7 @@ export const WidgetSnapshotPublisher = {
     deadlines: Deadline[],
     status: (event: TimetableEvent) => CancellationStatus,
     now: Date = new Date(),
+    moduleNames: Map<string, string> = new Map(),
   ): WidgetSnapshot {
     return {
       classes: [...events]
@@ -106,7 +110,7 @@ export const WidgetSnapshotPublisher = {
         .map((e) => WidgetSnapshotPublisher.widgetClass(e, status(e))),
       // The same horizon the deadlines tab uses, so the widget can't list something the app
       // has already dropped.
-      deadlines: DeadlineRules.upcoming(deadlines, now).map(WidgetSnapshotPublisher.widgetDeadline),
+      deadlines: DeadlineRules.upcoming(deadlines, now).map((d) => WidgetSnapshotPublisher.widgetDeadline(d, moduleNames)),
       updatedAt: isoSeconds(now),
     };
   },

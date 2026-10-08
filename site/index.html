@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DCU Timetable</title>
 <link rel="stylesheet" href="style.css">
+<script>
+  // Supabase sends confirmation and password-reset links back to this address, with the
+  // session in the URL fragment (#access_token=…) or a failure in its place. A fragment
+  // never reaches a server, so it is handed to the app, under app/, which reads it and
+  // carries on with signing up — the student shouldn't have to find their way there.
+  // Everything else — anyone simply visiting the site — falls through to the page below.
+  (function () {
+    var hash = window.location.hash || '';
+    var search = window.location.search || '';
+    var carriesAuth = /[#&](access_token|error|error_code)=/.test('#' + hash.replace(/^#/, '')) ||
+      /[?&](error|error_code)=/.test(search);
+    if (carriesAuth) window.location.replace('app/' + search + hash);
+  })();
+</script>
 </head>
 <body>
 <main>

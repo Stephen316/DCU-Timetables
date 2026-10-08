@@ -28,10 +28,6 @@ export function addDays(date: Date, days: number): Date {
   );
 }
 
-export function addMinutes(date: Date, minutes: number): Date {
-  return new Date(date.getTime() + minutes * MINUTE);
-}
-
 export function isSameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&

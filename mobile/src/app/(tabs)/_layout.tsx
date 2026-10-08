@@ -1,19 +1,11 @@
 import { Tabs } from 'expo-router';
+import { TabBar } from '../../features/week/TabBar';
 import { Icon } from '../../ui/components';
-import { useTheme } from '../../ui/theme';
 
 /** The signed-in app: the timetable and the deadlines list, sharing one week model. */
 export default function TabsLayout() {
-  const theme = useTheme();
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: theme.accent,
-        tabBarInactiveTintColor: theme.inkSecondary,
-        tabBarStyle: { backgroundColor: theme.surface, borderTopColor: theme.separator },
-      }}
-    >
+    <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
       <Tabs.Screen
         name="index"
         options={{ title: 'Timetable', tabBarIcon: ({ color, size }) => <Icon name="calendar" color={color} size={size} /> }}

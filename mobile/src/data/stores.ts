@@ -2,11 +2,12 @@ import {
   CancellationReport, CancellationTally, EventVerdict, isReportStance, VerdictState, VERDICT_STATES,
 } from '../core/cancellation';
 import {
-  Deadline, DeadlineConfirmation, DeadlineReportReason, DeadlineRules, DeadlineStanding, isDeadlineKind,
+  Deadline, DeadlineConfirmation, DeadlineFields, DeadlineReportReason, DeadlineRules, DeadlineStanding, isDeadlineKind,
 } from '../core/deadline';
 import { AccountProfile, makeAccountProfile, parseRole } from '../core/identity';
 import { isoSeconds, parseISO } from '../core/time';
-import { PostgREST, rows, ServiceError, SupabaseREST, userFacing } from './rest';
+import { TimetableCategory } from '../core/timetableEvent';
+import { notSignedIn, PostgREST, rows, ServiceError, SupabaseREST, userFacing } from './rest';
 import { SignedInUser } from './session';
 import { PrefKey, Prefs } from './storage';
 
@@ -125,14 +126,27 @@ export interface DeadlineStore {
   /** Every module on screen at once — the timetable needs them all to draw its borders. */
   deadlinesForModules(moduleKeys: string[]): Promise<Deadline[]>;
   submit(deadline: Deadline): Promise<void>;
+  /**
+   * The poster changing their own. The server clears the other confirmations when the date
+   * or type moves, and refuses anyone else's — or a deadline a moderator blocked.
+   */
+  edit(id: string, fields: DeadlineFields): Promise<void>;
+  /** This student's own name for a deadline; null goes back to the shared title. */
+  setLabel(id: string, label: string | null): Promise<void>;
   /** Only the submitter can remove one — enforced by RLS, not just by hiding the button. */
   withdraw(id: string, submitterID: string): Promise<void>;
   /** How many vouched for each deadline, and whether this person did — never who. */
   standings(ids: string[]): Promise<Map<string, DeadlineStanding>>;
   confirm(deadlineID: string, confirmerID: string): Promise<void>;
   unconfirm(deadlineID: string, confirmerID: string): Promise<void>;
-  /** Sends the deadline to the console's review queue and hides it from this student. */
+  /**
+   * Sends the deadline to the console's review queue. Any reason but `wrong` hides it from
+   * this student; `wrong` is a dispute, counted in the standings. Either takes back a
+   * confirmation.
+   */
   report(deadlineID: string, reason: DeadlineReportReason): Promise<void>;
+  /** Takes back this student's open report or dispute. */
+  withdrawReport(deadlineID: string): Promise<void>;
   /** Stops everything the deadline's author posts reaching this student. */
   hideAuthor(deadlineID: string): Promise<void>;
   /** How many people this student has hidden. A count, not a list. */
@@ -162,7 +176,7 @@ export class SupabaseDeadlineStore implements DeadlineStore {
   private async fetch(moduleFilter: string): Promise<Deadline[]> {
     const json = await this.rest.json('GET', '/rest/v1/module_deadlines_public', SupabaseDeadlineStore.describe, {
       query: [
-        ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at'],
+        ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label,grade_weight'],
         ['module_key', moduleFilter],
         ['due_at', `gte.${isoSeconds(DeadlineRules.horizon())}`],
         ['order', 'due_at.asc'],
@@ -181,6 +195,10 @@ export class SupabaseDeadlineStore implements DeadlineStore {
         submitterID: '',
         submittedAt: parseISO(r.submitted_at as string) ?? new Date(),
         isMine: r.is_mine === true,
+        status: r.status === 'verified' ? 'verified' : 'pending',
+        editedAt: typeof r.edited_at === 'string' ? parseISO(r.edited_at) : null,
+        myLabel: typeof r.my_label === 'string' && r.my_label.length > 0 ? r.my_label : null,
+        gradeWeight: typeof r.grade_weight === 'number' ? r.grade_weight : 0,
       }];
     });
   }
@@ -195,8 +213,19 @@ export class SupabaseDeadlineStore implements DeadlineStore {
         due_at: isoSeconds(deadline.due),
         kind: deadline.kind,
         submitter_id: deadline.submitterID,
+        grade_weight: deadline.gradeWeight,
       }],
     });
+  }
+
+  async edit(id: string, fields: DeadlineFields): Promise<void> {
+    await this.rpc('edit_deadline', {
+      p_deadline: id, p_title: fields.title, p_kind: fields.kind, p_due: isoSeconds(fields.due), p_weight: fields.gradeWeight,
+    });
+  }
+
+  async setLabel(id: string, label: string | null): Promise<void> {
+    await this.rpc('set_deadline_label', { p_deadline: id, p_label: label ?? '' });
   }
 
   async withdraw(id: string, submitterID: string): Promise<void> {
@@ -209,11 +238,12 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     const result = new Map<string, DeadlineStanding>();
     if (ids.length === 0) return result;
     const json = await this.rest.json('GET', '/rest/v1/deadline_confirmation_tallies', SupabaseDeadlineStore.describe, {
-      query: [['select', 'deadline_id,confirm_count,mine'], ['deadline_id', PostgREST.inList(ids)]],
+      query: [['select', 'deadline_id,confirm_count,mine,dispute_count,disputed_by_me'], ['deadline_id', PostgREST.inList(ids)]],
     });
     for (const r of rows(json)) {
       if (typeof r.deadline_id === 'string' && typeof r.confirm_count === 'number') {
-        result.set(r.deadline_id, new DeadlineStanding(r.confirm_count, r.mine === true));
+        const disputes = typeof r.dispute_count === 'number' ? r.dispute_count : 0;
+        result.set(r.deadline_id, new DeadlineStanding(r.confirm_count, r.mine === true, disputes, r.disputed_by_me === true));
       }
     }
     return result;
@@ -237,6 +267,10 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     await this.rpc('report_deadline', { p_deadline: deadlineID, p_reason: reason });
   }
 
+  async withdrawReport(deadlineID: string): Promise<void> {
+    await this.rpc('withdraw_deadline_report', { p_deadline: deadlineID });
+  }
+
   async hideAuthor(deadlineID: string): Promise<void> {
     await this.rpc('hide_author_of', { p_deadline: deadlineID });
   }
@@ -250,7 +284,7 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     await this.rpc('unhide_all_authors', {});
   }
 
-  private rpc(name: string, args: Record<string, string>): Promise<unknown> {
+  private rpc(name: string, args: Record<string, string | number>): Promise<unknown> {
     return this.rest.json('POST', `/rest/v1/rpc/${name}`, SupabaseDeadlineStore.describe, { body: args });
   }
 }
@@ -263,15 +297,27 @@ export class LocalDeadlineStore implements DeadlineStore {
   constructor(private readonly prefs: Prefs) {}
 
   private load(): Deadline[] {
+    // Rows saved before status, edits and names existed have none of the three.
+    type Stored = Omit<Deadline, 'due' | 'submittedAt' | 'editedAt' | 'status' | 'myLabel' | 'gradeWeight'>
+      & { due: number; submittedAt: number; editedAt?: number | null; status?: Deadline['status']; myLabel?: string | null; gradeWeight?: number };
     return this.prefs
-      .getJSON<(Omit<Deadline, 'due' | 'submittedAt'> & { due: number; submittedAt: number })[]>(PrefKey.localDeadlines, [])
-      .map((d) => ({ ...d, due: new Date(d.due), submittedAt: new Date(d.submittedAt), isMine: d.isMine ?? null }));
+      .getJSON<Stored[]>(PrefKey.localDeadlines, [])
+      .map((d) => ({
+        ...d,
+        due: new Date(d.due),
+        submittedAt: new Date(d.submittedAt),
+        isMine: d.isMine ?? null,
+        status: d.status ?? 'pending',
+        editedAt: typeof d.editedAt === 'number' ? new Date(d.editedAt) : null,
+        myLabel: d.myLabel ?? null,
+        gradeWeight: d.gradeWeight ?? 0,
+      }));
   }
 
   private save(list: Deadline[]): void {
     this.prefs.setJSON(
       PrefKey.localDeadlines,
-      list.map((d) => ({ ...d, due: d.due.getTime(), submittedAt: d.submittedAt.getTime() })),
+      list.map((d) => ({ ...d, due: d.due.getTime(), submittedAt: d.submittedAt.getTime(), editedAt: d.editedAt?.getTime() ?? null })),
     );
   }
 
@@ -290,6 +336,14 @@ export class LocalDeadlineStore implements DeadlineStore {
 
   async submit(deadline: Deadline): Promise<void> {
     this.save([...this.load(), deadline]);
+  }
+
+  async edit(id: string, fields: DeadlineFields): Promise<void> {
+    this.save(this.load().map((d) => (d.id === id ? { ...d, ...fields, editedAt: new Date() } : d)));
+  }
+
+  async setLabel(id: string, label: string | null): Promise<void> {
+    this.save(this.load().map((d) => (d.id === id ? { ...d, myLabel: label } : d)));
   }
 
   async withdraw(id: string, submitterID: string): Promise<void> {
@@ -318,6 +372,7 @@ export class LocalDeadlineStore implements DeadlineStore {
   }
 
   async report(): Promise<void> {}
+  async withdrawReport(): Promise<void> {}
   async hideAuthor(): Promise<void> {}
   async hiddenAuthorCount(): Promise<number> { return 0; }
   async unhideAllAuthors(): Promise<void> {}
@@ -416,6 +471,9 @@ export interface ProfileStore {
   myProfile(): Promise<AccountProfile | null>;
   /** Records the student number. Set once — after that only an admin can change it. */
   setStudentID(number: string): Promise<void>;
+  /** The programme this account last picked, so signing back in doesn't ask again. */
+  savedProgramme(): Promise<TimetableCategory | null>;
+  saveProgramme(programme: TimetableCategory): Promise<void>;
   /** Deletes the account for good. Contributions survive with the link broken. */
   deleteAccount(): Promise<void>;
 }
@@ -427,7 +485,7 @@ export class SupabaseProfileStore implements ProfileStore {
 
   async myProfile(): Promise<AccountProfile | null> {
     const uid = this.rest.session.userID;
-    if (!uid) throw userFacing("You're not signed in.");
+    if (!uid) throw notSignedIn();
     const json = await this.rest.json('GET', '/rest/v1/profiles', SupabaseProfileStore.describe, {
       query: [['select', 'id,role,pi,display_name,banned_until,student_id'], ['id', `eq.${uid}`]],
     });
@@ -446,7 +504,7 @@ export class SupabaseProfileStore implements ProfileStore {
   }
 
   async setStudentID(number: string): Promise<void> {
-    if (!this.rest.session.userID) throw userFacing("You're not signed in.");
+    if (!this.rest.session.userID) throw notSignedIn();
     const response = await this.rest.request('POST', '/rest/v1/rpc/set_student_id', {
       body: { p_student_id: number },
     });
@@ -460,6 +518,29 @@ export class SupabaseProfileStore implements ProfileStore {
       }
     }
     throw new ServiceError(response.status, SupabaseProfileStore.describe(response.status));
+  }
+
+  /** Its own request, not part of `myProfile`, so a database without the column only loses this. */
+  async savedProgramme(): Promise<TimetableCategory | null> {
+    const uid = this.rest.session.userID;
+    if (!uid) throw notSignedIn();
+    const json = await this.rest.json('GET', '/rest/v1/profiles', SupabaseProfileStore.describe, {
+      query: [['select', 'saved_programme'], ['id', `eq.${uid}`]],
+    });
+    const saved = rows(json)[0]?.saved_programme as Partial<TimetableCategory> | null | undefined;
+    if (!saved || typeof saved.identity !== 'string' || typeof saved.name !== 'string') return null;
+    return {
+      identity: saved.identity,
+      name: saved.name,
+      categoryTypeIdentity: typeof saved.categoryTypeIdentity === 'string' ? saved.categoryTypeIdentity : '',
+    };
+  }
+
+  async saveProgramme(programme: TimetableCategory): Promise<void> {
+    if (!this.rest.session.userID) throw notSignedIn();
+    await this.rest.json('POST', '/rest/v1/rpc/set_programme', SupabaseProfileStore.describe, {
+      body: { p_programme: programme },
+    });
   }
 
   async deleteAccount(): Promise<void> {
@@ -480,5 +561,9 @@ export class LocalProfileStore implements ProfileStore {
     return current ? makeAccountProfile(current.id) : null;
   }
   async setStudentID(): Promise<void> {}
+  async savedProgramme(): Promise<TimetableCategory | null> {
+    return null;
+  }
+  async saveProgramme(): Promise<void> {}
   async deleteAccount(): Promise<void> {}
 }

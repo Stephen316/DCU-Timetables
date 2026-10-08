@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Stephen316/DCU-Timetables/security/advisories/new
+    about: Report security problems privately, not as a public issue.
+  - name: App support
+    url: https://stephen316.github.io/DCU-Timetables/support.html
+    about: Help using the app, account questions and data requests.

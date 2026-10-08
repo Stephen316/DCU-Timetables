@@ -108,14 +108,22 @@ export const PrefKey = {
   studentID: 'studentID',
   profile: 'studentProfile',
   selectedProgramme: 'selectedProgramme',
-  hiddenGroups: 'hiddenGroups',
+  /** `accountID:programmeIdentity` last sent to the account, so it goes up once, not per launch. */
+  programmeSaved: 'programmeSaved',
+  /** The old "I won't attend" list. Read once, to carry it over into `timetableEdits`. */
   skipped: 'skippedEvents',
+  /** `TimetableEdit[]`: classes the student added to or dropped from their own timetable. */
+  timetableEdits: 'timetableEdits',
   allocationTried: 'allocationTried',
   weekShowsCalendar: 'weekShowsCalendar',
-  engLabGroup: 'engLabGroup',
   appearance: 'appearance',
+  /** `AlertSettings`: how long before a class it alerts. Kept across sign-outs, like appearance. */
+  classAlerts: 'classAlerts',
   labRotation: (courseKey: string) => `labRotation:${courseKey}`,
   timetableChanges: (courseKey: string) => `timetableChanges:${courseKey}`,
+  moduleSplits: 'moduleSplits',
+  moduleTitles: 'moduleTitles',
+  moduleAbbreviations: 'moduleAbbreviations',
   localReports: 'local:cancellationReports',
   localDeadlines: 'local:deadlines',
   localConfirmations: 'local:deadlineConfirmations',

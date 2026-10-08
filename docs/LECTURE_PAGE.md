@@ -143,10 +143,16 @@ A highlight also outranks the faint orange clash outline. Colours are mapped in 
 ## Where a deadline appears
 
 A deadline is submitted from a class's page and pinned to that class (`at_group_key`, a
-`TimetableEvent.groupKey`):
+`TimetableEvent.groupKey`). Its due date starts at that class's own start time
+(`DeadlineRules.defaultDue`) — or the same slot next week if the class has already begun — and
+two small controls beside "Due" change the date or the time. It shows up here:
 
-- **At the very top of that class's page** — "Lab report due at this class" — and nowhere
-  else. Monday's lecture doesn't headline what's handed in at Thursday's practical.
+- **Just under the heading of that class's page** — "Lab report due at this class", with
+  its date and weight — and nowhere else. Monday's lecture doesn't headline what's handed in
+  at Thursday's practical.
+- **On the day view**, as a small blue "!" beside the class's title and a line in its
+  description with the type and title ("Quiz: Quiz 2"). A class with nothing due has neither.
+- **In the corner of its block** on the week grid, as the same blue "!".
 - **At the bottom of every class's page in that module**, under "All EEG1001 dates", which is
   the full list of assignments, quizzes and exams regardless of which class they're pinned to.
 - **As a border** on the pinned class, on the due day only.
@@ -163,6 +169,35 @@ and capping the wording would hide that. `DeadlineRules.confirmThreshold` (3, co
 submitter, whose submission auto-confirms) only decides when the row is **flagged**: at that
 point the question mark becomes a green seal. Vouches are de-duplicated by person, in the app
 and by the composite primary key.
+
+The other side is **The date or details are wrong**, in the row's "…" menu. It's a dispute,
+not a report: counted in the open ("2 people say the details are wrong"), and the row stays
+up for everyone, including whoever disputed it — a wrong date is exactly the one a class needs
+warning about. Each person holds one side at a time; the server withdraws your confirmation
+when you dispute, and your dispute when you confirm. The seal needs three vouches *and* more
+of them than disputes; once disputes catch up, the row carries the warning in orange instead.
+Only offensive, spam and "something else" reports hide a row (from the reporter at once, and
+from everyone at three).
+
+A moderator's confirmation — from a trusted student or the console — sits above both counts
+and reads **"Confirmed by a moderator"**, the same precedence a verdict has over cancellation
+reports.
+
+## Changing a deadline
+
+- **The poster edits their own** (title, type, due date). Moving the date or type clears
+  everyone else's confirmations, since they vouched for the old one; the form says how many
+  before you save. An edit to a moderator-confirmed deadline sends it back to waiting, and the
+  row is marked "edited". A blocked deadline can't be edited back into view.
+- **What it's worth.** The form has a "Worth" box for the percentage of the module's grade,
+  a whole number from 0 to 100. Blank or 0 means not graded, and every row says so ("Not
+  graded", or "20% of the grade"). Changing only the weight keeps the confirmations.
+- **Anyone gives any deadline their own name** ("Give it my own name…"). Only they see it —
+  on the row, the class banner, the timetable outline and the widget — with the shared title
+  underneath. It's stored per account (`deadline_labels`), so it follows them to a new phone.
+- **The console** can edit, confirm, block, unblock or remove any deadline from its Deadlines
+  page. Blocking keeps the row, and a new deadline with the same title on the same day in the
+  same module arrives already blocked.
 
 ## Limits worth knowing
 

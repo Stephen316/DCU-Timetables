@@ -1,0 +1,32 @@
+# The Mac app: a native window around the student app's web build. `xcodegen generate` in
+# this folder writes DCUTimetableMac.xcodeproj (git-ignored); see README.md.
+name: DCUTimetableMac
+options:
+  bundleIdPrefix: com.stephenh
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  DCUTimetableMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: DCUTimetable
+    settings:
+      base:
+        PRODUCT_NAME: DCU Timetable
+        PRODUCT_BUNDLE_IDENTIFIER: com.stephenh.dcutimetable.mac
+        INFOPLIST_FILE: DCUTimetable/Info.plist
+        CODE_SIGN_ENTITLEMENTS: DCUTimetable/DCUTimetable.entitlements
+        # Signed to run on this Mac without an Apple team; set DEVELOPMENT_TEAM to distribute.
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: YES

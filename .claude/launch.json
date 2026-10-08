@@ -20,6 +20,33 @@
       ],
       "port": 8081,
       "cwd": "mobile"
+    },
+    {
+      "name": "mobile-preview",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "EXPO_PUBLIC_PREVIEW=1",
+        "npx",
+        "expo",
+        "start",
+        "--web",
+        "--port",
+        "8082"
+      ],
+      "port": 8082,
+      "cwd": "mobile"
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4100",
+        "--directory",
+        "site"
+      ],
+      "port": 4100
     }
   ]
 }

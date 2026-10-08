@@ -21,7 +21,8 @@ export type Module = {
   code: string;
   /// DCU's title, without the "(Semester …)" suffix it carries in the API.
   title: string;
-  semester: "1" | "2" | "1 & 2";
+  /// Absent for a course read from DCU, whose timetable doesn't say.
+  semester?: "1" | "2" | "1 & 2";
   /// Search-only words, for where people's words and DCU's differ. "maths" is not a
   /// substring of "Mathematics", and "2" is not in "II" — typing either found nothing.
   aka?: string;
@@ -100,10 +101,11 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
 export function checkScope(
   scope: Scope,
   proposed: { module?: string | null; programme?: string | null } = {},
+  /** The course, when it isn't one of the fixed ones here — resolved from DCU on the server. */
+  programme: Programme | undefined = programmeFor(scope.programme),
 ): RuleProblem[] {
   const problems: RuleProblem[] = [];
 
-  const programme = programmeFor(scope.programme);
   if (!programme) {
     return [{ level: "error", message: "No programme selected." }];
   }

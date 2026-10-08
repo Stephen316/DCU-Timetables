@@ -1,36 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 import { CANCELLATION_NET_THRESHOLD, CANCELLATION_THRESHOLD, ReportStance, VERDICT_STATES, VerdictState } from '../../core/cancellation';
-import { CONFIRM_THRESHOLD, Deadline, deadlineKindLabel, isSatInClass } from '../../core/deadline';
-import { Attendance, Lecturer, lecturerDisplayName, lecturerInitials } from '../../core/misc';
+import {
+  CONFIRM_THRESHOLD, Deadline, deadlineKindLabel, DeadlineRules, displayTitle, gradeWeightLabel, isSatInClass,
+} from '../../core/deadline';
+import { Lecturer, lecturerDisplayName, lecturerInitials } from '../../core/misc';
 import { locationDisplay } from '../../core/roomLocation';
 import { formatComplete, formatTime, formatWeekdayDayMonth } from '../../core/time';
 import { eventTypeLabel, groupLabelOf, TimetableEvent, titleOf } from '../../core/timetableEvent';
-import { PrefKey } from '../../data/storage';
-import { useModel, usePrefJSON, useServices } from '../../state/hooks';
+import { useModel, useServices } from '../../state/hooks';
 import {
-  ActionRow, ConfirmSheet, IconName, Label, LabeledRow, ListScroll, Row, Section, ToggleRow, Txt,
+  ActionRow, ConfirmSheet, DeadlineMark, IconName, Label, LabeledRow, ListScroll, Row, Section, Txt,
 } from '../../ui/components';
-import { deadlineTint } from '../../ui/meaning';
 import { Space, useTheme, withAlpha } from '../../ui/theme';
 import { DeadlineForm, DeadlineRow } from '../deadlines/DeadlineRows';
 import { LectureModel } from './LectureModel';
 
 /**
- * Everything known about one class, on its own page. Three kinds of information share it
- * and are kept visually distinct because they carry different weight: what the university
- * says (times, room, staff), what other students say (reports, deadlines), and what this
- * student has decided (not attending).
+ * Everything known about one class, on its own page. Two kinds of information share it and
+ * are kept visually distinct because they carry different weight: what the university says
+ * (times, room, staff), and what other students say (reports, deadlines).
  */
 export function LectureScreen({ event, isClashing, known }: { event: TimetableEvent; isClashing: boolean; known: Deadline[] }) {
   const services = useServices();
   const theme = useTheme();
   const model = useModel(useMemo(() => new LectureModel(services, event, known), [services, event, known]));
-  const [skipped, setSkipped] = usePrefJSON<string[]>(PrefKey.skipped, []);
   const [showingForm, setShowingForm] = useState(false);
   /** Non-null while the "are you sure?" card is up, holding the side being reported. */
   const [pendingReport, setPendingReport] = useState<ReportStance | null>(null);
-  const isSkipping = skipped.includes(model.eventKey);
   const status = model.status;
 
   useEffect(() => {
@@ -60,31 +57,30 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           </Section>
         ) : null}
 
-        {/* The very top of the page: what's due at this exact class today, and nothing else. */}
-        {model.dueHere.length > 0 ? (
-          <Section>
-            {model.dueHere.map((d) => (
-              <Row key={d.id}>
-                <Label
-                  icon={isSatInClass(d.kind) ? 'test' : 'assignment'}
-                  text={isSatInClass(d.kind) ? `${deadlineKindLabel(d.kind)} in this class` : `${deadlineKindLabel(d.kind)} due at this class`}
-                  type="status"
-                  color={deadlineTint(d.kind, theme)}
-                />
-                <Txt type="headline">{d.title}</Txt>
-                <Txt type="caption" color={theme.inkSecondary}>{formatComplete(d.due)}</Txt>
-              </Row>
-            ))}
-          </Section>
-        ) : null}
-
         <Section>
           <Row>
             <Txt type="pageTitle">{titleOf(event)}</Txt>
             <Txt type="subheadline" color={theme.inkSecondary}>{groupLabelOf(event)}</Txt>
-            {isSkipping ? <Label icon="notAttending" text="You're not attending this" type="caption" color={theme.inkSecondary} /> : null}
           </Row>
         </Section>
+
+        {/* Just under the heading: what's due at this exact class, and nothing else. */}
+        {model.dueHere.length > 0 ? (
+          <Section>
+            {model.dueHere.map((d) => (
+              <Row key={d.id}>
+                <View style={styles.dueLine}>
+                  <DeadlineMark />
+                  <Txt type="status" color={theme.tint.test}>
+                    {isSatInClass(d.kind) ? `${deadlineKindLabel(d.kind)} in this class` : `${deadlineKindLabel(d.kind)} due at this class`}
+                  </Txt>
+                </View>
+                <Txt type="headline">{displayTitle(d)}</Txt>
+                <Txt type="caption" color={theme.inkSecondary}>{formatComplete(d.due)} · {gradeWeightLabel(d.gradeWeight)}</Txt>
+              </Row>
+            ))}
+          </Section>
+        ) : null}
 
         <Section header="Class">
           <LabeledRow label="Time" value={`${formatTime(event.start)}–${formatTime(event.end)}`} />
@@ -103,12 +99,6 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           ) : (
             model.lecturers.map((l) => <LecturerRow key={l.name} lecturer={l} />)
           )}
-        </Section>
-
-        <Section footer="Only you see this. It doesn't report the class as cancelled.">
-          <ToggleRow value={isSkipping} onChange={() => setSkipped(Attendance.toggling(model.eventKey, skipped))}>
-            <Label icon="notAttending" text="I won't attend this" />
-          </ToggleRow>
         </Section>
 
         <Section
@@ -168,7 +158,7 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
 
         <Section
           header={`All ${model.moduleKey} dates`}
-          footer={`Shared with everyone taking this module. Confirm the ones you know are right — a deadline is flagged as confirmed once ${CONFIRM_THRESHOLD} people have vouched for it. You can only remove your own.`}
+          footer={`Shared with everyone taking this module. Confirm the ones you know are right — a deadline is flagged as confirmed once ${CONFIRM_THRESHOLD} people have vouched for it and more say it's right than wrong. You can only edit or remove your own, but you can give any of them a name only you see.`}
         >
           {model.isLoading && model.deadlines.length === 0 ? (
             <Row><ActivityIndicator color={theme.inkSecondary} /></Row>
@@ -184,6 +174,9 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
                 variant="module"
                 actions={{
                   onConfirm: () => void model.toggleConfirmation(d),
+                  onDispute: () => void model.toggleDispute(d),
+                  onEdit: (fields) => void model.editDeadline(d, fields),
+                  onRename: (label) => void model.renameDeadline(d, label),
                   onDelete: () => void model.removeDeadline(d),
                   onReport: (reason) => void model.reportDeadline(d, reason),
                   onHideAuthor: () => void model.hideAuthor(d),
@@ -197,8 +190,10 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
 
       <DeadlineForm
         visible={showingForm}
+        // Due at this class unless the student says otherwise.
+        defaultDue={DeadlineRules.defaultDue(event)}
         onClose={() => setShowingForm(false)}
-        onSubmit={(title, kind, due) => void model.addDeadline(title, kind, due)}
+        onSubmit={(fields) => void model.addDeadline(fields)}
       />
       <ConfirmSheet
         visible={pendingReport !== null}
@@ -239,6 +234,7 @@ function LecturerRow({ lecturer }: { lecturer: Lecturer }) {
 
 const styles = StyleSheet.create({
   banner: { gap: Space.xxs, paddingHorizontal: Space.xs },
+  dueLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   bannerLines: { marginLeft: 26, gap: Space.xxs },
   lecturer: { flexDirection: 'row', alignItems: 'center', gap: Space.m },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

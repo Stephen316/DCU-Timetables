@@ -1,6 +1,7 @@
 "use server";
 
-import { currentProfile, supabaseServer } from "@/lib/supabase/server";
+import { consoleOpen } from "@/lib/auth/gate";
+import { supabaseServer } from "@/lib/supabase/server";
 import { mistralKey, MISTRAL_MODEL } from "@/lib/mistral/client";
 import { classify } from "@/lib/mistral/api";
 import { readDocument, transcribeRotation, type ReadDocument } from "@/lib/mistral/rotation";
@@ -9,12 +10,15 @@ import { correctTable } from "@/lib/mistral/correct";
 import { applyToRoster, applyToRotation, rosterTable, rotationTable, ROSTER_COLUMNS, ROTATION_COLUMNS } from "@/lib/corrections/apply";
 import type { RotationSession } from "@/lib/extraction/rotation";
 import { normalise } from "@/lib/extraction/normalise";
-import { interpretMessage, type ChangeArgs } from "@/lib/mistral/split";
+import { interpretMessage, PROGRAMME_MODEL, type ChangeArgs, type HeadingArgs } from "@/lib/mistral/split";
+import { checkHeading, checkHeadingProvenance, type Heading } from "@/lib/proposals/heading";
 import { classes, dublin, weeks } from "@/lib/dcu/timetable";
-import { checkChangeProvenance, describeChange, fromRow, type TimetableChange } from "@/lib/changes/change";
-import { reviewChange, saveChange } from "../timetable/actions";
+import { checkAudienceProvenance, checkChangeProvenance, describeChange, fromRow, programmesNamed, type TimetableChange } from "@/lib/changes/change";
+import { saveChanges } from "../timetable/actions";
+import { review } from "@/lib/changes/review";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
-import { PROGRAMME_CODE, checkScope, moduleFor, programmeFor, type Scope } from "@/lib/proposals/courses";
+import { programmeFor, type Programme, type Scope } from "@/lib/proposals/courses";
+import { phoneCohortProblem, resolveCourse, scopeCheck } from "@/lib/proposals/catalogue";
 import type { Proposal } from "@/lib/proposals/types";
 import type { Finding } from "@/lib/extraction/rotation";
 import { validateRotation } from "@/lib/extraction/rotation";
@@ -36,18 +40,32 @@ export type AskResult = {
 };
 
 
+/// The conversation the page sent back, or null when it isn't one — a hand-made POST, or a
+/// page from an older deploy.
+function parseHistory(raw: FormDataEntryValue | null): Turn[] | null {
+  try {
+    const value: unknown = JSON.parse(typeof raw === "string" && raw ? raw : "[]");
+    if (!Array.isArray(value)) return null;
+    const ok = value.every((t) =>
+      t && typeof t === "object" && (t.role === "user" || t.role === "model") && typeof t.text === "string");
+    return ok ? (value as Turn[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function ask(form: FormData): Promise<AskResult> {
   // The layout redirects non-admins, but a Server Action is its own entry point — reachable
   // by POST without ever rendering the page that hosts it.
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
 
   const scope: Scope = {
     programme: String(form.get("programme") ?? "").trim(),
     module: String(form.get("module") ?? "").trim(),
   };
   const message = String(form.get("message") ?? "").trim();
-  const history: Turn[] = JSON.parse(String(form.get("history") ?? "[]"));
+  const history = parseHistory(form.get("history"));
+  if (!history) return { ok: false, error: "The conversation couldn't be read. Start a new conversation and try again." };
   const file = form.get("file");
   const hasFile = file instanceof File && file.size > 0;
 
@@ -74,8 +92,8 @@ export async function ask(form: FormData): Promise<AskResult> {
 
     // Stating the selection removes the clarifying round-trip — the first reply to a
     // well-formed split used to be "which module is this for?".
-    const programme = programmeFor(scope.programme);
-    const title = moduleFor(scope.module)?.title;
+    const programme = await courseOf(scope);
+    const title = programme?.modules.find((m) => m.code === scope.module)?.title;
     const scopeLine = programme && scope.module
       ? `The administrator has selected ${programme.name} (${programme.key}), module ` +
         `${scope.module}${title ? ` (${title})` : ""}. This request is for that module. Do ` +
@@ -83,9 +101,12 @@ export async function ask(form: FormData): Promise<AskResult> {
         `different module, say so.`
       : "";
 
+    // What was actually said: the administrator's words and the model's own questions.
+    // Not the scope line — this code wrote that, and it would vouch for anything.
+    const source = [...history.map((t) => t.text), message].join("\n");
     const out = await interpretMessage({
       key,
-      model: MISTRAL_MODEL,
+      model: MISTRAL_MODEL ?? (programmesNamed(programme, source).length ? PROGRAMME_MODEL : undefined),
       history,
       text: scopeLine ? `${scopeLine}\n\n${message}` : message,
       context: await changeContext(scope),
@@ -112,15 +133,12 @@ export async function ask(form: FormData): Promise<AskResult> {
           label: r.label || null,
         })),
       };
-      // What was actually said: the administrator's words and the model's own questions.
-      // Not the scope line — this code wrote that, and it would vouch for anything.
-      const source = [...history.map((t) => t.text), message].join("\n");
       return {
         ok: true, reply: out.reply, meta,
         proposal: {
           kind: "split", scope, rule, source,
           problems: [
-            ...checkScope(scope, { module: a.moduleKey }),
+            ...(await scopeCheck(scope, { module: a.moduleKey })),
             ...checkRule(rule),
             ...checkProvenance(rule, source),
           ],
@@ -128,9 +146,11 @@ export async function ask(form: FormData): Promise<AskResult> {
       };
     }
 
-    if (out.changes.length) {
-      const source = [...history.map((t) => t.text), message].join("\n");
-      const proposals = await Promise.all(out.changes.map((a) => changeProposal(scope, a, source)));
+    if (out.changes.length || out.headings.length) {
+      const proposals = await Promise.all([
+        ...out.changes.map((a) => changeProposal(scope, a, source)),
+        ...out.headings.slice(0, 1).map((a) => headingProposal(scope, a, source)),
+      ]);
       return { ok: true, reply: out.reply, meta, proposals };
     }
 
@@ -141,14 +161,25 @@ export async function ask(form: FormData): Promise<AskResult> {
   }
 }
 
+/// The selected course with its modules, or undefined when it can't be had — DCU down, or no
+/// such course. Only ever used for wording; every check that blocks saving resolves it again.
+async function courseOf(scope: Scope): Promise<Programme | undefined> {
+  return resolveCourse(scope.programme).catch(() => undefined);
+}
+
 /// What the model is shown about the selected module so it can turn "week 5" or "every
 /// Tuesday" into dates and find the class being removed: today, the teaching weeks, DCU's
 /// classes for the module, and what is saved. None of it is personal data — the class list
 /// is deliberately not here.
 async function changeContext(scope: Scope): Promise<string> {
-  if (!programmeFor(scope.programme) || !scope.module) return "";
+  if (!scope.programme || !scope.module) return "";
   const today = dublin(new Date().toISOString());
   const lines = [`Context for ${scope.programme}, module ${scope.module}. Today is ${today.day} ${today.date}.`];
+  const covers = programmeFor(scope.programme)?.covers ?? [];
+  if (covers.length) {
+    lines.push("", `${scope.programme}'s programmes, each a group a change can be for: ` +
+      covers.map((c) => `${c.code} (${c.name})`).join("; ") + ".");
+  }
 
   try {
     const all = await weeks();
@@ -183,14 +214,54 @@ async function changeContext(scope: Scope): Promise<string> {
     lines.push("", "Changes already saved:");
     for (const c of saved.map(fromRow)) lines.push(`- ${describeChange(c)}: ${c.dates.join(", ")}`);
   }
+  const heading = await savedHeading(scope.module);
+  lines.push("", heading
+    ? `Heading shown in the app for ${scope.module}: "${heading.title}".`
+    : `${scope.module} shows under DCU's own name in the app; no heading has been set.`);
   return lines.join("\n");
+}
+
+async function savedHeading(moduleKey: string): Promise<{ title: string } | null> {
+  const db = await supabaseServer();
+  const { data } = await db.from("module_titles").select("title").eq("module_key", moduleKey).maybeSingle();
+  return data ? { title: data.title } : null;
+}
+
+/// The week grid's name from the Abbreviations page, which a heading leaves in place.
+async function savedAbbreviation(moduleKey: string): Promise<string | null> {
+  const db = await supabaseServer();
+  const { data } = await db.from("module_abbreviations").select("abbreviation").eq("module_key", moduleKey).maybeSingle();
+  return data?.abbreviation ?? null;
+}
+
+/// The selection wins, as for a split: what the model read as the module is compared in
+/// checkScope. Only the words the administrator used can be saved (checkHeadingProvenance).
+async function headingProposal(scope: Scope, a: HeadingArgs, source: string): Promise<Proposal> {
+  const heading: Heading = { moduleKey: scope.module, title: a.title?.trim() || null };
+  const [saved, abbreviation] = scope.module
+    ? await Promise.all([savedHeading(scope.module).catch(() => null), savedAbbreviation(scope.module).catch(() => null)])
+    : [null, null];
+  return {
+    kind: "heading", scope, heading, source,
+    current: {
+      dcu: (await courseOf(scope))?.modules.find((m) => m.code === scope.module)?.title ?? null,
+      saved: saved?.title ?? null, abbreviation,
+    },
+    findings: [
+      ...(await scopeCheck(scope, { module: a.module })),
+      ...checkHeading(heading),
+      ...checkHeadingProvenance(heading, source),
+      ...(heading.title === null && !saved
+        ? [{ level: "info" as const, message: `${scope.module} already shows DCU's name; this changes nothing.` }]
+        : []),
+    ],
+  };
 }
 
 async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Promise<Proposal> {
   const kind = a.kind === "add" ? "add" : "remove";
-  const change: TimetableChange = {
+  const change: Omit<TimetableChange, "group"> = {
     courseKey: scope.programme,
-    group: a.group?.trim().toUpperCase() || null,
     kind,
     // The selection wins, as for a split; what the model read is compared in checkScope.
     module: scope.module,
@@ -202,17 +273,48 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
     room: kind === "add" ? a.room?.trim() || null : null,
     note: a.note?.trim() || null,
   };
+  const codes = (list?: string[] | null) =>
+    [...new Set((list ?? []).map((g) => g.trim().toUpperCase().replace(/^GROUP\s+/, "")).filter(Boolean))];
+  const named = codes(a.groups);
+  // Keeping is a removal's; an addition is for whoever was named, however they were filed.
+  const keptFor = kind === "remove" ? codes(a.keepFor) : [];
+  if (kind === "add") named.push(...codes(a.keepFor).filter((g) => !named.includes(g)));
+
+  const course = await courseOf(scope);
+  const programmes = course?.covers.map((c) => c.code) ?? [];
+  const findings: Finding[] = [];
+  const unknown = keptFor.filter((g) => !programmes.includes(g));
+  if (unknown.length) {
+    findings.push({
+      level: "error",
+      message: programmes.length
+        ? `${unknown.join(", ")} ${unknown.length > 1 ? "aren't" : "isn't one"} of ${scope.programme}'s programmes (${programmes.join(", ")}).`
+        : `${scope.programme} has no programmes within it to keep a class for.`,
+    });
+  }
+  // Worked out here, not by the model: the programmes that don't keep it lose it. Never from
+  // a list with a code that isn't the course's — that would remove it for all six.
+  const losing = keptFor.length && !unknown.length ? programmes.filter((p) => !keptFor.includes(p)) : [];
+  if (keptFor.length && !unknown.length && !losing.length) {
+    findings.push({ level: "error", message: `Every programme of ${scope.programme} keeps it, so nothing would be removed.` });
+  }
+  let groups: (string | null)[] = keptFor.length ? [...new Set([...losing, ...named])] : named.length ? named : [null];
+  // Every programme of the course is everyone on it: one change, not six.
+  if (programmes.length && programmes.every((p) => groups.includes(p)) && groups.every((g) => g && programmes.includes(g))) {
+    groups = [null];
+  }
+
+  const reviewed = (await Promise.all(groups.map((group) => review({ ...change, group })))).flat();
+  const seen = new Set<string>();
   return {
-    kind: "change", scope, change, source,
+    kind: "change", scope, change, groups, keptFor, source,
     findings: [
-      // Ask is for the course as a whole; a programme's split is made on the Timetable page,
-      // where its grid shows what that programme's students will see.
-      ...(change.group && PROGRAMME_CODE.test(change.group)
-        ? [{ level: "error" as const, message: `A change for ${change.group} alone is made on the Timetable page, not here.` }]
-        : []),
-      ...checkScope(scope, { module: a.module }),
-      ...(await reviewChange(change)),
+      ...findings,
+      ...(await scopeCheck(scope, { module: a.module })),
+      // Five programmes with the same missing date is one problem, not five.
+      ...reviewed.filter((f) => !seen.has(f.message) && !!seen.add(f.message)),
       ...checkChangeProvenance(change, source),
+      ...checkAudienceProvenance(groups, keptFor, course, source),
     ],
   };
 }
@@ -227,6 +329,11 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
 ///   rotation    -> the transcription the harness measured
 ///   -> a proposal on the panel: the review screen (n34). Accept saves it.
 async function readUpload(file: File, scope: Scope, started: number, note: string): Promise<AskResult> {
+  // An upload is a class list or a rotation, and neither reaches phones outside the fixed
+  // courses. Said before the file is read, not after paying to read it.
+  if (scope.programme && !programmeFor(scope.programme)) {
+    return { ok: false, error: phoneCohortProblem(scope, "class list")[0].message.replace("A class list", "A class list or lab rotation") };
+  }
   const input = normalise(file.name, file.type, Buffer.from(await file.arrayBuffer()));
   if (input.kind === "unsupported") return { ok: false, error: input.error };
 
@@ -327,7 +434,7 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
         courseKey: scope.programme,
         title: run.title,
         sessions: run.sessions,
-        findings: [...checkScope(scope), ...checks],
+        findings: [...(await scopeCheck(scope)), ...phoneCohortProblem(scope, "lab rotation"), ...checks],
         log: [],
       },
     };
@@ -388,7 +495,7 @@ async function correctDocument(doc: DocProposal, message: string, history: Turn[
     ok: true, reply: out.reply, meta: meta(out.usage),
     proposal: {
       ...doc, sessions: applied.sessions, log,
-      findings: [...checkScope(doc.scope), ...log, ...validateRotation(applied.sessions)],
+      findings: [...(await scopeCheck(doc.scope)), ...phoneCohortProblem(doc.scope, "lab rotation"), ...log, ...validateRotation(applied.sessions)],
     },
   };
 }
@@ -422,6 +529,7 @@ function documentFrom(raw: string): DocProposal | null {
       week: Number.isInteger(s?.week) ? s.week : null, date: str(s?.date), day: str(s?.day),
       start: str(s?.start), end: str(s?.end), module: str(s?.module), activity: str(s?.activity),
       groups: Array.isArray(s?.groups) ? s.groups.filter((g: unknown) => typeof g === "string") : null,
+      ...(str(s?.room) ? { room: str(s.room)! } : {}),
     }));
     return { kind: "rotation", scope, courseKey: String(p.courseKey ?? ""), title: str(p.title), sessions, log, findings: [] };
   }
@@ -445,8 +553,8 @@ function rosterProposal(
 
 /// A class list belongs to a programme, not a module — the module selection plays no part.
 function rosterScope(scope: Scope) {
-  return programmeFor(scope.programme)
-    ? []
+  return scope.programme
+    ? phoneCohortProblem(scope, "class list")
     : [{ level: "error" as const, message: "Pick the programme this class list is for." }];
 }
 
@@ -467,13 +575,12 @@ function members(rows: RosterRow[]) {
 /// shown. Once a proposal has been on screen, the payload and the picture are two different
 /// objects.
 export async function accept(proposal: Proposal) {
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   const db = await supabaseServer();
 
   if (proposal.kind === "split") {
     const problems = [
-      ...checkScope(proposal.scope),
+      ...(await scopeCheck(proposal.scope)),
       ...checkRule(proposal.rule),
       ...checkProvenance(proposal.rule, proposal.source ?? ""),
     ];
@@ -490,11 +597,29 @@ export async function accept(proposal: Proposal) {
   }
 
   if (proposal.kind === "change") {
-    const blocker = [...checkScope(proposal.scope), ...checkChangeProvenance(proposal.change, proposal.source ?? "")]
+    const { change, groups, keptFor = [] } = proposal;
+    const source = proposal.source ?? "";
+    if (!groups?.length) return { ok: false, error: "It isn't for anyone. Say who it is for." };
+    const blocker = [
+      ...(await scopeCheck(proposal.scope)),
+      ...checkChangeProvenance(change, source),
+      ...checkAudienceProvenance(groups, keptFor, await courseOf(proposal.scope), source),
+    ].find((f) => f.level === "error");
+    if (blocker) return { ok: false, error: blocker.message };
+    // Re-checks each change, including against DCU's timetable, and saves all or none.
+    return saveChanges(groups.map((group) => ({ ...change, group })));
+  }
+
+  if (proposal.kind === "heading") {
+    const h = proposal.heading;
+    const blocker = [...(await scopeCheck(proposal.scope)), ...checkHeading(h), ...checkHeadingProvenance(h, proposal.source ?? "")]
       .find((f) => f.level === "error");
     if (blocker) return { ok: false, error: blocker.message };
-    // Re-checks the change, including against DCU's timetable, before it saves.
-    return saveChange(proposal.change);
+    // Definer functions, as the other saves: the admin check and the audit row in one place.
+    const { error } = h.title === null
+      ? await db.rpc("delete_module_title", { p_module_key: h.moduleKey })
+      : await db.rpc("save_module_title", { p_module_key: h.moduleKey, p_title: h.title });
+    return error ? { ok: false, error: error.message } : { ok: true };
   }
 
   if (proposal.kind === "roster") {
@@ -514,7 +639,7 @@ export async function accept(proposal: Proposal) {
   // A session with no groups reaches no one — a blank cell the reader emitted, or one it
   // could not read. The review listed them in a single warning; they are not written.
   const sessions = proposal.sessions.filter((s) => s.groups?.length);
-  const blocker = [...checkScope(proposal.scope), ...validateRotation(sessions)]
+  const blocker = [...(await scopeCheck(proposal.scope)), ...phoneCohortProblem(proposal.scope, "lab rotation"), ...validateRotation(sessions)]
     .find((f) => f.level === "error");
   if (blocker) return { ok: false, error: blocker.message };
   if (!proposal.courseKey) return { ok: false, error: "No course — ask it which course this is for." };

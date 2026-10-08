@@ -5,7 +5,7 @@
 /// The distinction is the point. This used to be a redirect to the sign-in page, which is a
 /// confident claim — "you are not signed in" — made on the basis of a request that merely
 /// did not come back. Retrying costs one round-trip; the redirect cost a code entry, and
-/// with a per-network limit on codes, a wasted one.
+/// with five wrong codes signing a browser out, a counted one.
 export default function ConsoleError({
   error,
   reset,

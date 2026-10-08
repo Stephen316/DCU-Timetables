@@ -2,21 +2,32 @@
 // schema, because "ask when something is missing" needs the model to be able to answer in
 // prose instead of filling every field.
 
-import { post, textOf, withRetry } from "./api";
-import { CHANGE_TOOL, SPLIT_TOOL, SYSTEM } from "@/lib/proposals/prompt";
+import { historyMessages, post, textOf, withRetry } from "./api";
+import { CHANGE_TOOL, HEADING_TOOL, SPLIT_TOOL, SYSTEM } from "@/lib/proposals/prompt";
 import { toJsonSchema } from "@/lib/extraction/json-schema";
 import type { SplitRule } from "@/lib/proposals/rules";
 
 export const SPLIT_MODEL = "mistral-small-latest";
 
+/// For a message that names one of the course's programmes. Measured 8 Oct 2026, seven
+/// requests run twice on each: small proposed the wrong thing in 3 of 14 — both runs of "CE1
+/// has the 10:00 and everyone else the 11:00" (the times swapped, or both at 11:00), and one
+/// of "only CE1 and ECE1 have the 10:00" (read as the 11:00). Medium proposed nothing wrong in
+/// 14; it asked first in 7, which costs a message, not a wrong timetable. Splits and headings
+/// stay on small, which handled them.
+export const PROGRAMME_MODEL = "mistral-medium-latest";
+
 export type ChatTurn = { role: "user" | "model"; text: string };
 
 /// What the model proposed to change, as it said it — checked and normalised by the caller.
 export type ChangeArgs = {
-  kind?: string; module?: string; group?: string | null; dates?: string[]; start?: string;
+  kind?: string; module?: string; groups?: string[] | null; keepFor?: string[] | null; dates?: string[]; start?: string;
   end?: string | null; title?: string | null; room?: string | null; activityCode?: string | null;
   note?: string | null;
 };
+
+/// What the model proposed as a module's heading, as it said it.
+export type HeadingArgs = { module?: string; title?: string | null };
 
 /// `context` is what is known and saved for the selected module, sent as its own system
 /// message so it is never mistaken for — or checked for provenance as — the admin's words.
@@ -35,10 +46,12 @@ export async function interpretMessage(opts: {
     messages: [
       { role: "system", content: SYSTEM },
       ...(context ? [{ role: "system", content: context }] : []),
-      ...history.map((t) => ({ role: t.role === "model" ? "assistant" : "user", content: t.text })),
+      // The recent conversation, not all of it: each turn resends it, so an uncapped history
+      // costs more every message and keeps an earlier module in front of the model.
+      ...historyMessages(history.slice(-12)),
       { role: "user", content: text },
     ],
-    tools: [SPLIT_TOOL, CHANGE_TOOL].map((t) => ({
+    tools: [SPLIT_TOOL, CHANGE_TOOL, HEADING_TOOL].map((t) => ({
       type: "function",
       function: { name: t.name, description: t.description, parameters: toJsonSchema(t.parameters) },
     })),
@@ -55,11 +68,13 @@ export async function interpretMessage(opts: {
     ranges?: Partial<SplitRule["ranges"][number]>[];
   }) | null;
   const changes = args(CHANGE_TOOL.name) as ChangeArgs[];
+  const headings = args(HEADING_TOOL.name) as HeadingArgs[];
 
   return {
     reply: textOf(message?.content).trim() || undefined,
     split,
     changes,
+    headings,
     model: res.model,
     usage: { input: res.usage?.prompt_tokens, output: res.usage?.completion_tokens },
   };

@@ -1,10 +1,13 @@
 "use server";
 
-import { currentProfile, supabaseServer } from "@/lib/supabase/server";
-import { modulesFor } from "@/lib/proposals/courses";
+import { revalidatePath } from "next/cache";
+import { consoleOpen } from "@/lib/auth/gate";
+import { supabaseServer } from "@/lib/supabase/server";
+import { fromRow, type SavedChange } from "@/lib/changes/change";
 
-/// What is live in the database for one programme and module — the "Saved" list under the
-/// chat. Read-only, and read as the signed-in admin, so RLS applies as everywhere else.
+/// What applies to one programme and module — the "Saved" list under the chat. Nothing
+/// without both: every table for every module is offered by the reuse dropdown instead
+/// (library.ts). Read-only, and read as the signed-in admin, so RLS applies as everywhere else.
 ///
 /// A class list comes back as counts per group and subgroup, never as names: the names are
 /// reduced to keys when saved, and nothing here could show them if it tried.
@@ -24,7 +27,7 @@ export type SavedView = {
   rotation: {
     title: string | null; version: number; savedAt: string;
     total: number;              // every session in the rotation
-    sessions: SavedSession[];   // those for the selected module, or all of them
+    sessions: SavedSession[];   // those for the selected module
   } | null;
   splits: {
     module: string; activity: string; note: string | null; savedAt: string;
@@ -34,31 +37,42 @@ export type SavedView = {
     title: string | null; version: number; members: number; savedAt: string;
     groups: ClassGroup[];
   } | null;
+  heading: { title: string; savedAt: string } | null;
+  /// The module's removals and additions, one row per programme or group. Ask saves them
+  /// as well as the Timetable page, and the conversation that showed them saved is gone on
+  /// the next reload — which every deploy forces.
+  changes: SavedChange[];
 };
 
 export async function listSaved(programme: string, module: string):
   Promise<{ ok: true; view: SavedView } | { ok: false; error: string }> {
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
-  if (!programme) return { ok: true, view: { rotation: null, splits: [], classList: null } };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
+  if (!programme || !module) return { ok: true, view: { rotation: null, splits: [], classList: null, heading: null, changes: [] } };
 
   const db = await supabaseServer();
-  // With no module chosen, the splits of every module in the programme.
-  const modules = module ? [module] : modulesFor(programme).map((m) => m.code);
 
-  const [rot, splits, roster] = await Promise.all([
+  const [rot, splits, roster, title, changes] = await Promise.all([
     db.from("lab_rotations")
       .select("title, version, created_at, lab_rotation_sessions(week, date, day, start_time, end_time, module, activity, groups, room)")
       .eq("course_key", programme).maybeSingle(),
-    modules.length
-      ? db.from("module_splits")
-          .select("module_key, activity, note, created_at, module_split_ranges(from_letter, to_letter, day, start_time, end_time, room, label)")
-          .in("module_key", modules).order("module_key").order("activity")
-      : Promise.resolve({ data: [], error: null }),
+    db.from("module_splits")
+      .select("module_key, activity, note, created_at, module_split_ranges(from_letter, to_letter, day, start_time, end_time, room, label)")
+      .eq("module_key", module).order("activity"),
     db.from("rosters").select("title, version, members, created_at").eq("course_key", programme).maybeSingle(),
+    db.from("module_titles").select("title, updated_at").eq("module_key", module).maybeSingle(),
+    db.from("timetable_changes").select("*").eq("course_key", programme).eq("module", module).order("created_at"),
   ]);
-  const failed = rot.error ?? splits.error ?? roster.error;
+  const failed = rot.error ?? splits.error ?? roster.error ?? title.error ?? changes.error;
   if (failed) return { ok: false, error: failed.message };
+
+  // A class list places students in the rotation — its group picks their sessions, its
+  // workshop and drawing columns their rooms — so it applies to the rotation's modules and
+  // is listed under those alone. Listed under every module, it was deleted from one it
+  // didn't belong to, taking every student's group with it (8 Oct 2026). With no rotation
+  // saved the phone uses its bundled one, which the console can't see, so it shows everywhere.
+  const rotationModules = new Set(
+    ((rot.data?.lab_rotation_sessions ?? []) as { module: string | null }[]).map((s) => s.module),
+  );
 
   let rotation: SavedView["rotation"] = null;
   if (rot.data) {
@@ -72,12 +86,12 @@ export async function listSaved(programme: string, module: string):
     rotation = {
       title: rot.data.title, version: rot.data.version, savedAt: rot.data.created_at,
       total: all.length,
-      sessions: module ? all.filter((s) => s.module === module) : all,
+      sessions: all.filter((s) => s.module === module),
     };
   }
 
   let classList: SavedView["classList"] = null;
-  if (roster.data) {
+  if (roster.data && (rotationModules.size === 0 || rotationModules.has(module))) {
     const { data: rows, error } = await db.from("course_allocations")
       .select("grp, subgroup, day, workshop, drawing").eq("course_key", programme);
     if (error) return { ok: false, error: error.message };
@@ -107,6 +121,8 @@ export async function listSaved(programme: string, module: string):
           .sort((a, b) => a.from.localeCompare(b.from)),
       })),
       classList,
+      heading: title.data ? { title: title.data.title, savedAt: title.data.updated_at } : null,
+      changes: (changes.data ?? []).map(fromRow),
     },
   };
 }
@@ -114,17 +130,27 @@ export async function listSaved(programme: string, module: string):
 export type SavedTarget =
   | { kind: "split"; module: string; activity: string }
   | { kind: "rotation"; programme: string }
-  | { kind: "classList"; programme: string };
+  | { kind: "classList"; programme: string }
+  | { kind: "heading"; module: string }
+  | { kind: "change"; id: string };
 
 /// Removes one entry from the Saved list. Each kind has its own definer function, which
 /// checks the caller is an admin and writes the audit row.
 export async function deleteSaved(target: SavedTarget): Promise<{ ok: true } | { ok: false; error: string }> {
-  const profile = await currentProfile();
-  if (!profile || profile.role !== "admin") return { ok: false, error: "Not allowed." };
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
   const db = await supabaseServer();
 
+  if (target.kind === "change") {
+    const { error } = await db.rpc("delete_timetable_change", { p_id: target.id });
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/timetable");
+    return { ok: true };
+  }
+
   const { error } =
-    target.kind === "split"
+    target.kind === "heading"
+      ? await db.rpc("delete_module_title", { p_module_key: target.module })
+      : target.kind === "split"
       ? await db.rpc("delete_module_split", { p_module_key: target.module, p_activity: target.activity })
       : await db.rpc(target.kind === "rotation" ? "delete_lab_rotation" : "delete_roster",
                      { p_course_key: target.programme });

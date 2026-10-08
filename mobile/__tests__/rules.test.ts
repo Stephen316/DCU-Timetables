@@ -2,7 +2,8 @@ import {
   CancellationRules, CancellationStatus, EventVerdict, makeReport, CANCELLATION_THRESHOLD,
 } from '../src/core/cancellation';
 import {
-  Deadline, deadlineBelongsTo, DeadlineRules, DeadlineSchedule, DeadlineStanding, makeDeadline, highlightReason,
+  Deadline, deadlineBelongsTo, DeadlineRules, DeadlineSchedule, DeadlineStanding, deadlineTrust, displayTitle,
+  gradeWeightLabel, makeDeadline, highlightReason, TITLE_LIMIT,
 } from '../src/core/deadline';
 import { groupKeyOf } from '../src/core/timetableEvent';
 import { at, event, utc } from './helpers';
@@ -371,6 +372,130 @@ describe('Deadlines', () => {
     expect(local.isMine).toBeNull();
     expect(deadlineBelongsTo(local, 'me')).toBe(true);
     expect(deadlineBelongsTo(local, 'someone-else')).toBe(false);
+  });
+  test('a title longer than the database takes is refused', () => {
+    const future = new Date(Date.now() + 3600_000);
+    expect(DeadlineRules.isValid('x'.repeat(TITLE_LIMIT), future)).toBe(true);
+    expect(DeadlineRules.isValid('x'.repeat(TITLE_LIMIT + 1), future)).toBe(false);
+    // Spaces the server trims don't count against it.
+    expect(DeadlineRules.isValid(`  ${'x'.repeat(TITLE_LIMIT)}  `, future)).toBe(true);
+  });
+});
+
+describe('Module names for deadlines', () => {
+  test("names each module after the first class that has a name, without DCU's code in front", () => {
+    const start = at(2026, 9, 28, 10);
+    const names = DeadlineRules.moduleNames([
+      event('EEG1006[1]OC/L1/01', start, undefined, { moduleName: 'EEG1006[1] Materials Engineering' }),
+      event('EEG1006[1]OC/T1/01', start, undefined, { moduleName: 'EEG1006[1] Something else' }),
+      event('EEG1007[1]OC/L1/01', start, undefined, { moduleName: null }),
+    ]);
+    expect(names.get('EEG1006')).toBe('Materials Engineering');
+    // No class names it, so the caller falls back to the code.
+    expect(names.has('EEG1007')).toBe(false);
+  });
+});
+
+describe("A new deadline's date", () => {
+  const lab = (start: Date) => event('EEG1007[1]OC/L2/01', start);
+
+  test('starts at the class it was added from', () => {
+    expect(DeadlineRules.defaultDue(lab(at(2026, 10, 1, 11)), at(2026, 9, 28, 9))).toEqual(at(2026, 10, 1, 11));
+  });
+
+  test('a class already under way moves to the same slot next week', () => {
+    // 11:00 class, opened at 11:30 the same day: its own start would be refused as past.
+    expect(DeadlineRules.defaultDue(lab(at(2026, 10, 1, 11)), at(2026, 10, 1, 11, 30))).toEqual(at(2026, 10, 8, 11));
+    // Opened from an old week, it lands on the first slot still to come.
+    expect(DeadlineRules.defaultDue(lab(at(2026, 9, 17, 11)), at(2026, 10, 1, 12))).toEqual(at(2026, 10, 8, 11));
+  });
+
+  test('the default is due at the class it came from, so the class leads with it', () => {
+    const start = at(2026, 10, 1, 11);
+    const d = makeDeadline({ moduleKey: 'EEG1007', atGroupKey: groupKeyOf(lab(start)), title: 'Quiz', due: DeadlineRules.defaultDue(lab(start), at(2026, 9, 28, 9)), kind: 'quiz', submitterID: 's' });
+    expect(DeadlineRules.dueAt(lab(start), [d])).toEqual([d]);
+  });
+});
+
+describe('Grade weight', () => {
+  test('0 reads as not graded, anything else as a percentage', () => {
+    expect(gradeWeightLabel(0)).toBe('Not graded');
+    expect(gradeWeightLabel(1)).toBe('1% of the grade');
+    expect(gradeWeightLabel(100)).toBe('100% of the grade');
+  });
+
+  test('a new deadline is not graded until someone says so', () => {
+    expect(makeDeadline({ moduleKey: 'M', title: 'T', due: new Date(), submitterID: 's' }).gradeWeight).toBe(0);
+  });
+
+  test('the box takes a blank or a whole number from 0 to 100', () => {
+    expect(DeadlineRules.parseGradeWeight('')).toBe(0);
+    expect(DeadlineRules.parseGradeWeight('  ')).toBe(0);
+    expect(DeadlineRules.parseGradeWeight('0')).toBe(0);
+    expect(DeadlineRules.parseGradeWeight('20')).toBe(20);
+    expect(DeadlineRules.parseGradeWeight(' 20% ')).toBe(20);
+    expect(DeadlineRules.parseGradeWeight('100')).toBe(100);
+    expect(DeadlineRules.parseGradeWeight('101')).toBeNull();
+    expect(DeadlineRules.parseGradeWeight('7.5')).toBeNull();
+    expect(DeadlineRules.parseGradeWeight('-5')).toBeNull();
+    expect(DeadlineRules.parseGradeWeight('ten')).toBeNull();
+  });
+
+  test('changing only the weight keeps the confirmations', () => {
+    const d = makeDeadline({ moduleKey: 'M', title: 'T', due: at(2026, 10, 2, 9), kind: 'quiz', submitterID: 's', gradeWeight: 10 });
+    expect(DeadlineRules.editClearsConfirmations(d, 'quiz', at(2026, 10, 2, 9))).toBe(false);
+  });
+});
+
+describe('Deadline agreement', () => {
+  const d = (fields: Partial<Parameters<typeof makeDeadline>[0]> = {}) =>
+    makeDeadline({ moduleKey: 'CA106', title: 'Quiz 2', due: at(2026, 10, 2, 9), kind: 'quiz', submitterID: 's', ...fields });
+
+  test('disputes hold a confirmation back only while they keep pace with it', () => {
+    expect(new DeadlineStanding(3, false, 0).isConfirmed).toBe(true);
+    expect(new DeadlineStanding(3, false, 2).isConfirmed).toBe(true);
+    expect(new DeadlineStanding(3, false, 3).isConfirmed).toBe(false);
+    expect(new DeadlineStanding(3, false, 3).isDisputed).toBe(true);
+    expect(new DeadlineStanding(4, false, 3).isDisputed).toBe(false);
+    // One voice against nobody is a dispute; nobody against nobody is not.
+    expect(new DeadlineStanding(0, false, 1).isDisputed).toBe(true);
+    expect(DeadlineStanding.none.isDisputed).toBe(false);
+  });
+
+  test('a dispute line appears only when someone disputes', () => {
+    expect(new DeadlineStanding(2, false).disputeSummary).toBeNull();
+    expect(new DeadlineStanding(2, false, 1).disputeSummary).toBe('1 person says the details are wrong');
+    expect(new DeadlineStanding(2, false, 4).disputeSummary).toBe('4 people say the details are wrong');
+  });
+
+  test("a moderator's confirmation outranks the crowd either way", () => {
+    expect(deadlineTrust(d({ status: 'verified' }), new DeadlineStanding(0, false, 5))).toBe('verified');
+    expect(deadlineTrust(d(), new DeadlineStanding(1, false, 2))).toBe('disputed');
+    expect(deadlineTrust(d(), new DeadlineStanding(3, false, 1))).toBe('confirmed');
+    expect(deadlineTrust(d(), new DeadlineStanding(2, false))).toBe('unconfirmed');
+  });
+
+  test('moving the date or the type clears the vouches; rewording does not', () => {
+    const quiz = d();
+    expect(DeadlineRules.editClearsConfirmations(quiz, 'quiz', at(2026, 10, 2, 9))).toBe(false);
+    expect(DeadlineRules.editClearsConfirmations(quiz, 'quiz', at(2026, 10, 2, 10))).toBe(true);
+    expect(DeadlineRules.editClearsConfirmations(quiz, 'exam', at(2026, 10, 2, 9))).toBe(true);
+  });
+
+  test('your own name replaces the title everywhere you see it', () => {
+    expect(displayTitle(d())).toBe('Quiz 2');
+    expect(displayTitle(d({ myLabel: 'memory quiz' }))).toBe('memory quiz');
+    const lab = event('CA106[1]OC/P1/01', at(2026, 10, 2, 9));
+    expect(DeadlineRules.highlight(lab, [d({ myLabel: 'memory quiz' })], CancellationStatus.none))
+      .toEqual({ kind: 'test', title: 'memory quiz' });
+  });
+
+  test('a blank name, or the shared title itself, saves as no name', () => {
+    const quiz = d();
+    expect(DeadlineRules.labelToSave(quiz, '   ')).toBeNull();
+    expect(DeadlineRules.labelToSave(quiz, ' Quiz 2 ')).toBeNull();
+    expect(DeadlineRules.labelToSave(quiz, ' memory quiz ')).toBe('memory quiz');
+    expect(DeadlineRules.labelToSave(quiz, 'x'.repeat(100))).toHaveLength(80);
   });
 });
 

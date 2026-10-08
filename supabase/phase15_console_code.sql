@@ -2,6 +2,10 @@
 -- Phase 15 — the console opens with a 4-digit code, and nothing else
 -- ---------------------------------------------------------------------------
 --
+-- SUPERSEDED by phase22_remembered_console.sql, which keeps this code but replaces the
+-- sign-in below with email once per browser. Don't re-run this after phase 22: it would
+-- put back the attempt log phase 22 drops, and fail on console_code_status's new shape.
+--
 -- There is no sign-in page. The console's server holds the admin account's credentials in
 -- its environment (CONSOLE_ADMIN_EMAIL / CONSOLE_ADMIN_PASSWORD) and signs in as that
 -- account itself; the code decides whether it hands that session to the browser.

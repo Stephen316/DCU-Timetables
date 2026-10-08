@@ -3,8 +3,9 @@
 An iPhone app to help DCU students keep track of all their modules, classes, and
 deadlines — built on DCU's live public timetable API. React Native with Expo, in
 [`mobile/`](mobile); the home-screen widgets are SwiftUI, in
-[`mobile/targets/widgets`](mobile/targets/widgets). The Windows and macOS student app
-is in [`desktop/`](desktop), and the admin console is in [`web/`](web).
+[`mobile/targets/widgets`](mobile/targets/widgets). The Windows and macOS Tauri student app
+is in [`desktop/`](desktop); a separate Mac wrapper around the web build is in
+[`mac/`](mac). The admin console is in [`web/`](web).
 
 ## What it does
 
@@ -145,3 +146,12 @@ run separately in `.github/workflows/desktop.yml`.
 
 The app was converted from Swift/SwiftUI to React Native (Expo SDK 57). The Swift unit
 tests were ported to Jest and pass. Not yet released from the new codebase.
+
+## Contributing
+
+See [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md). Report security problems privately —
+[`.github/SECURITY.md`](.github/SECURITY.md).
+
+## License
+
+[MIT](LICENSE). The code is free to reuse; the app's name and App Store listing are not.

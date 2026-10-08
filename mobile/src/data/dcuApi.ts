@@ -17,6 +17,11 @@ export interface TimetableSource {
   weekCalendar(): Promise<WeekCalendar>;
   /** All events for a category (programme/module/room) across the given weeks. */
   events(category: TimetableCategory, weeks: TeachingWeek[]): Promise<TimetableEvent[]>;
+  /**
+   * The course's classes that `events` leaves out because they're another group's — what the
+   * student can add from Edit timetable. Absent when the source keeps nothing back.
+   */
+  otherEvents?(category: TimetableCategory, weeks: TeachingWeek[]): Promise<TimetableEvent[]>;
 }
 
 export const TimetableSourceError = {

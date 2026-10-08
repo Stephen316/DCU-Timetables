@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>%WEB_TITLE%</title>
+    <!-- Add to Home Screen: the icon, the name under it, and opening without Safari's bars. -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Timetable" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- The app repaints these from its own theme once it loads; this covers the first frame. -->
+    <meta name="theme-color" content="#212129" />
+    <script>
+      // The app is served from a sub-path on GitHub Pages and Expo's template has no base-path
+      // placeholder, so the links above are relative. This page only ever loads at the app's
+      // root, but the router then moves the URL (/app/class/…), and a relative link would
+      // resolve against that when Safari reads it. Pin them to where the page loaded.
+      for (const l of document.querySelectorAll('link[href^="./"]')) l.href = new URL(l.getAttribute('href'), location.href).href;
+    </script>
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+        background-color: #eee8d5;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background-color: #212129;
+        }
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+      /* The browser's focus ring on text fields; the caret already shows which one is active. */
+      input:focus,
+      textarea:focus {
+        outline: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+  </body>
+</html>

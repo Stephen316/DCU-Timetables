@@ -82,48 +82,40 @@ export class LecturerDirectory {
   }
 }
 
-// MARK: - Attendance
-
-/**
- * Classes the student has marked "I won't attend". Device-local and never shared: a
- * private choice about one person's day, and uploading it would turn the app into an
- * attendance record.
- */
-export const Attendance = {
-  storageKey: 'skippedEvents',
-
-  toggling(key: string, keys: string[]): string[] {
-    return keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key];
-  },
-};
-
 // MARK: - Pagers
 
 /**
- * What a pager does when a swipe would run off the end: the day pager wraps (Friday →
- * Monday), the week pager stops at the ends of the academic year.
+ * Pages run from 0 to `count - 1` and stop at both ends: the week and day pagers stop at the
+ * ends of the academic year, because scrolling back from week 1 and landing in week 52 is a
+ * teleport, not a scroll.
  */
-export type PagerBounds = 'wrapping' | 'clamped';
-
 export const PagerIndex = {
   /** The page to show at `value`, or null when there is no such page. */
-  resolve(value: number, count: number, bounds: PagerBounds): number | null {
-    if (count <= 0) return null;
-    if (bounds === 'wrapping') return ((value % count) + count) % count;
+  resolve(value: number, count: number): number | null {
     return value >= 0 && value < count ? value : null;
   },
 
-  /** Where a step lands. A clamped pager stays put rather than jumping to the other end. */
-  step(index: number, delta: number, count: number, bounds: PagerBounds): number {
+  /** Where a step lands: it stays put at an end rather than jumping to the other one. */
+  step(index: number, delta: number, count: number): number {
     if (count <= 0) return 0;
-    if (bounds === 'wrapping') return PagerIndex.resolve(index + delta, count, 'wrapping') ?? 0;
     return Math.min(Math.max(index + delta, 0), count - 1);
   },
+};
 
-  /** Whether a step would actually move — drives the chevrons' enabled state. */
-  canStep(index: number, delta: number, count: number, bounds: PagerBounds): boolean {
-    if (count <= 0) return false;
-    return PagerIndex.step(index, delta, count, bounds) !== index;
+/**
+ * The day pager runs through every weekday of the year as one sequence, so a swipe past
+ * Friday lands on the next week's Monday and one before Monday on the previous Friday.
+ */
+export const WeekdayIndex = {
+  daysPerWeek: 5,
+
+  flat(week: number, day: number): number {
+    return week * WeekdayIndex.daysPerWeek + day;
+  },
+
+  split(index: number): { week: number; day: number } {
+    const n = WeekdayIndex.daysPerWeek;
+    return { week: Math.floor(index / n), day: ((index % n) + n) % n };
   },
 };
 

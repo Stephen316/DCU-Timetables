@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, TextInput, TextInputProps, View } from 'react-native';
+import { Linking, StyleSheet, TextInput, View } from 'react-native';
 import { DCUEmail, parseDCUEmail, PasswordValidation } from '../../core/identity';
 import { AuthError, AuthService } from '../../data/auth';
 import { errorMessage } from '../../data/rest';
 import { AuthenticatedUser } from '../../data/session';
 import { useServices } from '../../state/hooks';
 import { AppLinks } from '../../ui/links';
-import { ActionRow, Icon, ListScroll, PrimaryButton, Row, Section, Segmented, Txt } from '../../ui/components';
+import { ActionRow, ListScroll, PrimaryButton, Row, Section, Segmented, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
+import { PasswordField } from './PasswordField';
 import { ScreenTitle } from './ScreenTitle';
 
 type Mode = 'signIn' | 'createAccount';
@@ -16,8 +17,12 @@ type Mode = 'signIn' | 'createAccount';
  * DCU-only sign-in with an email address and password. Creating an account sends
  * Supabase's confirmation email; the account can't be used until the link in it is tapped,
  * which is what proves the address is theirs. The name then comes from the address.
+ *
+ * Tapping that link in a browser signs the student in without coming back here at all;
+ * this screen is what they return to when the link failed, or when they confirmed on a
+ * different device.
  */
-export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) => void }) {
+export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: AuthenticatedUser) => void; notice?: string | null }) {
   const theme = useTheme();
   const { auth } = useServices();
   const [mode, setMode] = useState<Mode>('signIn');
@@ -101,9 +106,12 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
     }
   };
 
-  const noteSection = note ? (
+  // What this screen has to say takes over from whatever the launch had to say — an email
+  // link that had already expired — and nothing is said twice.
+  const message = note ?? notice ?? null;
+  const noteSection = message ? (
     <Section>
-      <Row><Txt type="callout" color={theme.inkSecondary}>{note}</Txt></Row>
+      <Row><Txt type="callout" color={theme.inkSecondary}>{message}</Txt></Row>
     </Section>
   ) : null;
 
@@ -183,8 +191,6 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
               />
               {addressLooksWrong ? (
                 <Txt type="caption" color={theme.inkSecondary}>{address.trim()} is not a valid email address</Txt>
-              ) : email ? (
-                <Txt type="caption" color={theme.inkSecondary}>Signing in as {email.displayName}</Txt>
               ) : null}
             </Row>
             <Row>
@@ -199,6 +205,9 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
                 returnKeyType={mode === 'signIn' ? 'go' : 'next'}
                 onSubmitEditing={() => mode === 'signIn' && canSubmit && submit()}
               />
+              {email && !addressLooksWrong ? (
+                <Txt type="caption" color={theme.inkSecondary}>Signing in as {email.displayName}</Txt>
+              ) : null}
             </Row>
             {mode === 'createAccount' ? (
               <Row>
@@ -259,51 +268,8 @@ export function SignIn({ onSignedIn }: { onSignedIn: (user: AuthenticatedUser) =
   );
 }
 
-/**
- * A password input with a button to show what's been typed. The eye shows the state it
- * switches to, as iOS's own password fields do.
- */
-function PasswordField({
-  placeholder, revealed, onToggleReveal, ...input
-}: Pick<TextInputProps, 'value' | 'onChangeText' | 'autoComplete' | 'returnKeyType' | 'onSubmitEditing'> & {
-  placeholder: string;
-  revealed: boolean;
-  onToggleReveal: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={styles.passwordLine}>
-      <TextInput
-        {...input}
-        placeholder={placeholder}
-        placeholderTextColor={theme.inkTertiary}
-        secureTextEntry={!revealed}
-        textContentType="password"
-        // Shown in plain text, the keyboard would otherwise capitalise and correct it.
-        autoCapitalize="none"
-        autoCorrect={false}
-        spellCheck={false}
-        style={[styles.input, styles.passwordInput, { color: theme.ink }]}
-        accessibilityLabel={placeholder}
-      />
-      <Pressable
-        onPress={onToggleReveal}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={revealed ? 'Hide password' : 'Show password'}
-        style={styles.reveal}
-      >
-        <Icon name={revealed ? 'hide' : 'show'} size={22} color={theme.inkSecondary} />
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   intro: { marginHorizontal: Space.xs },
   input: { fontSize: 17, minHeight: 36 },
-  passwordLine: { flexDirection: 'row', alignItems: 'center' },
-  passwordInput: { flex: 1 },
-  reveal: { minWidth: 44, minHeight: 36, alignItems: 'flex-end', justifyContent: 'center' },
   bottom: { height: Space.xl },
 });

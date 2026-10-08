@@ -2,7 +2,7 @@
 // one the console runs: the harness imports this function rather than a copy of it.
 
 import { post, ocr, textOf, withRetry, type Attachment } from "./api";
-import { rotationSchema, type RotationSession } from "@/lib/extraction/rotation";
+import { blankInSource, rotationSchema, type RotationSession } from "@/lib/extraction/rotation";
 import { toJsonSchema } from "@/lib/extraction/json-schema";
 import { TRANSCRIBE_SYSTEM, TRANSCRIBE_INSTRUCTION } from "@/lib/extraction/transcribe";
 
@@ -73,11 +73,13 @@ export async function transcribeRotation(opts: {
   const all: RotationSession[] =
     JSON.parse(textOf(chat.choices?.[0]?.message?.content) || "{}").sessions ?? [];
 
-  // A blank cell is not a session. The model marks one with an empty `groups` list, and
-  // those rows go. A `null` is different — it is the model saying it could not read the
-  // cell — and it stays, flagged, for a person to look at. Dropping nulls would turn
-  // "illegible" into "nothing there", which is the one mistake nobody downstream can see.
-  const sessions = all.filter((s) => !(Array.isArray(s.groups) && s.groups.length === 0));
+  // A blank cell is not a session. The model sometimes marks one with an empty `groups`
+  // list, and those rows go. A `null` may be a blank or a cell it could not read; only the
+  // ones the OCR text shows to be blank go, and the rest stay, flagged, for a person to look
+  // at. Dropping every null would turn "illegible" into "nothing there", which is the one
+  // mistake nobody downstream can see.
+  const blank = blankInSource(all, text);
+  const sessions = all.filter((s) => !(Array.isArray(s.groups) && s.groups.length === 0) && !blank.has(s));
 
   return {
     sessions,

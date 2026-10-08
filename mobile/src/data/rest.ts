@@ -1,4 +1,4 @@
-import { SupabaseConfig, SupabaseSession } from './session';
+import type { SupabaseConfig, SupabaseSession } from './session';
 
 /** A request the server answered with a non-2xx status. `message` is written for a student. */
 export class ServiceError extends Error {
@@ -20,6 +20,19 @@ export function userFacing(message: string): Error {
   const error = new Error(message);
   error.name = 'UserFacingError';
   return error;
+}
+
+/**
+ * The app remembers who signed in, but the tokens that let it act for them are gone. Told
+ * apart from other refusals so a screen can send the student back to sign-in rather than
+ * show a message that no button on it can fix.
+ */
+export function notSignedIn(): Error {
+  return Object.assign(userFacing("You're not signed in."), { code: 'notSignedIn' });
+}
+
+export function isNotSignedIn(error: unknown): boolean {
+  return error instanceof Error && (error as Error & { code?: unknown }).code === 'notSignedIn';
 }
 
 export type Query = [string, string][];

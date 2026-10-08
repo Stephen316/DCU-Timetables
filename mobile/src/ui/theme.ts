@@ -22,6 +22,8 @@ export interface Palette {
   surface: string;
   /** One step up from a surface — sheets, a pressed row, a secondary button. */
   raised: string;
+  /** A step darker than `canvas`: free time on the day view. */
+  band: string;
   /** Hairlines between rows and on the week grid. */
   separator: string;
   /** The line down the day view. */
@@ -34,6 +36,8 @@ export interface Palette {
   /** Text on an accent fill. */
   onAccent: string;
   destructive: string;
+  /** The line on the week grid at the current time, red as Calendar draws it. */
+  now: string;
   /** The colours that carry meaning in the timetable. */
   tint: {
     /** Something to hand in today. */
@@ -49,6 +53,8 @@ export interface Palette {
      * shade lands near 2:1, so a filled control keeps the dark shade throughout.
      */
     offFill: string;
+    /** Online classes: drawn as faint lines across the class, never as a fill. */
+    online: string;
   };
   /** Module colours for the calendar blocks: decoration, one per module. */
   modules: string[];
@@ -59,6 +65,7 @@ export const light: Palette = {
   canvas: '#EEE8D5',
   surface: '#FDF6E3',
   raised: '#DDD6C1',
+  band: '#E5DECA',
   separator: '#D3CBB7',
   rail: '#93A1A1',
   ink: '#073642',
@@ -67,7 +74,8 @@ export const light: Palette = {
   accent: '#6C71C4',
   onAccent: '#FDF6E3',
   destructive: '#DC322F',
-  tint: { due: '#B58900', test: '#268BD2', off: '#CB4B16', confirmed: '#859900', offFill: '#CB4B16' },
+  now: '#DC322F',
+  tint: { due: '#B58900', test: '#268BD2', off: '#CB4B16', confirmed: '#859900', offFill: '#CB4B16', online: '#4E9A3C' },
   modules: ['#268BD2', '#859900', '#D33682', '#2AA198', '#6C71C4', '#DC322F', '#AC9D57'],
 };
 
@@ -76,6 +84,7 @@ export const dark: Palette = {
   canvas: '#212129',
   surface: '#323949',
   raised: '#3D3E51',
+  band: '#18181E',
   separator: '#40445A',
   rail: '#4C5265',
   ink: '#ECEDF3',
@@ -84,7 +93,8 @@ export const dark: Palette = {
   accent: '#AFB8F2',
   onAccent: '#212129',
   destructive: '#FF6B6B',
-  tint: { due: '#FBBF24', test: '#60A5FA', off: '#FB923C', confirmed: '#34D399', offFill: '#C2410C' },
+  now: '#FF453A',
+  tint: { due: '#FBBF24', test: '#60A5FA', off: '#FB923C', confirmed: '#34D399', offFill: '#C2410C', online: '#4ADE80' },
   modules: ['#0A84FF', '#30D158', '#BF5AF2', '#40C8E0', '#5E5CE6', '#FF375F', '#AC8E68'],
 };
 
@@ -99,6 +109,13 @@ export const Radius = { block: 4, control: 8 } as const;
 
 /** The minimum hit area. Visible chrome may be smaller; the tappable frame isn't. */
 export const MIN_TARGET = 44;
+
+/**
+ * A desktop window (the Mac app, or a browser) is far wider than the phone the screens were
+ * drawn for. Past `wide`, sheets and short choices float as panels; lists and forms keep to
+ * `readable`, the width at which a row's label and its value still read as one line.
+ */
+export const Desktop = { wide: 760, readable: 680, panel: 620, dialog: 440 } as const;
 
 export const Type = {
   /** The weekday heading the day view. The one loud piece of type in the app. */

@@ -1,21 +1,28 @@
-import { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ReactNode, useEffect, useState } from 'react';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { formatTime } from '../../core/time';
-import { Txt, useLargeText } from '../../ui/components';
-import { Space, useTheme } from '../../ui/theme';
+import { Hatch, Txt, useLargeText, useReduceMotion } from '../../ui/components';
+import { Space, useTheme, withAlpha } from '../../ui/theme';
 
 /**
  * The day as a line you move along. Every class is a stop on one continuous rail, with its
  * start time set large beside it, so the left edge reads as a clock running down the day.
  * Free time is the rail carrying on, dashed. The class to head for is the one stop drawn in
  * the accent; classes already over shrink to a dot.
+ *
+ * Height is time: an hour of class or of free time takes `HOUR_HEIGHT`, so a three-hour lab
+ * is three times a lecture and a free hour is the same size as a lecture. A class whose
+ * text needs more room than its time gives (a half-hour tutorial, large text) grows to fit.
  */
 export type RailStop =
   | { kind: 'upcoming' }
-  | { kind: 'next' }
+  /** The class to head for. `live` while it's on: its ring pulses, as a "live" mark does. */
+  | { kind: 'next'; live: boolean }
   | { kind: 'past' }
   /** Carries news: cancelled, moved, a test, something due. Drawn in that news's colour. */
-  | { kind: 'flagged'; color: string };
+  | { kind: 'flagged'; color: string }
+  /** A class of the course that isn't in the student's timetable, shown while they edit it. */
+  | { kind: 'ghost' };
 
 /** Where a row sits in the day, which decides whether the rail runs above and below its stop. */
 export interface RailPosition {
@@ -33,26 +40,50 @@ const COLUMN = 28;
 const STOP_CENTRE = 12;
 const STOP = 11;
 const LINE = 2;
+/** Fits a one-hour class's title, type, room and lecturer. */
+const HOUR_HEIGHT = 120;
+const DASH = 3;
+const DASH_GAP = 4;
+const DASH_PERIOD = DASH + DASH_GAP;
+
+function heightFor(start: Date, end: Date): number {
+  return Math.max(0, (end.getTime() - start.getTime()) / 3_600_000) * HOUR_HEIGHT;
+}
 
 /**
  * One class on the rail. At the accessibility text sizes the times move above the content
  * instead of beside it, so the title keeps the full width.
  */
-export function RailRow({ start, end, stop, position, children }: {
+export function RailRow({ start, end, stop, position, divider = false, online = false, top = 0, children }: {
   start: Date;
   end: Date;
   stop: RailStop;
   position: RailPosition;
+  /** A hairline above, where this class follows straight on from another. */
+  divider?: boolean;
+  /** An online class: faint lines across it, clear of the times and the rail. */
+  online?: boolean;
+  /** Where the row sits among the day's rows, so their lines meet in step. */
+  top?: number;
   children: ReactNode;
 }) {
   const theme = useTheme();
   const stacked = useLargeText();
-  const timeColour = stop.kind === 'next' ? theme.accent : stop.kind === 'past' ? theme.inkSecondary : theme.ink;
+  const timeColour = stop.kind === 'next' ? theme.accent : stop.kind === 'past' || stop.kind === 'ghost' ? theme.inkSecondary : theme.ink;
   const railX = (stacked ? 0 : GUTTER) + COLUMN / 2;
   const stopY = Space.m + STOP_CENTRE;
 
   return (
-    <View style={styles.row}>
+    <View
+      style={[
+        styles.row,
+        { minHeight: heightFor(start, end) },
+        divider && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator },
+      ]}
+    >
+      {online ? (
+        <Hatch color={withAlpha(theme.tint.online, 0.18)} spacing={12} angle={-25} origin={{ x: 0, y: top }} style={{ left: (stacked ? 0 : GUTTER) + COLUMN }} />
+      ) : null}
       {/* The line through the row, and the stop on it. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <View
@@ -90,23 +121,27 @@ export function RailRow({ start, end, stop, position, children }: {
   );
 }
 
-/** Free time between two classes: the rail carries on, dashed, with nothing on it. */
+/**
+ * Free time between two classes: the rail carries on, dashed, over a darker band that runs
+ * the full width of the screen, so free time and class time can be told apart at a glance.
+ */
 export function RailGap({ start, end, label }: { start: Date; end: Date; label: string }) {
   const theme = useTheme();
   const stacked = useLargeText();
   const railX = (stacked ? 0 : GUTTER) + COLUMN / 2;
+  const height = heightFor(start, end);
   return (
     <View
-      style={styles.gap}
+      style={[styles.gap, { height, backgroundColor: theme.band }]}
       accessible
       accessibilityLabel={`${label}, ${formatTime(start)} to ${formatTime(end)}`}
     >
-      <View pointerEvents="none" style={[styles.dashes, { left: railX - LINE / 2 }]}>
-        {Array.from({ length: 30 }, (_, i) => (
+      <View pointerEvents="none" style={[styles.dashes, { left: Space.l + railX - LINE / 2 }]}>
+        {Array.from({ length: Math.ceil(height / DASH_PERIOD) }, (_, i) => (
           <View key={i} style={[styles.dash, { backgroundColor: theme.rail }]} />
         ))}
       </View>
-      <View style={{ width: (stacked ? 0 : GUTTER) + COLUMN }} />
+      <View style={{ width: Space.l + (stacked ? 0 : GUTTER) + COLUMN }} />
       <Txt type="footnote" color={theme.inkTertiary} style={styles.content}>{label}</Txt>
     </View>
   );
@@ -125,12 +160,49 @@ function StopMark({ stop }: { stop: RailStop }) {
       // A halo as well as a fill, so it doesn't rely on the accent's hue alone.
       return (
         <View style={[centred(STOP + 12), styles.halo, { borderColor: theme.accent + '59' }]}>
+          {stop.live ? <Pulse color={theme.accent} /> : null}
           <View style={{ width: STOP, height: STOP, borderRadius: STOP / 2, backgroundColor: theme.accent }} />
         </View>
       );
     case 'flagged':
       return <View style={[centred(STOP), { backgroundColor: stop.color }]} />;
+    case 'ghost':
+      return <View style={[centred(STOP), { backgroundColor: theme.canvas, borderWidth: LINE, borderColor: theme.rail, borderStyle: 'dashed' }]} />;
   }
+}
+
+/** How long one pulse takes: slow enough to read as "on now", not as an alert. */
+const PULSE_MS = 2000;
+
+/**
+ * A ring that swells out of the halo and fades, again and again — the "live" mark. Still
+ * under Reduce Motion, where the halo alone says the class is on.
+ */
+function Pulse({ color }: { color: string }) {
+  const reduce = useReduceMotion();
+  const [progress] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (reduce) return;
+    const loop = Animated.loop(
+      Animated.timing(progress, { toValue: 1, duration: PULSE_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      progress.setValue(0);
+    };
+  }, [reduce, progress]);
+  if (reduce) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.pulse, {
+        borderColor: color,
+        opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
+        transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] }) }],
+      }]}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
@@ -140,8 +212,11 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: Space.xs },
   stackedTimes: { flexDirection: 'row', alignItems: 'baseline', gap: Space.s },
   line: { position: 'absolute', width: LINE },
-  gap: { flexDirection: 'row', alignItems: 'center', paddingVertical: Space.l, paddingRight: Space.l, overflow: 'hidden' },
+  // Out past the day's left inset, so the band reaches the screen edge.
+  gap: { flexDirection: 'row', alignItems: 'center', marginLeft: -Space.l, paddingRight: Space.l, overflow: 'hidden' },
   dashes: { position: 'absolute', top: 0, bottom: 0, width: LINE, overflow: 'hidden' },
-  dash: { width: LINE, height: 3, marginBottom: 4 },
+  dash: { width: LINE, height: DASH, marginBottom: DASH_GAP },
   halo: { borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  // Over the halo exactly (its 3pt border included), so it starts where the halo is.
+  pulse: { position: 'absolute', top: -3, left: -3, right: -3, bottom: -3, borderRadius: 999, borderWidth: 2 },
 });

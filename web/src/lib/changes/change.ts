@@ -38,10 +38,9 @@ export function weekday(date: string): string {
 }
 
 /// The same rules the table enforces, said in words before the database says them in codes.
-export function checkChange(c: TimetableChange): Finding[] {
+export function checkChange(c: TimetableChange, programme: Programme | undefined = programmeFor(c.courseKey)): Finding[] {
   const out: Finding[] = [];
   const err = (message: string) => out.push({ level: "error", message });
-  const programme = programmeFor(c.courseKey);
 
   if (!programme) err("Pick the programme this change is for.");
   if (!c.module) err("No module.");
@@ -129,6 +128,7 @@ export function groupProblem(group: string, programme: Programme | undefined): s
   if (LAB_GROUP.test(group)) return null;
   if (PROGRAMME_CODE.test(group)) {
     if (!programme || programme.covers.some((c) => c.code === group)) return null;
+    if (!programme.covers.length) return `${programme.key} has no programmes within it to make a change for.`;
     return `${group} isn't one of ${programme.key}'s programmes (${programme.covers.map((c) => c.code).join(", ")}).`;
   }
   return `"${group}" isn't a group — a letter, a letter and a number like C.2, or a programme like BMED1.`;
@@ -140,8 +140,8 @@ export function groupList(text: string): (string | null)[] {
   return list.length ? list : [null];
 }
 
-export function describeChange(c: TimetableChange): string {
-  const who = audience(c.group);
+/// `who` names several groups at once, for a change Ask proposes for more than one.
+export function describeChange(c: Omit<TimetableChange, "group"> & { group?: string | null }, who = audience(c.group ?? null)): string {
   const what = c.kind === "remove"
     ? `Remove ${c.activityCode ?? c.module} at ${c.start}`
     : `Add ${c.module} ${c.title ?? ""} ${c.start}–${c.end ?? "?"}${c.room ? ` in ${c.room}` : ""}`;
@@ -151,7 +151,7 @@ export function describeChange(c: TimetableChange): string {
 /// An added class's hours and room must come from what the administrator said, not from the
 /// model: nothing downstream can check an invented 10:00 against anything. A removal's
 /// time is checked against DCU's timetable instead (`removalHits`).
-export function checkChangeProvenance(c: TimetableChange, source: string): Finding[] {
+export function checkChangeProvenance(c: Omit<TimetableChange, "group">, source: string): Finding[] {
   if (c.kind !== "add") return [];
   const text = source.toLowerCase();
   const mentions = (n: number) => new RegExp(`(?<!\\d)${n}(?!\\d)`).test(text);
@@ -166,4 +166,60 @@ export function checkChangeProvenance(c: TimetableChange, source: string): Findi
   return unsaid.length
     ? [{ level: "error", message: `${unsaid.join(", ")} ${unsaid.length > 1 ? "appear" : "appears"} nowhere in what you wrote, so it was assumed. Say it explicitly if it is right.` }]
     : [];
+}
+
+/// Who a change from Ask is for, checked against what the administrator said. A programme it
+/// is for, or kept for, must have been named: by its code ("CE1"), its CAO code, or a word of
+/// its name no other programme of the course shares ("Biomedical", "Mechatronics"). Lab
+/// groups aren't checked — a lone "C" is in every sentence. No programme can both keep the
+/// class and lose it. And a change for everyone can't come from a request that named
+/// programmes: "remove the 11:00 for BMED1 and CAM1" came back from mistral-small with no
+/// groups at all (8 Oct 2026), which would have removed it for all six.
+///
+/// When the class is kept for some programmes, either side may have been the one named:
+/// "only CE1 has the 10:00" names who keeps it, "everyone else has the 11:00" names who
+/// loses it (CE1), and the model lists the other five as keeping it.
+export function checkAudienceProvenance(
+  groups: (string | null)[], keptFor: string[], programme: Programme | undefined, source: string,
+): Finding[] {
+  const out: Finding[] = [];
+  const both = keptFor.filter((g) => groups.includes(g));
+  if (both.length) out.push({ level: "error", message: `${both.join(", ")} would both keep the class and lose it.` });
+
+  const mentioned = programmesNamed(programme, source);
+  // A code that isn't one of the course's is groupProblem's to report.
+  const named = (code: string) => mentioned.includes(code) || !programme?.covers.some((c) => c.code === code);
+  if (!keptFor.length && groups.includes(null)) {
+    if (mentioned.length) {
+      out.push({
+        level: "error",
+        message: `You named ${mentioned.join(", ")}, but this is for everyone on ${programme!.key}. Say which programmes lose the class, or which keep it.`,
+      });
+    }
+  }
+  const losing = groups.filter((g): g is string => !!g && PROGRAMME_CODE.test(g));
+  const unsaid = !keptFor.length ? losing.filter((code) => !named(code))
+    : keptFor.every(named) || (losing.length > 0 && losing.every(named)) ? []
+    : keptFor.filter((code) => !named(code));
+  if (unsaid.length) {
+    out.push({
+      level: "error",
+      message: `${unsaid.join(", ")} ${unsaid.length > 1 ? "appear" : "appears"} nowhere in what you wrote, so ${unsaid.length > 1 ? "they were" : "it was"} assumed. Name the programmes if ${unsaid.length > 1 ? "they are" : "it is"} right.`,
+    });
+  }
+  return out;
+}
+
+/// The course's programmes a text names: by code ("CE1"), CAO code, or a word of the name
+/// no other programme of the course shares ("Biomedical", "Mechatronics" — not "Mechanical",
+/// which two of them have).
+export function programmesNamed(programme: Programme | undefined, source: string): string[] {
+  const covers = programme?.covers ?? [];
+  const text = source.toLowerCase();
+  const words = (name: string) => name.toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 5 && w !== "engineering");
+  return covers.filter((p) => {
+    const own = words(p.name).filter((w) => !covers.some((o) => o !== p && words(o.name).includes(w)));
+    return new RegExp(`(?<![a-z0-9])${p.code.toLowerCase()}(?![a-z0-9])`).test(text) ||
+      text.includes(p.cao.toLowerCase()) || own.some((w) => text.includes(w));
+  }).map((p) => p.code);
 }

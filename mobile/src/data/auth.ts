@@ -1,14 +1,20 @@
 import { DCUEmail } from '../core/identity';
+import { EmailLinkTokens, sessionFromLink } from './authLink';
 import { AuthenticatedUser, parseAuthSession, SupabaseConfig, SupabaseSession } from './session';
 
 /** Why sign-in failed, in words for the student. */
 export class AuthError extends Error {
   constructor(
-    readonly kind: 'notConfigured' | 'emailNotConfirmed' | 'invalidCredentials' | 'server',
+    readonly kind: 'notConfigured' | 'emailNotConfirmed' | 'invalidCredentials' | 'offline' | 'server',
     message: string,
   ) {
     super(message);
     this.name = 'UserFacingError';
+  }
+
+  /** No answer at all — offline, or the address can't be found. */
+  static unreachable(): AuthError {
+    return new AuthError('offline', "Couldn't reach the server. Check your internet connection and try again.");
   }
 
   static notConfigured(): AuthError {
@@ -46,6 +52,10 @@ export interface AuthService {
   /** Send the confirmation email again to an address that hasn't been confirmed yet. */
   resendConfirmation(email: DCUEmail): Promise<void>;
   sendPasswordReset(email: DCUEmail): Promise<void>;
+  /** Turns the tokens an email link came back with into the signed-in student. */
+  completeEmailLink(tokens: EmailLinkTokens): Promise<AuthenticatedUser>;
+  /** Changes the signed-in student's password. Used by the reset a recovery link opens. */
+  setPassword(password: string): Promise<void>;
 }
 
 /**
@@ -100,6 +110,48 @@ export class SupabaseAuthService implements AuthService {
     await this.post('/auth/v1/recover', { email: email.address });
   }
 
+  /**
+   * The fragment carries tokens but neither the user id nor the address, so the account is
+   * read back with the access token — which also proves the tokens are real before the app
+   * stores them and calls the student signed in.
+   */
+  async completeEmailLink(tokens: EmailLinkTokens): Promise<AuthenticatedUser> {
+    let json: unknown;
+    try {
+      json = await this.send('GET', '/auth/v1/user', tokens.accessToken);
+    } catch (error) {
+      // Supabase's own words for a refused token are written for a developer ("invalid
+      // JWT: unable to parse or verify signature"), and a student can act on none of it:
+      // a link that won't open has one answer, whatever is wrong with it. Being offline
+      // keeps its own message, because that one they can fix.
+      if (error instanceof AuthError && error.kind === 'server') {
+        throw new AuthError('server', "That link didn't work. Ask for a new email and open the newest one.");
+      }
+      throw error;
+    }
+    const account = json as { id?: unknown; email?: unknown } | null;
+    if (typeof account?.id !== 'string' || typeof account.email !== 'string') {
+      throw new AuthError('server', "That link couldn't be checked. Sign in with your email and password instead.");
+    }
+    await this.session.save(sessionFromLink(tokens, account.id));
+    return { id: account.id, address: account.email };
+  }
+
+  async setPassword(password: string): Promise<void> {
+    const token = await this.session.accessToken(this.config);
+    // The recovery session is what authorises the change; without it the link has aged out
+    // between opening the page and pressing Save.
+    if (!token) throw new AuthError('server', 'Your reset link has expired. Ask for a new email and try again.');
+    try {
+      await this.send('PUT', '/auth/v1/user', token, { password });
+    } catch (error) {
+      if (error instanceof AuthError && isSamePassword(error.message)) {
+        throw new AuthError('server', 'That is the password you already have. Choose a different one.');
+      }
+      throw error;
+    }
+  }
+
   private async post(path: string, body: Record<string, string>): Promise<unknown> {
     let response: Response;
     try {
@@ -109,9 +161,8 @@ export class SupabaseAuthService implements AuthService {
         body: JSON.stringify(body),
       });
     } catch {
-      // No answer at all — offline, or the address can't be found. Said plainly, so it
-      // isn't mistaken for a wrong password.
-      throw new AuthError('server', "Couldn't reach the server. Check your internet connection and try again.");
+      // Said plainly, so it isn't mistaken for a wrong password.
+      throw AuthError.unreachable();
     }
     const text = await response.text();
     let json: unknown = null;
@@ -123,6 +174,44 @@ export class SupabaseAuthService implements AuthService {
     if (!response.ok) throw new AuthError('server', serverMessage(json, response.status));
     return json;
   }
+
+  /** The same handling as {@link post}, for the calls that act as a signed-in student. */
+  private async send(
+    method: 'GET' | 'PUT',
+    path: string,
+    token: string,
+    body?: Record<string, string>,
+  ): Promise<unknown> {
+    let response: Response;
+    try {
+      response = await this.fetchFn(this.config.url + path, {
+        method,
+        headers: {
+          apikey: this.config.anonKey,
+          Authorization: `Bearer ${token}`,
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw AuthError.unreachable();
+    }
+    const text = await response.text();
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    if (!response.ok) throw new AuthError('server', serverMessage(json, response.status));
+    return json;
+  }
+}
+
+/** Supabase refuses a password that matches the current one, which reads as a failure. */
+function isSamePassword(message: string): boolean {
+  const lowered = message.toLowerCase();
+  return lowered.includes('same_password') || lowered.includes('should be different from the old password');
 }
 
 /**

@@ -1,7 +1,10 @@
+import { ModuleAbbreviationCache, ModuleAbbreviationStore, SupabaseModuleAbbreviationStore } from './abbreviations';
+import { AlertScheduler, MemoryAlertScheduler } from './alerts';
 import { AuthService, SupabaseAuthService } from './auth';
 import {
-  AllocationStore, LabRotationCache, LabRotationStore, SupabaseAllocationStore, SupabaseLabRotationStore,
-  SupabaseTimetableChangeStore, TimetableChangeCache, TimetableChangeStore,
+  AllocationStore, LabRotationCache, LabRotationStore, ModuleSplitCache, ModuleSplitStore, ModuleTitleCache,
+  ModuleTitleStore, SupabaseAllocationStore, SupabaseLabRotationStore, SupabaseModuleSplitStore,
+  SupabaseModuleTitleStore, SupabaseTimetableChangeStore, TimetableChangeCache, TimetableChangeStore,
 } from './courseData';
 import { DCU_API, DCUAPIClient, TimetableSource } from './dcuApi';
 import { SupabaseREST } from './rest';
@@ -38,13 +41,23 @@ export interface Services {
   allocations: AllocationStore | null;
   labRotations: LabRotationStore | null;
   timetableChanges: TimetableChangeStore | null;
+  moduleSplits: ModuleSplitStore | null;
+  /** Headings set in the console. Null until Supabase is configured. */
+  moduleTitles: ModuleTitleStore | null;
+  /** Week-grid abbreviations set in the console. Null until Supabase is configured. */
+  moduleAbbreviations: ModuleAbbreviationStore | null;
   rotationCache: LabRotationCache;
   changeCache: TimetableChangeCache;
+  splitCache: ModuleSplitCache;
+  titleCache: ModuleTitleCache;
+  abbreviationCache: ModuleAbbreviationCache;
   timetableCache: TimetableCache;
   /** Programme search and a picked programme's timetable. */
   dcu: DCUAPIClient;
   /** Replaces `dcu` for timetables when set — the preview fixtures. */
   sourceOverride: TimetableSource | null;
+  /** Class alerts on the phone. */
+  alerts: AlertScheduler;
   /**
    * Everything this student left on the device goes, not just their credentials: the next
    * person to sign in here is a different person.
@@ -57,6 +70,8 @@ export interface Platform {
   secrets: SecretStore;
   env: Record<string, string | undefined>;
   fetchFn?: typeof fetch;
+  /** Defaults to one that fires nothing: tests, the web build, the preview. */
+  alerts?: AlertScheduler;
 }
 
 export async function createServices(platform: Platform): Promise<Services> {
@@ -81,6 +96,7 @@ export async function createServices(platform: Platform): Promise<Services> {
   const rest = config ? new SupabaseREST(config, session, fetchFn) : null;
   const reporter = new ReporterID(prefs, user);
   const role = new CachedRole(prefs);
+  const alerts = platform.alerts ?? new MemoryAlertScheduler();
 
   const services: Services = {
     prefs,
@@ -98,8 +114,14 @@ export async function createServices(platform: Platform): Promise<Services> {
     allocations: rest ? new SupabaseAllocationStore(rest) : null,
     labRotations: rest ? new SupabaseLabRotationStore(rest) : null,
     timetableChanges: rest ? new SupabaseTimetableChangeStore(rest) : null,
+    moduleSplits: rest ? new SupabaseModuleSplitStore(rest) : null,
+    moduleTitles: rest ? new SupabaseModuleTitleStore(rest) : null,
+    moduleAbbreviations: rest ? new SupabaseModuleAbbreviationStore(rest) : null,
     rotationCache: new LabRotationCache(prefs),
     changeCache: new TimetableChangeCache(prefs),
+    splitCache: new ModuleSplitCache(prefs),
+    titleCache: new ModuleTitleCache(prefs),
+    abbreviationCache: new ModuleAbbreviationCache(prefs),
     timetableCache: new TimetableCache(platform.kv),
     // The API host is versioned (docs/API.md), so it can be moved without a code change.
     dcu: new DCUAPIClient(
@@ -107,17 +129,21 @@ export async function createServices(platform: Platform): Promise<Services> {
       fetchFn,
     ),
     sourceOverride: null,
+    alerts,
     signOut() {
       user.forget();
       void session.clear();
       reporter.reset();
       role.reset();
       for (const key of [
-        PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme, PrefKey.hiddenGroups,
-        PrefKey.skipped, PrefKey.allocationTried,
+        PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme, PrefKey.programmeSaved,
+        PrefKey.skipped, PrefKey.timetableEdits, PrefKey.allocationTried,
       ]) {
         prefs.set(key, null);
       }
+      // Last, so nothing re-planned while the rest was cleared survives: the next person to
+      // sign in here shouldn't be told where this one's classes are.
+      void alerts.clear();
     },
   };
   return services;

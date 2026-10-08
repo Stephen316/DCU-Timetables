@@ -3,7 +3,7 @@ import { makeDeadline } from '../src/core/deadline';
 import { SupabaseAuthService } from '../src/data/auth';
 import { SupabaseAllocationStore, SupabaseLabRotationStore, SupabaseTimetableChangeStore } from '../src/data/courseData';
 import { DCUAPIClient } from '../src/data/dcuApi';
-import { SupabaseREST } from '../src/data/rest';
+import { errorMessage, isNotSignedIn, SupabaseREST } from '../src/data/rest';
 import { SupabaseSession } from '../src/data/session';
 import {
   SupabaseCancellationStore, SupabaseDeadlineStore, SupabaseProfileStore, SupabaseVerdictStore,
@@ -107,7 +107,7 @@ describe('Supabase requests', () => {
     const d = makeDeadline({ id: 'd1', moduleKey: 'CA106', atGroupKey: 'g', title: 'Quiz', due: utc(2026, 9, 25, 9), kind: 'quiz', submitterID: 'user-1' });
     await new SupabaseDeadlineStore(await signedInREST(fn)).submit(d);
     expect(calls[0].url).toBe('https://proj.supabase.co/rest/v1/module_deadlines');
-    expect(calls[0].body).toEqual([{ id: 'd1', module_key: 'CA106', at_group_key: 'g', title: 'Quiz', due_at: '2026-09-25T09:00:00Z', kind: 'quiz', submitter_id: 'user-1' }]);
+    expect(calls[0].body).toEqual([{ id: 'd1', module_key: 'CA106', at_group_key: 'g', title: 'Quiz', due_at: '2026-09-25T09:00:00Z', kind: 'quiz', submitter_id: 'user-1', grade_weight: 0 }]);
   });
 
   test('moderation goes through the RPCs by deadline, never by person', async () => {
@@ -126,10 +126,47 @@ describe('Supabase requests', () => {
   });
 
   test('standings come from the tally view', async () => {
-    const { calls, fn } = fakeFetch(() => ({ body: [{ deadline_id: 'd1', confirm_count: 4, mine: true }] }));
-    const s = await new SupabaseDeadlineStore(await signedInREST(fn)).standings(['d1']);
-    expect(query(calls[0].url)).toEqual({ select: 'deadline_id,confirm_count,mine', deadline_id: 'in.("d1")' });
-    expect(s.get('d1')).toMatchObject({ confirmCount: 4, confirmedByMe: true });
+    const { calls, fn } = fakeFetch(() => ({ body: [
+      { deadline_id: 'd1', confirm_count: 4, mine: true, dispute_count: 2, disputed_by_me: false },
+      // A server without phase 25 sends no dispute columns.
+      { deadline_id: 'd2', confirm_count: 1, mine: false },
+    ] }));
+    const s = await new SupabaseDeadlineStore(await signedInREST(fn)).standings(['d1', 'd2']);
+    expect(query(calls[0].url)).toEqual({ select: 'deadline_id,confirm_count,mine,dispute_count,disputed_by_me', deadline_id: 'in.("d1","d2")' });
+    expect(s.get('d1')).toMatchObject({ confirmCount: 4, confirmedByMe: true, disputeCount: 2, disputedByMe: false });
+    expect(s.get('d2')).toMatchObject({ confirmCount: 1, disputeCount: 0 });
+  });
+
+  test('status, edits and your own name come back with each deadline', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: [{
+      id: 'd1', module_key: 'CA106', at_group_key: null, title: 'Quiz', due_at: '2026-09-25T09:00:00+00:00', kind: 'quiz',
+      is_mine: false, submitted_at: '2026-09-20T09:00:00+00:00', status: 'verified', edited_at: '2026-09-21T10:00:00+00:00', my_label: 'memory quiz', grade_weight: 20,
+    }, {
+      id: 'd2', module_key: 'CA106', at_group_key: null, title: 'Lab', due_at: '2026-09-26T09:00:00+00:00', kind: 'labReport',
+      is_mine: false, submitted_at: '2026-09-20T09:00:00+00:00', status: 'pending', edited_at: null, my_label: null,
+    }] }));
+    const list = await new SupabaseDeadlineStore(await signedInREST(fn)).deadlinesForModule('CA106');
+    expect(query(calls[0].url).select).toBe('id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label,grade_weight');
+    expect(list[0]).toMatchObject({ status: 'verified', editedAt: utc(2026, 9, 21, 10), myLabel: 'memory quiz', gradeWeight: 20 });
+    // No weight from the server is no weight: not graded, never a guess.
+    expect(list[1]).toMatchObject({ status: 'pending', editedAt: null, myLabel: null, gradeWeight: 0 });
+  });
+
+  test('editing, naming and disputing go through the RPCs', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: null }));
+    const store = new SupabaseDeadlineStore(await signedInREST(fn));
+    await store.edit('d1', { title: 'Quiz 2', kind: 'exam', due: utc(2026, 10, 2, 9), gradeWeight: 15 });
+    await store.setLabel('d1', 'memory quiz');
+    await store.setLabel('d1', null);
+    await store.report('d1', 'wrong');
+    await store.withdrawReport('d1');
+    expect(calls.map((c) => [c.url.replace(config.url, ''), c.body])).toEqual([
+      ['/rest/v1/rpc/edit_deadline', { p_deadline: 'd1', p_title: 'Quiz 2', p_kind: 'exam', p_due: '2026-10-02T09:00:00Z', p_weight: 15 }],
+      ['/rest/v1/rpc/set_deadline_label', { p_deadline: 'd1', p_label: 'memory quiz' }],
+      ['/rest/v1/rpc/set_deadline_label', { p_deadline: 'd1', p_label: '' }],
+      ['/rest/v1/rpc/report_deadline', { p_deadline: 'd1', p_reason: 'wrong' }],
+      ['/rest/v1/rpc/withdraw_deadline_report', { p_deadline: 'd1' }],
+    ]);
   });
 
   test('a verdict replaces the row, and unknown states are dropped on read', async () => {
@@ -163,6 +200,43 @@ describe('Supabase requests', () => {
     await expect(new SupabaseProfileStore(await signedInREST(fn)).setStudentID('A12345678'))
       .rejects.toThrow('Your student ID is already set — ask an admin to change it');
     expect(calls[0]).toMatchObject({ url: 'https://proj.supabase.co/rest/v1/rpc/set_student_id', body: { p_student_id: 'A12345678' } });
+  });
+
+  test('the saved programme is read on its own and sent through the RPC', async () => {
+    const programme = { identity: 'uuid-1', name: 'CASE1 (Computer Science-1)', categoryTypeIdentity: 'type-1' };
+    const { calls, fn } = fakeFetch((c) => ({ body: c.url.includes('rpc') ? null : [{ saved_programme: programme }] }));
+    const store = new SupabaseProfileStore(await signedInREST(fn));
+    expect(await store.savedProgramme()).toEqual(programme);
+    expect(query(calls[0].url)).toEqual({ select: 'saved_programme', id: 'eq.user-1' });
+    await store.saveProgramme(programme);
+    expect(calls[1]).toMatchObject({ url: 'https://proj.supabase.co/rest/v1/rpc/set_programme', body: { p_programme: programme } });
+  });
+
+  // An account from before the column existed, or one that never picked, gets the search.
+  test('no saved programme, or a malformed one, reads as none', async () => {
+    for (const row of [{ saved_programme: null }, { saved_programme: { name: 'CASE1' } }, {}]) {
+      const { fn } = fakeFetch(() => ({ body: [row] }));
+      expect(await new SupabaseProfileStore(await signedInREST(fn)).savedProgramme()).toBeNull();
+    }
+  });
+
+  // The ID screen sends a student back to sign-in on exactly this error, rather than
+  // showing a message no button on it can fix — so it has to be told apart from a refusal.
+  test('without a session the profile store says so, recognisably, and sends nothing', async () => {
+    const { calls, fn } = fakeFetch();
+    const store = new SupabaseProfileStore(await anonREST(fn));
+    const onSave = await store.setStudentID('A12345678').catch((e: unknown) => e);
+    const onRead = await store.myProfile().catch((e: unknown) => e);
+    expect(isNotSignedIn(onSave)).toBe(true);
+    expect(isNotSignedIn(onRead)).toBe(true);
+    expect(errorMessage(onSave, 'fallback')).toBe("You're not signed in.");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("the database's refusal is not mistaken for a lost session", async () => {
+    const { fn } = fakeFetch(() => ({ status: 400, body: { message: 'your student ID is already set — ask an admin to change it' } }));
+    const error = await new SupabaseProfileStore(await signedInREST(fn)).setStudentID('A12345678').catch((e: unknown) => e);
+    expect(isNotSignedIn(error)).toBe(false);
   });
 
   test('allocation lookups use the bytea literal and the RPC', async () => {
@@ -248,6 +322,59 @@ describe('Auth requests', () => {
     const { fn } = fakeFetch(() => ({ body: { id: 'u1', email: 'x' } }));
     const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
     expect(await service.signUp(email, 'Password1')).toEqual({ kind: 'needsEmailConfirmation' });
+  });
+
+  const tokens = { accessToken: 'link-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 };
+
+  test('an email link is finished by reading back the account it signed in', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: { id: 'u1', email: 'aoife.murphy5@mail.dcu.ie' } }));
+    const session = new SupabaseSession(memorySecrets(), () => undefined, fn);
+    const user = await new SupabaseAuthService(config, session, fn).completeEmailLink(tokens);
+    // The fragment carries neither the id nor the address, and the call is also what proves
+    // the tokens in a URL anyone could paste are real.
+    expect(calls[0]).toMatchObject({ url: 'https://proj.supabase.co/auth/v1/user', method: 'GET' });
+    expect(calls[0].headers.Authorization).toBe('Bearer link-token');
+    expect(user).toEqual({ id: 'u1', address: 'aoife.murphy5@mail.dcu.ie' });
+    expect(session.userID).toBe('u1');
+  });
+
+  test('tokens the server will not vouch for sign nobody in', async () => {
+    const { fn } = fakeFetch(() => ({ status: 401, body: { msg: 'invalid JWT: unable to parse or verify signature' } }));
+    const session = new SupabaseSession(memorySecrets(), () => undefined, fn);
+    const service = new SupabaseAuthService(config, session, fn);
+    // Supabase's wording is for a developer; the student is told what to do instead.
+    await expect(service.completeEmailLink(tokens)).rejects.toThrow("That link didn't work.");
+    expect(session.userID).toBeNull();
+  });
+
+  test('a link that could not be sent at all says so, because that one is fixable', async () => {
+    const fn = (async () => { throw new TypeError('Network request failed'); }) as unknown as typeof fetch;
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.completeEmailLink(tokens)).rejects.toThrow("Couldn't reach the server.");
+  });
+
+  test('the new password is set as the student the reset link signed in', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: { id: 'u1' } }));
+    const session = new SupabaseSession(memorySecrets(), () => undefined, fn);
+    await session.save({ accessToken: 'recovery-token', refreshToken: 'r', userID: 'u1', expiresAt: Date.now() + 3_600_000 });
+    await new SupabaseAuthService(config, session, fn).setPassword('Password2');
+    expect(calls[0]).toMatchObject({ url: 'https://proj.supabase.co/auth/v1/user', method: 'PUT', body: { password: 'Password2' } });
+    expect(calls[0].headers.Authorization).toBe('Bearer recovery-token');
+  });
+
+  test('a reset with no session left says the link expired, not that something went wrong', async () => {
+    const { calls, fn } = fakeFetch();
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.setPassword('Password2')).rejects.toThrow('Your reset link has expired.');
+    expect(calls).toHaveLength(0);
+  });
+
+  test('reusing the old password is explained rather than passed through', async () => {
+    const { fn } = fakeFetch(() => ({ status: 422, body: { error_code: 'same_password', msg: 'New password should be different from the old password.' } }));
+    const session = new SupabaseSession(memorySecrets(), () => undefined, fn);
+    await session.save({ accessToken: 'recovery-token', refreshToken: 'r', userID: 'u1', expiresAt: Date.now() + 3_600_000 });
+    const service = new SupabaseAuthService(config, session, fn);
+    await expect(service.setPassword('Password1')).rejects.toThrow('That is the password you already have.');
   });
 });
 

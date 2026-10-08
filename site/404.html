@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found · DCU Timetable</title>
+<link rel="stylesheet" href="/DCU-Timetables/style.css">
+<script>
+  // The web app routes in the browser, so reloading one of its pages (e.g. a class) asks
+  // Pages for a file that doesn't exist. Send those back to the app's start.
+  if (location.pathname.startsWith('/DCU-Timetables/app/')) location.replace('/DCU-Timetables/app/');
+</script>
+</head>
+<body>
+<main>
+<h1>Page not found</h1>
+<p><a href="/DCU-Timetables/">Back to DCU Timetable</a></p>
+</main>
+</body>
+</html>

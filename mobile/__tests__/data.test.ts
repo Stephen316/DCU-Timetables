@@ -14,7 +14,7 @@ import {
 import { EventMapper, EventsResponseDTO } from '../src/data/dcuApi';
 import { buildQuery, PostgREST } from '../src/data/rest';
 import { isSessionValid, parseAuthSession, SupabaseSession } from '../src/data/session';
-import { MemoryKV, Prefs } from '../src/data/storage';
+import { MemoryKV, PrefKey, Prefs } from '../src/data/storage';
 import { LocalCancellationStore, LocalDeadlineStore } from '../src/data/stores';
 import { deadlineSFSymbol, WidgetSnapshotPublisher } from '../src/data/widgets';
 import { at, event, utc } from './helpers';
@@ -75,7 +75,6 @@ class FakeAllocationStore implements AllocationStore {
     return this.resolution;
   }
   async allocation() { return this.row; }
-  async subgroups() { return []; }
 }
 
 describe('Allocation refresh', () => {
@@ -361,6 +360,32 @@ describe('Timetable changes', () => {
     expect(TimetableChanges.apply(week, [remove()], picked, null)).toEqual([]);
   });
 
+  test("a change for a programme reaches the students who picked it, and no one else's", () => {
+    const week = [ev(lab, '2026-10-14', '14:00')];
+    const ce1 = TimetableAudience.forProgramme('CE1');
+    expect(TimetableChanges.apply(week, [remove({ group: 'CE1' })], ce1, null)).toEqual([]);
+    expect(TimetableChanges.apply(week, [remove({ group: 'ECE1' })], ce1, null)).toEqual(week);
+    expect(TimetableChanges.apply(week, [remove({ group: 'C' })], ce1, null)).toEqual(week);
+  });
+
+  test('a slot kept for some programmes is gone for the rest', () => {
+    // "Keep only for CE1 and ECE1" saves a removal for each of the other four.
+    const week = [ev(lab, '2026-10-14', '14:00')];
+    const removals = ['BMED1', 'CAM1', 'ME1', 'SSE1'].map((group) => remove({ group }));
+    const shown = (code: string) => TimetableChanges.apply(week, removals, TimetableAudience.forProgramme(code), null).length;
+    expect(['BMED1', 'CAM1', 'CE1', 'ECE1', 'ME1', 'SSE1'].map(shown)).toEqual([0, 0, 1, 1, 0, 0]);
+  });
+
+  test("a class-list student gets their picked programme's changes as well as their group's", () => {
+    const week = [ev(lab, '2026-10-14', '14:00')];
+    const profile = makeProfile({ name: 'A', group: 'C', subgroup: 'C.2', courseKey: 'EEG1' });
+    expect(TimetableChanges.apply(week, [remove({ group: 'CE1' })], TimetableAudience.forProfile(profile, 'CE1'), null)).toEqual([]);
+    expect(TimetableChanges.apply(week, [remove({ group: 'C' })], TimetableAudience.forProfile(profile, 'CE1'), null)).toEqual([]);
+    expect(TimetableChanges.apply(week, [remove({ group: 'CE1' })], TimetableAudience.forProfile(profile), null)).toEqual(week);
+    // A programme from another course isn't one of this course's groups.
+    expect(TimetableAudience.forProfile(profile, 'CASE3').programme).toBeNull();
+  });
+
   test("another course's changes don't apply", () => {
     const week = [ev(lab, '2026-10-14', '14:00')];
     expect(TimetableChanges.apply(week, [remove({ course: 'CASE1' })], groupC, null)).toEqual(week);
@@ -396,9 +421,17 @@ describe('Timetable changes', () => {
     expect(TimetableChanges.apply(week, [remove()], null, null)).toEqual(week);
   });
 
-  test('picked Engineering programmes map to their course', () => {
+  test('picked Engineering programmes map to their course, and any other programme is its own', () => {
     expect(TimetableAudience.forProgramme('ECE1')?.courseKey).toBe('EEG1');
-    expect(TimetableAudience.forProgramme('CASE3')).toBeNull();
+    expect(TimetableAudience.forProgramme('case3')?.courseKey).toBe('CASE3');
+    expect(TimetableAudience.forProgramme(' ')).toBeNull();
+  });
+
+  test("a change saved for another programme reaches that programme's students only", () => {
+    const week = [ev(lab, '2026-10-14', '14:00')];
+    const case3 = TimetableAudience.forProgramme('CASE3');
+    expect(TimetableChanges.apply(week, [remove({ course: 'CASE3' })], case3, null)).toEqual([]);
+    expect(TimetableChanges.apply(week, [remove()], case3, null)).toEqual(week);
   });
 
   test('decodes a row', () => {
@@ -525,6 +558,24 @@ describe('Auth session', () => {
   });
 });
 
+test('no signal while the token is refreshed keeps the student signed in', async () => {
+  const secrets = new Map<string, string>();
+  const store = { get: async (k: string) => secrets.get(k) ?? null, set: async (k: string, v: string) => void secrets.set(k, v), remove: async (k: string) => void secrets.delete(k) };
+  const config = { url: 'https://x.supabase.co', anonKey: 'anon' };
+  for (const failure of [
+    async () => { throw new TypeError('Network request failed'); },
+    async () => new Response('{}', { status: 503 }),
+  ]) {
+    let expired = 0;
+    const session = new SupabaseSession(store, () => expired++, jest.fn(failure) as unknown as typeof fetch);
+    await session.save({ accessToken: 'a', refreshToken: 'good', userID: 'u', expiresAt: Date.now() - 1000 });
+    await expect(session.accessToken(config)).rejects.toThrow("Couldn't reach the server");
+    expect(expired).toBe(0);
+    expect(session.userID).toBe('u');
+    expect(secrets.size).toBe(1);
+  }
+});
+
 describe('Device storage', () => {
   test('prefs survive a relaunch', async () => {
     const kv = new MemoryKV();
@@ -571,6 +622,26 @@ describe('Device storage', () => {
     await store.withdraw(d.id, 'me');
     expect(await store.deadlinesForModule('M')).toHaveLength(0);
   });
+
+  test('a deadline saved before weights existed reads as not graded', async () => {
+    const prefs = newPrefs();
+    const due = Date.now() + 86_400_000;
+    prefs.setJSON(PrefKey.localDeadlines, [{ id: 'old', moduleKey: 'M', atGroupKey: null, title: 'T', due, kind: 'quiz', submitterID: 'me', submittedAt: due }]);
+    expect((await new LocalDeadlineStore(prefs).deadlinesForModule('M'))[0].gradeWeight).toBe(0);
+  });
+
+  test('the local deadline store keeps edits and names across a reload', async () => {
+    const prefs = newPrefs();
+    const due = new Date(Date.now() + 86_400_000);
+    const d = makeDeadline({ moduleKey: 'M', title: 'T', due, submitterID: 'me' });
+    await new LocalDeadlineStore(prefs).submit(d);
+    const later = new Date(due.getTime() + 3600_000);
+    await new LocalDeadlineStore(prefs).edit(d.id, { title: 'T2', kind: 'exam', due: later, gradeWeight: 25 });
+    await new LocalDeadlineStore(prefs).setLabel(d.id, 'mine');
+    const [back] = await new LocalDeadlineStore(prefs).deadlinesForModule('M');
+    expect(back).toMatchObject({ title: 'T2', kind: 'exam', due: later, myLabel: 'mine', status: 'pending', gradeWeight: 25 });
+    expect(back.editedAt).toBeInstanceOf(Date);
+  });
 });
 
 describe('Widget snapshot', () => {
@@ -588,8 +659,24 @@ describe('Widget snapshot', () => {
     });
   });
 
-  test('a class with no room carries an empty one', () => {
+  test('a class with no room carries an empty one, or "Online" when it is', () => {
     expect(WidgetSnapshotPublisher.room(ev('a', t(23, 9), t(23, 11), []))).toBe('');
+    const online = event('EEG1006[1]SY/L1/01', t(23, 9), t(23, 10), { locations: [], type: 'synchronous' });
+    expect(WidgetSnapshotPublisher.room(online)).toBe('Online');
+  });
+
+  test("a deadline carries its module's name when a class gives one, else the code", () => {
+    const names = new Map([['CA106', 'Computer Systems']]);
+    const snap = WidgetSnapshotPublisher.snapshot([], [deadline('a', t(25, 12))], clear, t(23, 8), names);
+    expect(snap.deadlines[0].code).toBe('Computer Systems');
+    expect(WidgetSnapshotPublisher.snapshot([], [deadline('a', t(25, 12))], clear, t(23, 8)).deadlines[0].code).toBe('CA106');
+  });
+
+  test("a class's title leaves off the module code DCU puts in front of its name", () => {
+    const coded = event('EEG1006[1]OC/L1/01', t(23, 9), t(23, 10), { id: 'm', moduleName: 'EEG1006[1] Materials Engineering' });
+    const snap = WidgetSnapshotPublisher.snapshot([coded], [], clear, t(23, 8));
+    expect(snap.classes[0].title).toBe('Materials Engineering');
+    expect(snap.classes[0].code).toBe('EEG1006');
   });
 
   test('a flagged class is marked cancelled; reports below the bar are not', () => {
@@ -614,6 +701,11 @@ describe('Widget snapshot', () => {
     expect(snap.deadlines[0].isSatInClass).toBe(true);
     expect(snap.deadlines[0].symbol).toBe(deadlineSFSymbol('quiz'));
     expect(snap.deadlines[0].symbol).toBe('checklist');
+  });
+
+  test('a widget shows your own name for a deadline', () => {
+    const named = makeDeadline({ id: 'n', moduleKey: 'CA106', title: 'Lab n', due: t(25, 12), submitterID: 'someone', myLabel: 'the long one' });
+    expect(WidgetSnapshotPublisher.snapshot([], [named], clear, t(23, 8)).deadlines[0].title).toBe('the long one');
   });
 
   test('dates are whole-second ISO strings, which Swift decodes', () => {

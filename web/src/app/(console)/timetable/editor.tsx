@@ -285,7 +285,7 @@ function ClassDetail({ c, removals, props, onDone }: {
       {removals.length > 0 && (
         <p>Already removed for {removals.map((r) => audience(r.group)).join(", ")}. Delete those under Saved changes to undo.</p>
       )}
-      <RemoveForm c={c} props={props} onDone={onDone} />
+      <RemoveForm c={c} removals={removals} props={props} onDone={onDone} />
     </>
   );
 }
@@ -314,10 +314,14 @@ function AddedDetail({ change, date, onDone }: { change: SavedChange; date: stri
   );
 }
 
-function RemoveForm({ c, props, onDone }: { c: DcuClass; props: Props; onDone: () => void }) {
+function RemoveForm({ c, removals, props, onDone }: {
+  c: DcuClass; removals: SavedChange[]; props: Props; onDone: () => void;
+}) {
+  const programmes = props.programmeGroups.map((p) => p.code);
+  // Gone on this date already, for everyone or for that programme.
+  const removedFor = new Set(programmes.filter((p) => removals.some((r) => r.group === null || r.group === p)));
+  const [keeps, setKeeps] = useState<Set<string>>(() => new Set(programmes));
   const [group, setGroup] = useState("");
-  // A programme the class belongs to alone: it stays for that one and goes for the rest.
-  const [keepFor, setKeepFor] = useState("");
   const [every, setEvery] = useState(false);
   const [dates, setDates] = useState<string[]>([c.date]);
   const [onlyThis, setOnlyThis] = useState(true);
@@ -337,9 +341,11 @@ function RemoveForm({ c, props, onDone }: { c: DcuClass; props: Props; onDone: (
     });
   }
 
-  const targets = keepFor
-    ? props.programmeGroups.map((p) => p.code).filter((code) => code !== keepFor)
-    : groupList(group);
+  const byGroup = group.trim() !== "" || !programmes.length;
+  const dropped = programmes.filter((p) => !keeps.has(p) && !removedFor.has(p));
+  const kept = programmes.filter((p) => keeps.has(p) && !removedFor.has(p));
+  // Every programme unticked is one removal for everyone, not six.
+  const targets: (string | null)[] = byGroup ? groupList(group) : !dropped.length ? [] : !kept.length ? [null] : dropped;
   const changes: TimetableChange[] = targets.map((g) => ({
     courseKey: props.programme, group: g, kind: "remove",
     module: c.module, activityCode: onlyThis ? c.code : null, title: null,
@@ -356,18 +362,16 @@ function RemoveForm({ c, props, onDone }: { c: DcuClass; props: Props; onDone: (
 
   return (
     <div className="tt-edit">
+      {programmes.length > 0 && (
+        <ProgrammeTicks programmes={props.programmeGroups} ticked={keeps} locked={removedFor}
+          disabled={group.trim() !== ""} onChange={setKeeps} />
+      )}
       <div className="row" style={{ flexWrap: "wrap" }}>
-        <div className="field" style={{ width: 170 }}>
-          <label>Remove for</label>
-          <GroupInput value={keepFor ? "" : group} onChange={setGroup} groups={props.groups}
-            programmes={props.programmeGroups} disabled={!!keepFor} />
-        </div>
-        <div className="field" style={{ width: 170 }}>
-          <label>Or keep only for</label>
-          <select value={keepFor} onChange={(e) => setKeepFor(e.target.value)}>
-            <option value="">—</option>
-            {props.programmeGroups.map((p) => <option key={p.code} value={p.code}>{p.code} · {p.name}</option>)}
-          </select>
+        <div className="field" style={{ width: 190 }}>
+          <label>{programmes.length ? "Or remove for lab groups" : "Remove for"}</label>
+          <GroupInput value={group} onChange={setGroup} groups={props.groups}
+            programmes={programmes.length ? [] : props.programmeGroups}
+            placeholder={programmes.length ? "C, D.1" : "Everyone"} disabled={dropped.length > 0} />
         </div>
         <div className="field">
           <label>Dates</label>
@@ -389,9 +393,11 @@ function RemoveForm({ c, props, onDone }: { c: DcuClass; props: Props; onDone: (
       {every && !finding && <p className="dim" style={{ fontSize: 12 }}>{dates.length} date{dates.length === 1 ? "" : "s"}: {dates.map(shortDate).join(", ")}</p>}
       {problems.map((p, i) => <p key={i} className={p.level === "error" ? "tag off" : "tag warn"}>{p.message}</p>)}
       {error && <p className="err">{error}</p>}
-      <button className="primary" onClick={save} disabled={saving || finding || problems.some((p) => p.level === "error")}>
-        {saving ? <><Spinner /> Saving</> : keepFor
-          ? `Keep only for ${keepFor} — remove for ${targets.join(", ")}`
+      <button className="primary" onClick={save}
+        disabled={saving || finding || !changes.length || problems.some((p) => p.level === "error")}>
+        {saving ? <><Spinner /> Saving</>
+          : !changes.length ? "Untick the programmes losing this class, or name lab groups"
+          : !byGroup && targets[0] !== null ? `Remove for ${dropped.join(", ")} · ${kept.join(", ")} keep${kept.length === 1 ? "s" : ""} it`
           : `Remove for ${targets.map(audience).join(", ")}`}
       </button>
     </div>
@@ -400,8 +406,10 @@ function RemoveForm({ c, props, onDone }: { c: DcuClass; props: Props; onDone: (
 
 function AddForm(props: Props & { onDone: () => void }) {
   const shown = props.weeks.find((w) => w.number === props.week);
+  const programmes = props.programmeGroups.map((p) => p.code);
   const [module, setModule] = useState(props.modules[0]?.code ?? "");
   const [title, setTitle] = useState("");
+  const [has, setHas] = useState<Set<string>>(() => new Set(programmes));
   const [group, setGroup] = useState("");
   const [first, setFirst] = useState(shown?.firstDay ?? "");
   const [repeat, setRepeat] = useState(1);
@@ -413,7 +421,10 @@ function AddForm(props: Props & { onDone: () => void }) {
   const [saving, start] = useTransition();
 
   const dates = first ? Array.from({ length: Math.max(1, Math.min(repeat, 30)) }, (_, i) => addDays(first, 7 * i)) : [];
-  const targets = groupList(group);
+  const byGroup = group.trim() !== "" || !programmes.length;
+  const ticked = programmes.filter((p) => has.has(p));
+  // Every programme ticked is one addition for everyone, not six.
+  const targets: (string | null)[] = byGroup ? groupList(group) : ticked.length === programmes.length ? [null] : ticked;
   const changes: TimetableChange[] = targets.map((g) => ({
     courseKey: props.programme, group: g, kind: "add",
     module, activityCode: null, title: title.trim() || null, dates, start: startTime,
@@ -428,6 +439,9 @@ function AddForm(props: Props & { onDone: () => void }) {
 
   return (
     <div className="tt-edit tt-add">
+      {programmes.length > 0 && (
+        <ProgrammeTicks programmes={props.programmeGroups} ticked={has} disabled={group.trim() !== ""} onChange={setHas} />
+      )}
       <div className="row" style={{ flexWrap: "wrap" }}>
         <div className="field" style={{ width: 150 }}>
           <label>Module</label>
@@ -439,9 +453,11 @@ function AddForm(props: Props & { onDone: () => void }) {
           <label>What</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Lab, Tutorial…" />
         </div>
-        <div className="field" style={{ width: 170 }}>
-          <label>For</label>
-          <GroupInput value={group} onChange={setGroup} groups={props.groups} programmes={props.programmeGroups} />
+        <div className="field" style={{ width: 190 }}>
+          <label>{programmes.length ? "Or only lab groups" : "For"}</label>
+          <GroupInput value={group} onChange={setGroup} groups={props.groups}
+            programmes={programmes.length ? [] : props.programmeGroups}
+            placeholder={programmes.length ? "C, D.1" : "Everyone"} disabled={ticked.length < programmes.length} />
         </div>
         <div className="field" style={{ width: 160 }}>
           <label>First date</label>
@@ -473,8 +489,10 @@ function AddForm(props: Props & { onDone: () => void }) {
       )}
       {problems.map((p, i) => <p key={i} className={p.level === "error" ? "tag off" : "tag warn"}>{p.message}</p>)}
       {error && <p className="err">{error}</p>}
-      <button className="primary" onClick={save} disabled={saving || problems.some((p) => p.level === "error")}>
-        {saving ? <><Spinner /> Saving</> : `Add for ${targets.map(audience).join(", ")}`}
+      <button className="primary" onClick={save} disabled={saving || !changes.length || problems.some((p) => p.level === "error")}>
+        {saving ? <><Spinner /> Saving</>
+          : !changes.length ? "Tick the programmes that have this class"
+          : `Add for ${targets.map(audience).join(", ")}`}
       </button>
     </div>
   );
@@ -524,15 +542,51 @@ function Saved({ changes }: { changes: SavedChange[] }) {
   );
 }
 
-/// Free text with the known groups and the course's programmes offered. Blank means
-/// everyone on the course; several, "CE1, ECE1", saves one change for each.
-function GroupInput({ value, onChange, groups, programmes, disabled }: {
+/// One box per programme of the course, ticked when the class is on its timetable. Several
+/// can share a slot: the 10:00 kept for CE1 and ECE1, the 11:00 for the other four. A
+/// student is on one programme, so each box is a separate change when saved.
+function ProgrammeTicks({ programmes, ticked, locked, disabled, onChange }: {
+  programmes: { code: string; name: string }[];
+  ticked: Set<string>;
+  /// Removed on this date already: shown unticked, and put back only under Saved changes.
+  locked?: Set<string>;
+  disabled?: boolean;
+  onChange: (next: Set<string>) => void;
+}) {
+  const open = programmes.filter((p) => !locked?.has(p.code));
+  const set = (codes: string[]) => onChange(new Set(codes));
+  return (
+    <div className="field">
+      <div className="tt-who-head">
+        <label>Programmes with this class</label>
+        <button type="button" className="link" disabled={disabled} onClick={() => set(open.map((p) => p.code))}>All</button>
+        <button type="button" className="link" disabled={disabled} onClick={() => set([])}>None</button>
+      </div>
+      <div className="tt-who">
+        {programmes.map((p) => {
+          const gone = !!locked?.has(p.code);
+          return (
+            <label key={p.code} className="check" title={gone ? `Already removed for ${p.code} on this date. Delete that under Saved changes to put it back.` : p.name}>
+              <input type="checkbox" checked={!gone && ticked.has(p.code)} disabled={disabled || gone}
+                onChange={(e) => set(open.map((x) => x.code).filter((code) => code === p.code ? e.target.checked : ticked.has(code)))} />
+              <span className={gone ? "dim" : undefined}>{p.code}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/// Free text with the known groups offered, and the course's programmes when there are no
+/// boxes for them. Several, "C, D.1", saves one change for each.
+function GroupInput({ value, onChange, groups, programmes, placeholder, disabled }: {
   value: string; onChange: (v: string) => void; groups: string[];
-  programmes: { code: string; name: string }[]; disabled?: boolean;
+  programmes: { code: string; name: string }[]; placeholder: string; disabled?: boolean;
 }) {
   return (
     <>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Everyone" list="tt-groups" disabled={disabled} />
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} list="tt-groups" disabled={disabled} />
       <datalist id="tt-groups">
         {programmes.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
         {groups.map((g) => <option key={g} value={g}>Group {g}</option>)}
@@ -545,7 +599,7 @@ function GroupInput({ value, onChange, groups, programmes, disabled }: {
 /// is one problem, not five.
 function findingsOf(changes: TimetableChange[]): Finding[] {
   const seen = new Set<string>();
-  return changes.flatMap(checkChange).filter((f) => !seen.has(f.message) && !!seen.add(f.message));
+  return changes.flatMap((c) => checkChange(c)).filter((f) => !seen.has(f.message) && !!seen.add(f.message));
 }
 
 // ---------------------------------------------------------------------------

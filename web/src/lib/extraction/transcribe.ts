@@ -28,7 +28,8 @@ Rules, in order of importance:
 /// Not added, deliberately: "a blank cell or one marked N/A is not a session". It removed
 /// the 14 rows Mistral emits for blank cells, and it cost two real sessions — 65/67,
 /// identical across two runs. Losing a session is the worst outcome available, so the
-/// blanks are handled in code instead (they carry no groups, and are not saved).
+/// blanks are handled in code instead: blankInSource (extraction/rotation.ts) drops the
+/// ones the OCR text shows as empty.
 export const TRANSCRIBE_INSTRUCTION =
   "Transcribe every session in this rotation table, from every column — one object per " +
   "filled cell. `activity` is the heading the cell sits under. Where a cell lists several " +

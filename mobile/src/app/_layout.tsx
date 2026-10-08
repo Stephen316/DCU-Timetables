@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createAppServices } from '../data/platform';
 import { Services } from '../data/services';
 import { PrefKey } from '../data/storage';
+import { startWebUpdateChecks } from '../data/webUpdate';
 import { ServicesContext, usePref } from '../state/hooks';
 import { RootProvider, useRoot } from '../state/root';
 import { dark, light, ThemeContext } from '../ui/theme';
@@ -22,6 +23,9 @@ export default function RootLayout() {
       .then(setServices)
       .finally(() => void SplashScreen.hideAsync());
   }, []);
+
+  // The web build on a Home Screen is never reloaded by iOS, so it updates itself.
+  useEffect(() => startWebUpdateChecks(), []);
 
   if (!services) return null;
   return (
@@ -48,6 +52,16 @@ function Themed({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (Platform.OS !== 'web') Appearance.setColorScheme(setting === 'light' || setting === 'dark' ? setting : 'unspecified');
   }, [setting]);
+
+  // In a browser the page behind the app shows under the status bar and around Safari's
+  // toolbar; paint it the app's canvas, which can differ from the phone's setting.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    document.documentElement.style.backgroundColor = palette.canvas;
+    document.body.style.backgroundColor = palette.canvas;
+    document.documentElement.style.colorScheme = scheme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', palette.canvas);
+  }, [scheme, palette]);
 
   const navigationTheme = useMemo(() => {
     const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
