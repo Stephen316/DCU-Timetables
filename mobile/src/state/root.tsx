@@ -128,11 +128,11 @@ export function RootProvider({ children }: { children: ReactNode }) {
     if (flow !== 'shell') return null;
     if (profile) {
       return {
-        key: `profile:${JSON.stringify(profile)}`,
+        key: `profile:${JSON.stringify(profile)}:${programme?.identity ?? ''}`,
         programme: { identity: `profile-${profile.group}`, name: 'Year 1 Engineering', categoryTypeIdentity: '' },
         source: services.sourceOverride ?? new ProfileTimetableSource(profile, services.rotationCache, services.dcu),
         title: 'Year 1 Eng',
-        audience: TimetableAudience.forProfile(profile),
+        audience: TimetableAudience.forProfile(profile, programme ? categoryCode(programme) : null),
         groupsAssigned: true,
       };
     }

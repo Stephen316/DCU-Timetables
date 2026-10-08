@@ -360,6 +360,32 @@ describe('Timetable changes', () => {
     expect(TimetableChanges.apply(week, [remove()], picked, null)).toEqual([]);
   });
 
+  test("a change for a programme reaches the students who picked it, and no one else's", () => {
+    const week = [ev(lab, '2026-10-14', '14:00')];
+    const ce1 = TimetableAudience.forProgramme('CE1');
+    expect(TimetableChanges.apply(week, [remove({ group: 'CE1' })], ce1, null)).toEqual([]);
+    expect(TimetableChanges.apply(week, [remove({ group: 'ECE1' })], ce1, null)).toEqual(week);
+    expect(TimetableChanges.apply(week, [remove({ group: 'C' })], ce1, null)).toEqual(week);
+  });
+
+  test('a slot kept for some programmes is gone for the rest', () => {
+    // "Keep only for CE1 and ECE1" saves a removal for each of the other four.
+    const week = [ev(lab, '2026-10-14', '14:00')];
+    const removals = ['BMED1', 'CAM1', 'ME1', 'SSE1'].map((group) => remove({ group }));
+    const shown = (code: string) => TimetableChanges.apply(week, removals, TimetableAudience.forProgramme(code), null).length;
+    expect(['BMED1', 'CAM1', 'CE1', 'ECE1', 'ME1', 'SSE1'].map(shown)).toEqual([0, 0, 1, 1, 0, 0]);
+  });
+
+  test("a class-list student gets their picked programme's changes as well as their group's", () => {
+    const week = [ev(lab, '2026-10-14', '14:00')];
+    const profile = makeProfile({ name: 'A', group: 'C', subgroup: 'C.2', courseKey: 'EEG1' });
+    expect(TimetableChanges.apply(week, [remove({ group: 'CE1' })], TimetableAudience.forProfile(profile, 'CE1'), null)).toEqual([]);
+    expect(TimetableChanges.apply(week, [remove({ group: 'C' })], TimetableAudience.forProfile(profile, 'CE1'), null)).toEqual([]);
+    expect(TimetableChanges.apply(week, [remove({ group: 'CE1' })], TimetableAudience.forProfile(profile), null)).toEqual(week);
+    // A programme from another course isn't one of this course's groups.
+    expect(TimetableAudience.forProfile(profile, 'CASE3').programme).toBeNull();
+  });
+
   test("another course's changes don't apply", () => {
     const week = [ev(lab, '2026-10-14', '14:00')];
     expect(TimetableChanges.apply(week, [remove({ course: 'CASE1' })], groupC, null)).toEqual(week);

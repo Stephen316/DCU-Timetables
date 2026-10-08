@@ -229,7 +229,7 @@ function compare(a: string, b: string): number {
 export interface TimetableChange {
   id: string;
   courseKey: string;
-  /** "C", "C.2", or null for everyone on the course. */
+  /** "C", "C.2", one of the course's programmes ("CE1"), or null for everyone on the course. */
   group: string | null;
   kind: 'remove' | 'add';
   module: string;
@@ -279,10 +279,18 @@ export function changeFromRow(row: Record<string, unknown>): TimetableChange | n
 export class TimetableAudience {
   readonly group: string | null;
   readonly subgroup: string | null;
+  /** The DCU programme the student picked, "CE1". A change for it reaches them whatever their lab group. */
+  readonly programme: string | null;
 
-  constructor(readonly courseKey: string, group: string | null = null, subgroup: string | null = null) {
+  constructor(
+    readonly courseKey: string,
+    group: string | null = null,
+    subgroup: string | null = null,
+    programme: string | null = null,
+  ) {
     this.group = group === '' ? null : group;
     this.subgroup = subgroup === '' ? null : subgroup;
+    this.programme = programme?.trim().toUpperCase() || null;
   }
 
   /**
@@ -294,18 +302,26 @@ export class TimetableAudience {
   };
 
   /**
-   * A student on a programme they picked has no group, so only course-wide changes reach
-   * them. Any other DCU programme is a course of its own in the console, saved under its
-   * code — "CASE3" — so its code is its course key.
+   * A student on a programme they picked has no lab group, so the changes for everyone on
+   * the course reach them, and those for their programme. Any other DCU programme is a
+   * course of its own in the console, saved under its code — "CASE3" — so its code is its
+   * course key.
    */
   static forProgramme(code: string): TimetableAudience | null {
     const upper = code.trim().toUpperCase();
     if (!upper) return null;
-    return new TimetableAudience(TimetableAudience.programmeCourses[upper] ?? upper);
+    return new TimetableAudience(TimetableAudience.programmeCourses[upper] ?? upper, null, null, upper);
   }
 
-  static forProfile(profile: StudentProfile): TimetableAudience {
-    return new TimetableAudience(profile.courseKey ?? cohortCourseKey(profile.cohort), profile.group, profile.subgroup);
+  /**
+   * A student on a class list. Class lists don't say which programme a student is on, so it
+   * is the one they picked, when that is one of the profile's course's.
+   */
+  static forProfile(profile: StudentProfile, programme: string | null = null): TimetableAudience {
+    const course = profile.courseKey ?? cohortCourseKey(profile.cohort);
+    const code = programme?.trim().toUpperCase() ?? '';
+    return new TimetableAudience(course, profile.group, profile.subgroup,
+      TimetableAudience.programmeCourses[code] === course ? code : null);
   }
 
   static forCategory(category: TimetableCategory): TimetableAudience | null {
@@ -315,7 +331,7 @@ export class TimetableAudience {
   includes(change: TimetableChange): boolean {
     if (change.courseKey !== this.courseKey) return false;
     if (change.group === null) return true;
-    return change.group === this.group || change.group === this.subgroup;
+    return change.group === this.group || change.group === this.subgroup || change.group === this.programme;
   }
 }
 
