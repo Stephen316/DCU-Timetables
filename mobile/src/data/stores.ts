@@ -525,9 +525,9 @@ export class SupabaseProfileStore implements ProfileStore {
     const uid = this.rest.session.userID;
     if (!uid) throw notSignedIn();
     const json = await this.rest.json('GET', '/rest/v1/profiles', SupabaseProfileStore.describe, {
-      query: [['select', 'programme'], ['id', `eq.${uid}`]],
+      query: [['select', 'saved_programme'], ['id', `eq.${uid}`]],
     });
-    const saved = rows(json)[0]?.programme as Partial<TimetableCategory> | null | undefined;
+    const saved = rows(json)[0]?.saved_programme as Partial<TimetableCategory> | null | undefined;
     if (!saved || typeof saved.identity !== 'string' || typeof saved.name !== 'string') return null;
     return {
       identity: saved.identity,
