@@ -8,8 +8,8 @@ import { at, event } from './helpers';
 const start = at(2026, 9, 28, 10);
 const materials = event('EEG1006[1]OC/L1/01', start, undefined, { id: 'm', moduleName: 'EEG1006[1] Materials Engineering' });
 const profDev = event('EEG1000[1]OC/L1/01', start, undefined, { id: 'p', moduleName: 'EEG1000[1,2] Fundamentals of Professional Development' });
-const materialsHeading: ModuleTitle = { moduleKey: 'EEG1006', title: 'Materials', shortTitle: null };
-const profDevHeading: ModuleTitle = { moduleKey: 'EEG1000', title: 'Professional Development', shortTitle: 'Prof Dev' };
+const materialsHeading: ModuleTitle = { moduleKey: 'EEG1006', title: 'Materials' };
+const profDevHeading: ModuleTitle = { moduleKey: 'EEG1000', title: 'Professional Development' };
 
 describe('Module headings', () => {
   test("replace DCU's name on the day view and week grid, but not on the class's own page", () => {
@@ -17,13 +17,14 @@ describe('Module headings', () => {
     expect(shortTitleOf(m)).toBe('Materials');
     expect(compactTitleOf(m)).toBe('Materials');
     expect(shortTitleOf(p)).toBe('Professional Development');
-    // The admin's own week-grid heading is used as written, not shortened again.
-    expect(compactTitleOf(p)).toBe('Prof Dev');
     expect(titleOf(p)).toBe('EEG1000[1,2] Fundamentals of Professional Development');
   });
 
-  test('a heading with no week-grid version is shortened like any name', () => {
-    const [e] = ModuleTitles.apply([materials], [{ moduleKey: 'EEG1006', title: 'Materials Engineering Lab', shortTitle: null }]);
+  test('a heading is shortened on the week grid like any name', () => {
+    // The week grid's own names come from the Abbreviations page (abbreviations.test.ts).
+    const [p] = ModuleTitles.apply([profDev], [profDevHeading]);
+    expect(compactTitleOf(p)).toBe('Prof. Dev.');
+    const [e] = ModuleTitles.apply([materials], [{ moduleKey: 'EEG1006', title: 'Materials Engineering Lab' }]);
     expect(compactTitleOf(e)).toBe('Materials Eng. Lab');
   });
 
@@ -48,8 +49,8 @@ describe('Module headings', () => {
   });
 
   test('rows from the server are read defensively', () => {
-    expect(ModuleTitles.fromRow({ module_key: 'EEG1006', title: ' Materials ', short_title: '' }))
-      .toEqual({ moduleKey: 'EEG1006', title: 'Materials', shortTitle: null });
+    expect(ModuleTitles.fromRow({ module_key: 'EEG1006', title: ' Materials ' }))
+      .toEqual({ moduleKey: 'EEG1006', title: 'Materials' });
     expect(ModuleTitles.fromRow({ module_key: 'EEG1006', title: '   ' })).toBeNull();
     expect(ModuleTitles.fromRow({ title: 'Materials' })).toBeNull();
   });

@@ -30,6 +30,9 @@ export type Proposal =
       rows: RosterRow[]; findings: Finding[]; log?: Finding[] }
   | { kind: "change"; scope: Scope; change: TimetableChange; findings: Finding[]; source: string }
   | { kind: "heading"; scope: Scope; heading: Heading;
-      /** What the app shows now: DCU's name, and any heading already saved. */
-      current: { dcu: string | null; saved: string | null };
+      /**
+       * What the app shows now: DCU's name, any heading already saved, and the week grid's
+       * abbreviation from the Abbreviations page, which a heading doesn't change.
+       */
+      current: { dcu: string | null; saved: string | null; abbreviation: string | null };
       findings: Finding[]; source: string };

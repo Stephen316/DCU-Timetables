@@ -35,7 +35,7 @@ export type SavedView = {
     title: string | null; version: number; members: number; savedAt: string;
     groups: ClassGroup[];
   } | null;
-  heading: { title: string; shortTitle: string | null; savedAt: string } | null;
+  heading: { title: string; savedAt: string } | null;
 };
 
 export async function listSaved(programme: string, module: string):
@@ -53,7 +53,7 @@ export async function listSaved(programme: string, module: string):
       .select("module_key, activity, note, created_at, module_split_ranges(from_letter, to_letter, day, start_time, end_time, room, label)")
       .eq("module_key", module).order("activity"),
     db.from("rosters").select("title, version, members, created_at").eq("course_key", programme).maybeSingle(),
-    db.from("module_titles").select("title, short_title, updated_at").eq("module_key", module).maybeSingle(),
+    db.from("module_titles").select("title, updated_at").eq("module_key", module).maybeSingle(),
   ]);
   const failed = rot.error ?? splits.error ?? roster.error ?? title.error;
   if (failed) return { ok: false, error: failed.message };
@@ -105,7 +105,7 @@ export async function listSaved(programme: string, module: string):
           .sort((a, b) => a.from.localeCompare(b.from)),
       })),
       classList,
-      heading: title.data ? { title: title.data.title, shortTitle: title.data.short_title, savedAt: title.data.updated_at } : null,
+      heading: title.data ? { title: title.data.title, savedAt: title.data.updated_at } : null,
     },
   };
 }

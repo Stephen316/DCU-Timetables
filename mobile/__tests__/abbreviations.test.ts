@@ -24,8 +24,8 @@ describe('Week-grid abbreviations', () => {
     expect(titleOf(m)).toBe('EEG1007[1] Engineering Mathematics I');
   });
 
-  test("win over a heading's week-grid version, and leave its day-view heading alone", () => {
-    const headed = ModuleTitles.apply([profDev], [{ moduleKey: 'EEG1000', title: 'Professional Development', shortTitle: 'Prof Dev' }]);
+  test('win over a heading on the week grid, and leave the heading on the day view', () => {
+    const headed = ModuleTitles.apply([profDev], [{ moduleKey: 'EEG1000', title: 'Professional Development' }]);
     const [p] = ModuleAbbreviations.apply(headed, [{ moduleKey: 'EEG1000', abbreviation: 'PD' }]);
     expect(compactTitleOf(p)).toBe('PD');
     expect(shortTitleOf(p)).toBe('Professional Development');

@@ -7,9 +7,10 @@
 -- phone, and only a person can say what a module is actually called. This holds the heading
 -- an administrator chose, from Ask in the console.
 --
--- `title` is what the day view, the widget and the deadlines list show. `short_title`, when
--- set, is what the narrow week-grid block shows instead of a shortened `title`. The class's
--- own page keeps DCU's full name and code.
+-- `title` is what the day view, the widget and the deadlines list show, and what the week
+-- grid shortens for a module with no abbreviation from the Abbreviations page (phase 28),
+-- which is the one place the week grid's own names are set. The class's own page keeps DCU's
+-- full name and code.
 --
 -- By module, not course: the heading is the module's, whoever takes it. Nothing here is
 -- personal data, so every signed-in student reads it, like `module_splits`.
@@ -22,10 +23,14 @@
 create table if not exists module_titles (
   module_key  text primary key,
   title       text not null check (length(btrim(title)) between 1 and 80),
-  short_title text check (short_title is null or length(btrim(short_title)) between 1 and 30),
   updated_by  uuid references auth.users (id),
   updated_at  timestamptz not null default now()
 );
+
+-- A first draft of this phase had a week-grid heading here too, now the Abbreviations page's
+-- job. It was never run on the live project; this clears it wherever it was.
+alter table module_titles drop column if exists short_title;
+drop function if exists public.save_module_title(text, text, text);
 
 alter table module_titles enable row level security;
 
@@ -37,25 +42,23 @@ create policy "read signed in" on module_titles
 
 revoke insert, update, delete on table module_titles from public, anon, authenticated;
 
-create or replace function public.save_module_title(p_module_key text, p_title text, p_short_title text)
+create or replace function public.save_module_title(p_module_key text, p_title text)
   returns void language plpgsql security definer set search_path = '' as $$
 declare
   old_row jsonb;
 begin
   if not public.is_admin() then raise exception 'not allowed'; end if;
 
-  select jsonb_build_object('title', title, 'short_title', short_title) into old_row
+  select jsonb_build_object('title', title) into old_row
     from public.module_titles where module_key = p_module_key;
 
-  insert into public.module_titles (module_key, title, short_title, updated_by, updated_at)
-  values (p_module_key, btrim(p_title), nullif(btrim(p_short_title), ''), auth.uid(), now())
+  insert into public.module_titles (module_key, title, updated_by, updated_at)
+  values (p_module_key, btrim(p_title), auth.uid(), now())
   on conflict (module_key) do update
-    set title = excluded.title, short_title = excluded.short_title,
-        updated_by = excluded.updated_by, updated_at = excluded.updated_at;
+    set title = excluded.title, updated_by = excluded.updated_by, updated_at = excluded.updated_at;
 
   insert into public.admin_actions (actor_id, action, target, before, after)
-  values (auth.uid(), 'title.save', p_module_key, old_row,
-          jsonb_build_object('title', btrim(p_title), 'short_title', nullif(btrim(p_short_title), '')));
+  values (auth.uid(), 'title.save', p_module_key, old_row, jsonb_build_object('title', btrim(p_title)));
 end $$;
 
 create or replace function public.delete_module_title(p_module_key text)
@@ -66,7 +69,7 @@ begin
   if not public.is_admin() then raise exception 'not allowed'; end if;
 
   delete from public.module_titles where module_key = p_module_key
-  returning jsonb_build_object('title', title, 'short_title', short_title) into old_row;
+  returning jsonb_build_object('title', title) into old_row;
   if not found then return false; end if;
 
   insert into public.admin_actions (actor_id, action, target, before, after)
@@ -74,7 +77,7 @@ begin
   return true;
 end $$;
 
-revoke all    on function public.save_module_title(text, text, text) from public, anon;
-revoke all    on function public.delete_module_title(text)           from public, anon;
-grant execute on function public.save_module_title(text, text, text) to authenticated, service_role;
-grant execute on function public.delete_module_title(text)           to authenticated, service_role;
+revoke all    on function public.save_module_title(text, text) from public, anon;
+revoke all    on function public.delete_module_title(text)     from public, anon;
+grant execute on function public.save_module_title(text, text) to authenticated, service_role;
+grant execute on function public.delete_module_title(text)     to authenticated, service_role;

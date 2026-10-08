@@ -34,11 +34,10 @@ export interface TimetableEvent {
   activity: ActivityCode;
   weekLabels: string[];
   /**
-   * The heading an admin chose for the module in the console, in place of DCU's name, and a
-   * shorter one for the week grid. Put on by `ModuleTitles.apply`; never stored.
+   * The heading an admin chose for the module in the console, in place of DCU's name. Put on
+   * by `ModuleTitles.apply`; never stored.
    */
   heading?: string;
-  shortHeading?: string | null;
   /** The module's name on the week grid, from the console's Abbreviations page. Put on by `ModuleAbbreviations.apply`. */
   abbreviation?: string;
 }
@@ -47,7 +46,6 @@ export interface TimetableEvent {
 export interface ModuleTitle {
   moduleKey: string;
   title: string;
-  shortTitle: string | null;
 }
 
 export const ModuleTitles = {
@@ -57,14 +55,14 @@ export const ModuleTitles = {
     const byModule = new Map(titles.map((t) => [t.moduleKey, t]));
     return events.map((e) => {
       const t = e.activity.moduleCode ? byModule.get(e.activity.moduleCode) : undefined;
-      return t ? { ...e, heading: t.title, shortHeading: t.shortTitle } : e;
+      return t ? { ...e, heading: t.title } : e;
     });
   },
 
   fromRow(row: Record<string, unknown>): ModuleTitle | null {
-    const { module_key: moduleKey, title, short_title: shortTitle } = row;
+    const { module_key: moduleKey, title } = row;
     if (typeof moduleKey !== 'string' || typeof title !== 'string' || !title.trim()) return null;
-    return { moduleKey, title: title.trim(), shortTitle: typeof shortTitle === 'string' && shortTitle.trim() ? shortTitle.trim() : null };
+    return { moduleKey, title: title.trim() };
   },
 };
 
@@ -107,10 +105,8 @@ const ABBREVIATIONS: Record<string, string> = {
  * Professional Development" reads "Fund. of Prof. Dev.". Words it doesn't know are kept.
  */
 export function compactTitleOf(event: TimetableEvent): string {
-  // The Abbreviations page is where the week grid's names are set, so it comes first.
+  // The Abbreviations page is where the week grid's names are set; anything else is shortened.
   if (event.abbreviation) return event.abbreviation;
-  // The admin's own short heading is used as it stands; anything else is shortened.
-  if (event.shortHeading) return event.shortHeading;
   return shortTitleOf(event)
     .split(/\s+/)
     .filter((word) => word.toLowerCase() !== 'the')

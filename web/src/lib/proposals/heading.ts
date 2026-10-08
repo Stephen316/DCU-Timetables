@@ -4,14 +4,13 @@
 
 import type { Finding } from "@/lib/extraction/rotation";
 
-/// `title` null puts DCU's name back. `shortTitle` is what the narrow week-grid block shows;
-/// null leaves the app to shorten `title` itself.
-export type Heading = { moduleKey: string; title: string | null; shortTitle: string | null };
+/// `title` null puts DCU's name back. The week grid's shorter names are set on the
+/// Abbreviations page, not here.
+export type Heading = { moduleKey: string; title: string | null };
 
-/// The limits `supabase/phase27_module_titles.sql` enforces, checked here first so the
-/// panel says why rather than the save failing on a constraint.
+/// The limit `supabase/phase27_module_titles.sql` enforces, checked here first so the panel
+/// says why rather than the save failing on a constraint.
 export const TITLE_LIMIT = 80;
-export const SHORT_TITLE_LIMIT = 30;
 
 export function checkHeading(h: Heading): Finding[] {
   const out: Finding[] = [];
@@ -20,35 +19,24 @@ export function checkHeading(h: Heading): Finding[] {
   if (h.title && h.title.length > TITLE_LIMIT) {
     out.push({ level: "error", message: `The heading is ${h.title.length} characters; it can be at most ${TITLE_LIMIT}.` });
   }
-  if (h.title === null && h.shortTitle) {
-    out.push({ level: "error", message: "A week-grid heading needs a heading to go with it." });
-  }
-  if (h.shortTitle && h.shortTitle.length > SHORT_TITLE_LIMIT) {
-    out.push({
-      level: "error",
-      message: `The week-grid heading is ${h.shortTitle.length} characters; it can be at most ${SHORT_TITLE_LIMIT}.`,
-    });
-  }
-  // About 12 characters fit on a line of a week-grid block before it wraps mid-word.
-  if (h.title && !h.shortTitle && h.title.length > 24) {
+  // A one-hour week-grid block shows about 20 characters (lib/abbreviations/check.ts).
+  if (h.title && h.title.length > 20) {
     out.push({
       level: "info",
-      message: "Long for the week grid, where the app will shorten it. Give a week-grid heading to choose the words yourself.",
+      message: "Long for the week grid, where the app shortens it unless the module has an abbreviation. Set one on the Abbreviations page to choose the words there.",
     });
   }
   return out;
 }
 
 /// A heading is words for students to read, so it has to be the administrator's words — not
-/// the model's paraphrase of them. Both headings must appear in what was said, ignoring case
-/// and spacing.
+/// the model's paraphrase of them. It must appear in what was said, ignoring case and spacing.
 export function checkHeadingProvenance(h: Heading, source: string): Finding[] {
-  const said = squash(source);
-  const unsaid = [h.title, h.shortTitle].filter((t): t is string => !!t && !said.includes(squash(t)));
-  return unsaid.map((t) => ({
-    level: "error" as const,
-    message: `“${t}” isn't in what you wrote, so it's the assistant's wording. Say the exact heading you want.`,
-  }));
+  if (!h.title || squash(source).includes(squash(h.title))) return [];
+  return [{
+    level: "error",
+    message: `“${h.title}” isn't in what you wrote, so it's the assistant's wording. Say the exact heading you want.`,
+  }];
 }
 
 function squash(text: string): string {

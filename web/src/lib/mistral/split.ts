@@ -19,7 +19,7 @@ export type ChangeArgs = {
 };
 
 /// What the model proposed as a module's heading, as it said it.
-export type HeadingArgs = { module?: string; title?: string | null; shortTitle?: string | null };
+export type HeadingArgs = { module?: string; title?: string | null };
 
 /// `context` is what is known and saved for the selected module, sent as its own system
 /// message so it is never mistaken for — or checked for provenance as — the admin's words.

@@ -81,8 +81,8 @@ export const CHANGE_TOOL = {
 export const HEADING_TOOL = {
   name: "proposeHeading",
   description:
-    "Propose the heading a module's classes show under in the app's day and week views, in " +
-    "place of DCU's name for it — or put DCU's name back. Use the administrator's exact " +
+    "Propose the heading a module's classes show under in the app, in place of DCU's name " +
+    "for it — or put DCU's name back. Use the administrator's exact " +
     "words for the heading; never reword, shorten or correct them yourself. If the heading " +
     "isn't clear, do NOT call this — ask what it should say.",
   parameters: {
@@ -93,12 +93,8 @@ export const HEADING_TOOL = {
         type: Type.STRING, nullable: true,
         description: "The heading, exactly as the administrator wrote it. Null to put DCU's own name back.",
       },
-      shortTitle: {
-        type: Type.STRING, nullable: true,
-        description: "A shorter heading for the narrow week grid, only if the administrator gave one. Otherwise null.",
-      },
     },
-    required: ["module", "title", "shortTitle"],
+    required: ["module", "title"],
   },
 };
 
@@ -117,7 +113,8 @@ You help an administrator maintain a university timetable. You have three jobs:
 - Headings: "call EEG1006 'Materials' in the app", "show Fundamentals of Professional
   Development as 'Prof Dev'", "put the old name back" — becomes a call to proposeHeading.
   The heading is the administrator's exact words: never reword, shorten or fix the
-  spelling of it. Only give shortTitle when they asked for a separate week-grid heading.
+  spelling of it. A shorter name for the week grid alone isn't a heading: the
+  Abbreviations page sets those, so if that's what they want, say so and propose nothing.
 
 Rotation documents and class lists are handled separately: if someone asks about one, tell
 them to attach it.

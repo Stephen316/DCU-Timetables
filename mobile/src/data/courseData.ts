@@ -427,7 +427,7 @@ export class SupabaseModuleTitleStore implements ModuleTitleStore {
     // Signed in or not at all: the anon key reads an empty table, which would wipe the cache.
     const json = await this.rest.json('GET', '/rest/v1/module_titles', describe, {
       auth: 'userOnly',
-      query: [['select', 'module_key,title,short_title'], ['order', 'module_key']],
+      query: [['select', 'module_key,title'], ['order', 'module_key']],
     });
     return rows(json).flatMap((r) => {
       const title = ModuleTitles.fromRow(r);
