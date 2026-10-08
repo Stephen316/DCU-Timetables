@@ -13,7 +13,7 @@ import { Spinner } from "../spinner";
 import { SavedPanel } from "./saved-panel";
 import { LibraryPanel } from "./library-panel";
 import type { Reused } from "./library";
-import { describeChange, weekday } from "@/lib/changes/change";
+import { audience, describeChange, weekday } from "@/lib/changes/change";
 import { describeHeading } from "@/lib/proposals/heading";
 
 /// What the transcript shows. The attachment and proposal number are display only — the
@@ -41,7 +41,7 @@ type Item = {
 function target(p: Proposal): string {
   if (p.kind === "split") return `split ${p.rule.moduleKey} ${p.rule.activity}`;
   // Changes add up rather than replace; only an identical one is "the same thing".
-  if (p.kind === "change") return `change ${JSON.stringify(p.change)}`;
+  if (p.kind === "change") return `change ${JSON.stringify([p.change, p.groups])}`;
   if (p.kind === "heading") return `heading ${p.heading.moduleKey}`;
   return `${p.kind} ${p.courseKey}`;
 }
@@ -49,7 +49,7 @@ function target(p: Proposal): string {
 function describe(p: Proposal): string {
   if (p.kind === "split") return `${p.rule.moduleKey || "?"} ${p.rule.activity} split`;
   if (p.kind === "roster") return `${p.courseKey || "?"} class list · ${p.rows.length} students`;
-  if (p.kind === "change") return describeChange(p.change);
+  if (p.kind === "change") return describeChange(p.change, whoFor(p));
   if (p.kind === "heading") return describeHeading(p.heading);
   return `${p.courseKey || "?"} rotation · ${p.sessions.filter((s) => s.groups?.length).length} sessions`;
 }
@@ -272,7 +272,7 @@ export function Ask() {
           message: proposal.kind === "split"
             ? `${proposal.rule.moduleKey} ${proposal.rule.activity} split saved. Phones pick it up when the app next opens.`
             : proposal.kind === "change"
-              ? "Change saved. Phones pick it up when the app next opens."
+              ? `${proposal.groups.length > 1 ? `${proposal.groups.length} changes` : "Change"} saved. Phones pick ${proposal.groups.length > 1 ? "them" : "it"} up when the app next opens.`
             : proposal.kind === "heading"
               ? `${proposal.heading.moduleKey} heading saved. Phones pick it up when the app next opens.`
             : proposal.kind === "roster"
@@ -349,7 +349,8 @@ export function Ask() {
           {turns.length === 0 && (
             <p className="dim">
               Describe a change, or attach a document. For example: &ldquo;In EEG1001,
-              surnames A to M have the lecture Tuesday at 10, N to Z Thursday at 2&rdquo; —
+              surnames A to M have the lecture Tuesday at 10, N to Z Thursday at 2&rdquo;, or
+              &ldquo;only CE1 and ECE1 have Thursday&rsquo;s 10:00 tutorial this week&rdquo; —
               or attach a document — a lab rotation or a class list, as a PDF, photo,
               spreadsheet, Word file or CSV.
             </p>
@@ -592,16 +593,23 @@ function SplitPanel({ p }: { p: Extract<Proposal, { kind: "split" }> }) {
   );
 }
 
+/// "group C", "BMED1, CAM1", "everyone on EEG1" — or no one, when what was asked for couldn't be worked out.
+function whoFor(p: Extract<Proposal, { kind: "change" }>): string {
+  if (!p.groups.length) return "no one";
+  return p.groups.map((g) => (g ? audience(g) : `everyone on ${p.change.courseKey}`)).join(", ");
+}
+
 function ChangePanel({ p }: { p: Extract<Proposal, { kind: "change" }> }) {
   const c = p.change;
   return (
     <>
       <h2>
         {c.kind === "remove" ? "Remove" : "Add"} {c.module}{" "}
-        <span className="dim">for {c.group ? `group ${c.group}` : "everyone on " + c.courseKey}</span>
+        <span className="dim">for {whoFor(p)}</span>
       </h2>
       <table>
         <tbody>
+          {p.keptFor.length > 0 && <tr><th>Kept for</th><td>{p.keptFor.join(", ")}</td></tr>}
           <tr><th>{c.kind === "remove" ? "Class" : "What"}</th>
             <td>{c.kind === "remove" ? <span className="mono">{c.activityCode ?? `every ${c.module} class`}</span> : c.title}</td></tr>
           <tr><th>Time</th><td className="mono">{c.start}{c.end ? `–${c.end}` : ""}</td></tr>

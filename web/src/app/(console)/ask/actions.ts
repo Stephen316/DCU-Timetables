@@ -10,14 +10,14 @@ import { correctTable } from "@/lib/mistral/correct";
 import { applyToRoster, applyToRotation, rosterTable, rotationTable, ROSTER_COLUMNS, ROTATION_COLUMNS } from "@/lib/corrections/apply";
 import type { RotationSession } from "@/lib/extraction/rotation";
 import { normalise } from "@/lib/extraction/normalise";
-import { interpretMessage, type ChangeArgs, type HeadingArgs } from "@/lib/mistral/split";
+import { interpretMessage, PROGRAMME_MODEL, type ChangeArgs, type HeadingArgs } from "@/lib/mistral/split";
 import { checkHeading, checkHeadingProvenance, type Heading } from "@/lib/proposals/heading";
 import { classes, dublin, weeks } from "@/lib/dcu/timetable";
-import { checkChangeProvenance, describeChange, fromRow, type TimetableChange } from "@/lib/changes/change";
-import { saveChange } from "../timetable/actions";
+import { checkAudienceProvenance, checkChangeProvenance, describeChange, fromRow, programmesNamed, type TimetableChange } from "@/lib/changes/change";
+import { saveChanges } from "../timetable/actions";
 import { review } from "@/lib/changes/review";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
-import { PROGRAMME_CODE, programmeFor, type Programme, type Scope } from "@/lib/proposals/courses";
+import { programmeFor, type Programme, type Scope } from "@/lib/proposals/courses";
 import { phoneCohortProblem, resolveCourse, scopeCheck } from "@/lib/proposals/catalogue";
 import type { Proposal } from "@/lib/proposals/types";
 import type { Finding } from "@/lib/extraction/rotation";
@@ -101,9 +101,12 @@ export async function ask(form: FormData): Promise<AskResult> {
         `different module, say so.`
       : "";
 
+    // What was actually said: the administrator's words and the model's own questions.
+    // Not the scope line — this code wrote that, and it would vouch for anything.
+    const source = [...history.map((t) => t.text), message].join("\n");
     const out = await interpretMessage({
       key,
-      model: MISTRAL_MODEL,
+      model: MISTRAL_MODEL ?? (programmesNamed(programme, source).length ? PROGRAMME_MODEL : undefined),
       history,
       text: scopeLine ? `${scopeLine}\n\n${message}` : message,
       context: await changeContext(scope),
@@ -130,9 +133,6 @@ export async function ask(form: FormData): Promise<AskResult> {
           label: r.label || null,
         })),
       };
-      // What was actually said: the administrator's words and the model's own questions.
-      // Not the scope line — this code wrote that, and it would vouch for anything.
-      const source = [...history.map((t) => t.text), message].join("\n");
       return {
         ok: true, reply: out.reply, meta,
         proposal: {
@@ -147,7 +147,6 @@ export async function ask(form: FormData): Promise<AskResult> {
     }
 
     if (out.changes.length || out.headings.length) {
-      const source = [...history.map((t) => t.text), message].join("\n");
       const proposals = await Promise.all([
         ...out.changes.map((a) => changeProposal(scope, a, source)),
         ...out.headings.slice(0, 1).map((a) => headingProposal(scope, a, source)),
@@ -176,6 +175,11 @@ async function changeContext(scope: Scope): Promise<string> {
   if (!scope.programme || !scope.module) return "";
   const today = dublin(new Date().toISOString());
   const lines = [`Context for ${scope.programme}, module ${scope.module}. Today is ${today.day} ${today.date}.`];
+  const covers = programmeFor(scope.programme)?.covers ?? [];
+  if (covers.length) {
+    lines.push("", `${scope.programme}'s programmes, each a group a change can be for: ` +
+      covers.map((c) => `${c.code} (${c.name})`).join("; ") + ".");
+  }
 
   try {
     const all = await weeks();
@@ -256,9 +260,8 @@ async function headingProposal(scope: Scope, a: HeadingArgs, source: string): Pr
 
 async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Promise<Proposal> {
   const kind = a.kind === "add" ? "add" : "remove";
-  const change: TimetableChange = {
+  const change: Omit<TimetableChange, "group"> = {
     courseKey: scope.programme,
-    group: a.group?.trim().toUpperCase() || null,
     kind,
     // The selection wins, as for a split; what the model read is compared in checkScope.
     module: scope.module,
@@ -270,17 +273,48 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
     room: kind === "add" ? a.room?.trim() || null : null,
     note: a.note?.trim() || null,
   };
+  const codes = (list?: string[] | null) =>
+    [...new Set((list ?? []).map((g) => g.trim().toUpperCase().replace(/^GROUP\s+/, "")).filter(Boolean))];
+  const named = codes(a.groups);
+  // Keeping is a removal's; an addition is for whoever was named, however they were filed.
+  const keptFor = kind === "remove" ? codes(a.keepFor) : [];
+  if (kind === "add") named.push(...codes(a.keepFor).filter((g) => !named.includes(g)));
+
+  const course = await courseOf(scope);
+  const programmes = course?.covers.map((c) => c.code) ?? [];
+  const findings: Finding[] = [];
+  const unknown = keptFor.filter((g) => !programmes.includes(g));
+  if (unknown.length) {
+    findings.push({
+      level: "error",
+      message: programmes.length
+        ? `${unknown.join(", ")} ${unknown.length > 1 ? "aren't" : "isn't one"} of ${scope.programme}'s programmes (${programmes.join(", ")}).`
+        : `${scope.programme} has no programmes within it to keep a class for.`,
+    });
+  }
+  // Worked out here, not by the model: the programmes that don't keep it lose it. Never from
+  // a list with a code that isn't the course's — that would remove it for all six.
+  const losing = keptFor.length && !unknown.length ? programmes.filter((p) => !keptFor.includes(p)) : [];
+  if (keptFor.length && !unknown.length && !losing.length) {
+    findings.push({ level: "error", message: `Every programme of ${scope.programme} keeps it, so nothing would be removed.` });
+  }
+  let groups: (string | null)[] = keptFor.length ? [...new Set([...losing, ...named])] : named.length ? named : [null];
+  // Every programme of the course is everyone on it: one change, not six.
+  if (programmes.length && programmes.every((p) => groups.includes(p)) && groups.every((g) => g && programmes.includes(g))) {
+    groups = [null];
+  }
+
+  const reviewed = (await Promise.all(groups.map((group) => review({ ...change, group })))).flat();
+  const seen = new Set<string>();
   return {
-    kind: "change", scope, change, source,
+    kind: "change", scope, change, groups, keptFor, source,
     findings: [
-      // Ask is for the course as a whole; a programme's split is made on the Timetable page,
-      // where its grid shows what that programme's students will see.
-      ...(change.group && PROGRAMME_CODE.test(change.group)
-        ? [{ level: "error" as const, message: `A change for ${change.group} alone is made on the Timetable page, not here.` }]
-        : []),
+      ...findings,
       ...(await scopeCheck(scope, { module: a.module })),
-      ...(await review(change)),
+      // Five programmes with the same missing date is one problem, not five.
+      ...reviewed.filter((f) => !seen.has(f.message) && !!seen.add(f.message)),
       ...checkChangeProvenance(change, source),
+      ...checkAudienceProvenance(groups, keptFor, course, source),
     ],
   };
 }
@@ -563,11 +597,17 @@ export async function accept(proposal: Proposal) {
   }
 
   if (proposal.kind === "change") {
-    const blocker = [...(await scopeCheck(proposal.scope)), ...checkChangeProvenance(proposal.change, proposal.source ?? "")]
-      .find((f) => f.level === "error");
+    const { change, groups, keptFor = [] } = proposal;
+    const source = proposal.source ?? "";
+    if (!groups?.length) return { ok: false, error: "It isn't for anyone. Say who it is for." };
+    const blocker = [
+      ...(await scopeCheck(proposal.scope)),
+      ...checkChangeProvenance(change, source),
+      ...checkAudienceProvenance(groups, keptFor, await courseOf(proposal.scope), source),
+    ].find((f) => f.level === "error");
     if (blocker) return { ok: false, error: blocker.message };
-    // Re-checks the change, including against DCU's timetable, before it saves.
-    return saveChange(proposal.change);
+    // Re-checks each change, including against DCU's timetable, and saves all or none.
+    return saveChanges(groups.map((group) => ({ ...change, group })));
   }
 
   if (proposal.kind === "heading") {

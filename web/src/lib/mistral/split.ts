@@ -9,11 +9,19 @@ import type { SplitRule } from "@/lib/proposals/rules";
 
 export const SPLIT_MODEL = "mistral-small-latest";
 
+/// For a message that names one of the course's programmes. Measured 8 Oct 2026, seven
+/// requests run twice on each: small proposed the wrong thing in 3 of 14 — both runs of "CE1
+/// has the 10:00 and everyone else the 11:00" (the times swapped, or both at 11:00), and one
+/// of "only CE1 and ECE1 have the 10:00" (read as the 11:00). Medium proposed nothing wrong in
+/// 14; it asked first in 7, which costs a message, not a wrong timetable. Splits and headings
+/// stay on small, which handled them.
+export const PROGRAMME_MODEL = "mistral-medium-latest";
+
 export type ChatTurn = { role: "user" | "model"; text: string };
 
 /// What the model proposed to change, as it said it — checked and normalised by the caller.
 export type ChangeArgs = {
-  kind?: string; module?: string; group?: string | null; dates?: string[]; start?: string;
+  kind?: string; module?: string; groups?: string[] | null; keepFor?: string[] | null; dates?: string[]; start?: string;
   end?: string | null; title?: string | null; room?: string | null; activityCode?: string | null;
   note?: string | null;
 };
