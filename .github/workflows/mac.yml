@@ -1,0 +1,52 @@
+# Builds the Mac app (mac/) and publishes it as a GitHub Release when a `mac-v*` tag is
+# pushed — `git tag mac-v1.0 && git push origin mac-v1.0`. The site's download link points at
+# releases/latest/download/DCU-Timetable-mac.zip, so it always serves the newest one.
+#
+# The app loads the web build live, so a change to mobile/ never needs a release; only a
+# change to mac/ does. It's signed ad hoc (no Apple Developer ID), so macOS asks each person
+# to allow it once — the release notes say how.
+name: Mac
+
+on:
+  push:
+    tags: ["mac-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - run: xcodegen generate
+        working-directory: mac
+      # The generic destination builds for Apple silicon and Intel in one app.
+      - name: Build
+        working-directory: mac
+        run: |
+          xcodebuild -project DCUTimetableMac.xcodeproj -scheme DCUTimetableMac \
+            -configuration Release -destination 'generic/platform=macOS' -derivedDataPath build/dd \
+            MARKETING_VERSION="${GITHUB_REF_NAME#mac-v}" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            build
+      # ditto, not zip: it keeps the app's signature and permissions intact.
+      - name: Package
+        working-directory: mac/build/dd/Build/Products/Release
+        run: |
+          codesign --verify --deep --strict "DCU Timetable.app"
+          ditto -c -k --keepParent "DCU Timetable.app" "$GITHUB_WORKSPACE/DCU-Timetable-mac.zip"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          **Install:** download `DCU-Timetable-mac.zip`, open it, and drag **DCU Timetable** into Applications. Needs macOS 14 or later, on Apple silicon or Intel.
+
+          **First launch:** the app isn't notarised by Apple, so macOS stops it the first time with "Apple could not verify…". Click **Done**, then open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to DCU Timetable. You only do this once.
+
+          The timetable inside updates itself; a new download is only needed for a new version of the Mac window around it.
+          EOF
+          gh release create "$GITHUB_REF_NAME" DCU-Timetable-mac.zip \
+            --title "DCU Timetable for Mac ${GITHUB_REF_NAME#mac-v}" --notes-file notes.md --latest
