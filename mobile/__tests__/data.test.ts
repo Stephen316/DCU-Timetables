@@ -441,6 +441,57 @@ describe('Timetable changes', () => {
     expect(row?.kind).toBe('remove');
   });
 
+  const edit = (fields: { group?: string; code?: string; room?: string; staff?: string; id?: string } = {}) =>
+    makeChange({ id: fields.id ?? Math.random().toString(), courseKey: 'EEG1', group: fields.group ?? null, kind: 'edit',
+      module: 'EEG1002', activityCode: fields.code ?? null, dates: ['2026-10-14'], start: '14:00',
+      room: fields.room ?? null, staff: fields.staff ?? null });
+  const dcu = (code: string, time = '14:00') => {
+    const e = ev(code, '2026-10-14', time);
+    return { ...e, locations: ['GLA.QG13'], staff: ['Dr DCU'] };
+  };
+
+  test('an edit gives its class a new room and lecturer, and leaves the rest of it as it was', () => {
+    const [out] = TimetableChanges.apply([dcu(lab)], [edit({ room: 'GLA.S210', staff: 'Dr Jane Smith' })], groupC, null);
+    expect(out.locations).toEqual(['GLA.S210']);
+    expect(out.staff).toEqual(['Dr Jane Smith']);
+    expect(out.id).toBe(dcu(lab).id);
+    expect(out.start).toEqual(dcu(lab).start);
+  });
+
+  test("an edit's blank field keeps DCU's", () => {
+    const [onlyStaff] = TimetableChanges.apply([dcu(lab)], [edit({ staff: 'Dr Jane Smith' })], groupC, null);
+    expect(onlyStaff.locations).toEqual(['GLA.QG13']);
+    const [onlyRoom] = TimetableChanges.apply([dcu(lab)], [edit({ room: 'GLA.S210' })], groupC, null);
+    expect(onlyRoom.staff).toEqual(['Dr DCU']);
+  });
+
+  test('an edit finds its class as a removal does', () => {
+    const week = [dcu(lab), dcu(otherLab), dcu(lab, '09:00')];
+    const out = TimetableChanges.apply(week, [edit({ code: lab, room: 'GLA.S210' })], groupC, null);
+    const room = new Map(out.map((e) => [e.id, e.locations[0]]));
+    expect(week.map((e) => room.get(e.id))).toEqual(['GLA.S210', 'GLA.QG13', 'GLA.QG13']);
+  });
+
+  test("an edit reaches only its audience, and a later one wins over an earlier", () => {
+    const changes = [edit({ room: 'Everyone room' }), edit({ group: 'CE1', room: 'CE1 room' })];
+    const shown = (code: string) => TimetableChanges.apply([dcu(lab)], changes, TimetableAudience.forProgramme(code), null)[0].locations;
+    expect(shown('CE1')).toEqual(['CE1 room']);
+    expect(shown('ECE1')).toEqual(['Everyone room']);
+    expect(TimetableChanges.apply([dcu(lab)], [edit({ group: 'D', room: 'X' })], groupC, null)[0].locations).toEqual(['GLA.QG13']);
+  });
+
+  test('decodes an edit, and an added class carries its lecturer', () => {
+    const row = changeFromRow({ id: 'e', course_key: 'EEG1', grp: 'CE1', kind: 'edit', module: 'EEG1002', activity_code: null,
+      title: null, dates: ['2026-10-14'], start_time: '14:00', end_time: null, room: null, staff: 'Dr Jane Smith' });
+    expect(row?.kind).toBe('edit');
+    expect(row?.staff).toBe('Dr Jane Smith');
+    expect(changeFromRow({ id: 'm', course_key: 'EEG1', kind: 'move', module: 'EEG1002', dates: [], start_time: '14:00' })).toBeNull();
+
+    const add = makeChange({ id: 'a', courseKey: 'EEG1', kind: 'add', module: 'EEG1004', title: 'Make-up lab',
+      dates: ['2026-10-16'], start: '10:00', end: '12:00', staff: 'Dr Jane Smith' });
+    expect(TimetableChanges.apply([], [add], groupC, DublinTime.date('2026-10-12', '00:00'))[0].staff).toEqual(['Dr Jane Smith']);
+  });
+
   class FakeChangeStore implements TimetableChangeStore {
     failing = false;
     constructor(public list = [makeChange({ id: '1', courseKey: 'EEG1', kind: 'remove', module: 'EEG1002', dates: ['2026-10-14'], start: '14:00' })]) {}

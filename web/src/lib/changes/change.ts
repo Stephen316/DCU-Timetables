@@ -1,6 +1,7 @@
-// A change to a course's timetable: a class removed or added, for everyone on the course
-// or one group of it — a lab group, a subgroup, or one of the programmes the course covers
-// (supabase/phase17_timetable_changes.sql, phase19_programme_groups.sql).
+// A change to a course's timetable: a class removed, added, or moved to another room or
+// lecturer, for everyone on the course or one group of it — a lab group, a subgroup, or one
+// of the programmes the course covers (supabase/phase17_timetable_changes.sql,
+// phase19_programme_groups.sql, phase30_class_edits.sql).
 //
 // No `server-only`: the Timetable page's forms run the same checks in the browser that
 // saving runs on the server.
@@ -12,17 +13,21 @@ export type TimetableChange = {
   courseKey: string;
   /// "C", "C.2", a programme ("BMED1"), or null for everyone on the course.
   group: string | null;
-  kind: "remove" | "add";
+  /// An edit finds its class as a removal does, and gives it `room` and/or `staff`.
+  kind: "remove" | "add" | "edit";
   module: string;
-  /// Remove only: one DCU activity (EEG1001[1]OC/P2/01) where two classes of the module
-  /// start together. Null hides every class of the module at that time.
+  /// Remove or edit: one DCU activity (EEG1001[1]OC/P2/01) where two classes of the module
+  /// start together. Null means every class of the module at that time.
   activityCode: string | null;
   /// Add only: what the class is — Lab, Tutorial, Make-up lab.
   title: string | null;
   dates: string[];
   start: string;
   end: string | null;
+  /// An added class's room, or an edited class's new one. Null leaves an edit's room as DCU has it.
   room: string | null;
+  /// The lecturer, as a person reads it: an added class's, or an edited class's new one.
+  staff: string | null;
   note: string | null;
 };
 
@@ -56,6 +61,9 @@ export function checkChange(c: TimetableChange, programme: Programme | undefined
     if (g) err(g);
   }
   if (!TIME.test(c.start)) err(`"${c.start}" isn't a start time. Use 24-hour, like 14:00.`);
+  if (c.kind === "edit" && !c.room?.trim() && !c.staff?.trim()) err("Give a new room or a new lecturer.");
+  if (c.room && c.room.trim().length > 80) err("The room is over 80 characters.");
+  if (c.staff && c.staff.trim().length > 120) err("The lecturer is over 120 characters.");
   if (c.kind === "add") {
     if (!c.title?.trim()) err("Say what the class is — Lab, Tutorial…");
     if (!c.end || !TIME.test(c.end)) err("An added class needs an end time.");
@@ -70,8 +78,8 @@ export function checkChange(c: TimetableChange, programme: Programme | undefined
   return out;
 }
 
-/// What a phone does with a removal, done against DCU's timetable here: which of the dates
-/// have a class for it to hide. A removal that hides nothing is a wrong date or time.
+/// What a phone does with a removal or an edit, done against DCU's timetable here: which of
+/// the dates have a class for it to hide or change. One that finds nothing is a wrong date or time.
 export function removalHits(c: TimetableChange, classes: { module: string; code: string; date: string; start: string }[]) {
   const hits = (date: string) => classes.filter((x) =>
     x.module === c.module && x.date === date && x.start === c.start && (!c.activityCode || x.code === c.activityCode));
@@ -79,20 +87,21 @@ export function removalHits(c: TimetableChange, classes: { module: string; code:
 }
 
 export function hitFindings(c: TimetableChange, hits: ReturnType<typeof removalHits>): Finding[] {
-  if (c.kind !== "remove") return [];
+  if (c.kind === "add") return [];
+  const verb = c.kind === "edit" ? "change" : "remove";
   const none = hits.filter((h) => h.codes.length === 0).map((h) => h.date);
   const out: Finding[] = [];
   if (none.length) {
     out.push({
       level: none.length === hits.length ? "error" : "warn",
-      message: `No ${c.module} class starts at ${c.start} on ${none.map((d) => `${weekday(d)} ${d}`).join(", ")} — nothing to remove there.`,
+      message: `No ${c.module} class starts at ${c.start} on ${none.map((d) => `${weekday(d)} ${d}`).join(", ")} — nothing to ${verb} there.`,
     });
   }
   const several = hits.filter((h) => h.codes.length > 1);
   if (several.length && !c.activityCode) {
     out.push({
       level: "warn",
-      message: `${several.length === 1 ? "One date has" : `${several.length} dates have`} more than one ${c.module} class at ${c.start} (${[...new Set(several.flatMap((h) => h.codes))].join(", ")}); all of them are removed.`,
+      message: `${several.length === 1 ? "One date has" : `${several.length} dates have`} more than one ${c.module} class at ${c.start} (${[...new Set(several.flatMap((h) => h.codes))].join(", ")}); all of them are ${c.kind === "edit" ? "changed" : "removed"}.`,
     });
   }
   return out;
@@ -101,11 +110,13 @@ export function hitFindings(c: TimetableChange, hits: ReturnType<typeof removalH
 export function toRow(c: TimetableChange) {
   return {
     course_key: c.courseKey, grp: c.group, kind: c.kind, module: c.module,
-    activity_code: c.kind === "remove" ? c.activityCode : null,
+    activity_code: c.kind !== "add" ? c.activityCode : null,
     title: c.kind === "add" ? c.title : null,
     dates: [...new Set(c.dates)].sort(), start_time: c.start,
     end_time: c.kind === "add" ? c.end : null,
-    room: c.kind === "add" ? c.room : null, note: c.note,
+    room: c.kind !== "remove" ? c.room : null,
+    staff: c.kind !== "remove" ? c.staff : null,
+    note: c.note,
   };
 }
 
@@ -113,7 +124,7 @@ export function fromRow(r: Record<string, any>): SavedChange {
   return {
     id: r.id, createdAt: r.created_at, courseKey: r.course_key, group: r.grp, kind: r.kind,
     module: r.module, activityCode: r.activity_code, title: r.title, dates: r.dates ?? [],
-    start: r.start_time, end: r.end_time, room: r.room, note: r.note,
+    start: r.start_time, end: r.end_time, room: r.room, staff: r.staff ?? null, note: r.note,
   };
 }
 
@@ -142,10 +153,15 @@ export function groupList(text: string): (string | null)[] {
 
 /// `who` names several groups at once, for a change Ask proposes for more than one.
 export function describeChange(c: Omit<TimetableChange, "group"> & { group?: string | null }, who = audience(c.group ?? null)): string {
-  const what = c.kind === "remove"
-    ? `Remove ${c.activityCode ?? c.module} at ${c.start}`
-    : `Add ${c.module} ${c.title ?? ""} ${c.start}–${c.end ?? "?"}${c.room ? ` in ${c.room}` : ""}`;
+  const what = c.kind === "remove" ? `Remove ${c.activityCode ?? c.module} at ${c.start}`
+    : c.kind === "edit" ? `Change ${c.activityCode ?? c.module} at ${c.start}: ${edited(c)}`
+    : `Add ${c.module} ${c.title ?? ""} ${c.start}–${c.end ?? "?"}${c.room ? ` in ${c.room}` : ""}${c.staff ? ` with ${c.staff}` : ""}`;
   return `${what} · ${who} · ${c.dates.length} date${c.dates.length === 1 ? "" : "s"}`;
+}
+
+/// What an edit changes, in words: "room GLA.S210, lecturer Dr Smith".
+export function edited(c: { room: string | null; staff: string | null }): string {
+  return [c.room && `room ${c.room}`, c.staff && `lecturer ${c.staff}`].filter(Boolean).join(", ");
 }
 
 /// An added class's hours and room must come from what the administrator said, not from the

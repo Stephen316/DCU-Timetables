@@ -41,7 +41,7 @@ describe('Week-grid abbreviations', () => {
   test('a class added by a change keeps its own name, since abbreviations go on first', () => {
     const added = TimetableChanges.apply(ModuleAbbreviations.apply([], [mathsAbbreviation]), [{
       id: 'c1', courseKey: 'EEG1', group: null, kind: 'add', module: 'EEG1007', activityCode: null, title: 'Revision',
-      dates: ['2026-09-29'], start: '14:00', end: '16:00', room: null,
+      dates: ['2026-09-29'], start: '14:00', end: '16:00', room: null, staff: null,
     }], TimetableAudience.forProgramme('ECE1'), at(2026, 9, 28));
     expect(added.map(compactTitleOf)).toEqual(['Revision · EEG1007']);
   });

@@ -308,7 +308,7 @@ export class SupabaseTimetableChangeStore implements TimetableChangeStore {
     const json = await this.rest.json('GET', '/rest/v1/timetable_changes', describe, {
       auth: 'userOnly',
       query: [
-        ['select', 'id,course_key,grp,kind,module,activity_code,title,dates,start_time,end_time,room'],
+        ['select', 'id,course_key,grp,kind,module,activity_code,title,dates,start_time,end_time,room,staff'],
         ['course_key', `eq.${courseKey}`],
         ['order', 'created_at'],
       ],

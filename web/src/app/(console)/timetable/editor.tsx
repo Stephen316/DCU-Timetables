@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { DcuClass, Week } from "@/lib/dcu/timetable";
-import { audience, checkChange, describeChange, groupList, weekday, type SavedChange, type TimetableChange } from "@/lib/changes/change";
+import { audience, checkChange, describeChange, edited, groupList, weekday, type SavedChange, type TimetableChange } from "@/lib/changes/change";
 import type { Finding } from "@/lib/extraction/rotation";
 import { PROGRAMME_CODE } from "@/lib/proposals/courses";
 import { saveChanges, deleteChange, slotDates } from "./actions";
@@ -35,11 +35,15 @@ type Block = {
   end: string;
   module: string;
   label: string;
+  /// As the viewer sees them: DCU's, or an edit's.
   room: string | null;
+  staff: string | null;
   /// Removed for everyone, removed for some groups, added, or untouched.
   state: "removed" | "partial" | "added" | "normal";
   badges: string[];
-  source: { kind: "dcu"; c: DcuClass; removals: SavedChange[] } | { kind: "added"; change: SavedChange };
+  /// Who has a new room or lecturer for it: "✎all", "✎CE1".
+  edited: string[];
+  source: { kind: "dcu"; c: DcuClass; removals: SavedChange[]; edits: SavedChange[] } | { kind: "added"; change: SavedChange };
 };
 
 const HOUR = 56;
@@ -107,7 +111,8 @@ export function Editor(props: Props) {
       {chosen && (
         <div className="tt-detail">
           {chosen.source.kind === "dcu"
-            ? <ClassDetail key={chosen.id} c={chosen.source.c} removals={chosen.source.removals} props={props} onDone={() => setSelected(null)} />
+            ? <ClassDetail key={chosen.id} c={chosen.source.c} removals={chosen.source.removals} edits={chosen.source.edits}
+                props={props} onDone={() => setSelected(null)} />
             : <AddedDetail key={chosen.id} change={chosen.source.change} date={chosen.date} onDone={() => setSelected(null)} />}
         </div>
       )}
@@ -161,12 +166,13 @@ function WeekGrid({ week, blocks, selected, dimmed, onSelect }: {
                       left: `calc(${(column / n) * 100}% + 2px)`, width: `calc(${100 / n}% - 4px)`,
                       ["--c" as string]: tint(block.module),
                     }}
-                    title={`${block.module} ${block.label} · ${block.start}–${block.end}${block.room ? ` · ${block.room}` : ""}`}
+                    title={`${block.module} ${block.label} · ${block.start}–${block.end}${block.room ? ` · ${block.room}` : ""}${block.staff ? ` · ${block.staff}` : ""}`}
                     onClick={() => onSelect(block.id)}>
                     <strong>{block.module}</strong>
                     {height > 40 && <span>{block.label}</span>}
                     {height > 56 && block.room && <span className="dim">{block.room}</span>}
                     {block.badges.length > 0 && <em>{block.badges.join(" ")}</em>}
+                    {block.edited.length > 0 && <em className="edit">{block.edited.join(" ")}</em>}
                   </button>
                 );
               })}
@@ -180,23 +186,27 @@ function WeekGrid({ week, blocks, selected, dimmed, onSelect }: {
 
 /// What the grid shows. With nobody chosen, everything, with changes marked; with a
 /// programme or group chosen, what a student in it sees — their removals gone, their
-/// additions in. (The phone also swaps lab slots for the lab rotation; that isn't drawn here.)
+/// additions in, their rooms and lecturers changed. (The phone also swaps lab slots for the
+/// lab rotation; that isn't drawn here.)
 function buildBlocks(classes: DcuClass[], changes: SavedChange[], week: Week, viewer: Viewer): Block[] {
   const end = addDays(week.firstDay, 7);
   const viewing = !!(viewer.programme || viewer.group);
   const out: Block[] = [];
 
   for (const c of classes) {
-    const removals = changes.filter((x) => x.kind === "remove" && x.module === c.module && x.start === c.start &&
-      x.dates.includes(c.date) && (!x.activityCode || x.activityCode === c.code));
+    const removals = changes.filter((x) => x.kind === "remove" && finds(x, c));
+    const edits = changes.filter((x) => x.kind === "edit" && finds(x, c));
     if (viewing && removals.some((r) => reaches(r.group, viewer))) continue;
     const everyone = removals.some((r) => !r.group);
+    // Viewing no one, a class shows what everyone sees: only the edits for everyone.
+    const now = shownAs(c, edits, (group) => (viewing ? reaches(group, viewer) : !group));
     out.push({
       id: `dcu|${c.code}|${c.date}|${c.start}`, date: c.date, start: c.start, end: c.end, module: c.module,
-      label: `${c.code.split("/").slice(1).join("/")} ${kindLabel(c.code)}`.trim(), room: c.rooms[0] ?? null,
+      label: `${c.code.split("/").slice(1).join("/")} ${kindLabel(c.code)}`.trim(), room: now.room, staff: now.staff,
       state: viewing ? "normal" : everyone ? "removed" : removals.length ? "partial" : "normal",
       badges: viewing ? [] : removals.map((r) => `−${r.group ?? "all"}`),
-      source: { kind: "dcu", c, removals },
+      edited: viewing ? [] : edits.map((e) => `✎${e.group ?? "all"}`),
+      source: { kind: "dcu", c, removals, edits },
     });
   }
   for (const x of changes) {
@@ -204,13 +214,30 @@ function buildBlocks(classes: DcuClass[], changes: SavedChange[], week: Week, vi
     for (const date of x.dates.filter((d) => d >= week.firstDay && d < end)) {
       out.push({
         id: `add|${x.id}|${date}`, date, start: x.start, end: x.end, module: x.module,
-        label: x.title ?? "", room: x.room, state: "added",
-        badges: viewing ? [] : [`+${x.group ?? "all"}`],
+        label: x.title ?? "", room: x.room, staff: x.staff, state: "added",
+        badges: viewing ? [] : [`+${x.group ?? "all"}`], edited: [],
         source: { kind: "added", change: x },
       });
     }
   }
   return out;
+}
+
+/// The class a removal or an edit finds, as the phone finds it (mobile/src/core/profile.ts).
+function finds(x: SavedChange, c: DcuClass): boolean {
+  return x.module === c.module && x.start === c.start && x.dates.includes(c.date) && (!x.activityCode || x.activityCode === c.code);
+}
+
+/// The room and lecturer a class shows: DCU's, with each edit that reaches the viewer put on
+/// in the order the edits were saved, so a later one wins — as on the phone.
+function shownAs(c: DcuClass, edits: SavedChange[], reaching: (group: string | null) => boolean) {
+  let room = c.rooms.join(", ") || null;
+  let staff = c.staff.join(", ") || null;
+  for (const e of edits.filter((x) => reaching(x.group))) {
+    room = e.room ?? room;
+    staff = e.staff ?? staff;
+  }
+  return { room, staff };
 }
 
 /// A change for "C" reaches everyone in C, including C.2; one for "C.2" reaches only C.2;
@@ -272,20 +299,33 @@ function tint(module: string): string {
 // ---------------------------------------------------------------------------
 // What opens under the grid when a block is clicked.
 
-function ClassDetail({ c, removals, props, onDone }: {
-  c: DcuClass; removals: SavedChange[]; props: Props; onDone: () => void;
+function ClassDetail({ c, removals, edits, props, onDone }: {
+  c: DcuClass; removals: SavedChange[]; edits: SavedChange[]; props: Props; onDone: () => void;
 }) {
+  const [mode, setMode] = useState<"remove" | "edit">("remove");
   return (
     <>
       <div className="tt-detail-head">
         <h2>{c.module} <span className="dim">{c.code} · {kindLabel(c.code)}</span></h2>
         <button type="button" onClick={onDone} aria-label="Close">Close</button>
       </div>
-      <p>{weekday(c.date)} {c.date} · {c.start}–{c.end}{c.rooms.length ? ` · ${c.rooms.join(", ")}` : ""}{c.title ? ` · ${c.title}` : ""}</p>
+      <p>
+        {weekday(c.date)} {c.date} · {c.start}–{c.end}{c.rooms.length ? ` · ${c.rooms.join(", ")}` : ""}
+        {c.staff.length ? ` · ${c.staff.join(", ")}` : ""}{c.title ? ` · ${c.title}` : ""}
+      </p>
       {removals.length > 0 && (
         <p>Already removed for {removals.map((r) => audience(r.group)).join(", ")}. Delete those under Saved changes to undo.</p>
       )}
-      <RemoveForm c={c} removals={removals} props={props} onDone={onDone} />
+      {edits.length > 0 && (
+        <p>Already changed: {edits.map((e) => `${edited(e)} for ${audience(e.group)}`).join("; ")}. Delete those under Saved changes to undo.</p>
+      )}
+      <div className="tt-modes" role="tablist">
+        <button type="button" role="tab" aria-selected={mode === "remove"} onClick={() => setMode("remove")}>Remove</button>
+        <button type="button" role="tab" aria-selected={mode === "edit"} onClick={() => setMode("edit")}>Change room or lecturer</button>
+      </div>
+      {mode === "remove"
+        ? <RemoveForm c={c} removals={removals} props={props} onDone={onDone} />
+        : <EditForm c={c} props={props} onDone={onDone} />}
     </>
   );
 }
@@ -300,7 +340,7 @@ function AddedDetail({ change, date, onDone }: { change: SavedChange; date: stri
         <button type="button" onClick={onDone} aria-label="Close">Close</button>
       </div>
       <p>
-        {weekday(date)} {date} · {change.start}–{change.end}{change.room ? ` · ${change.room}` : ""} · for {audience(change.group)} ·
+        {weekday(date)} {date} · {change.start}–{change.end}{change.room ? ` · ${change.room}` : ""}{change.staff ? ` · ${change.staff}` : ""} · for {audience(change.group)} ·
         {" "}{change.dates.length} date{change.dates.length === 1 ? "" : "s"} in all{change.note ? ` · ${change.note}` : ""}
       </p>
       {error && <p className="err">{error}</p>}
@@ -322,24 +362,12 @@ function RemoveForm({ c, removals, props, onDone }: {
   const removedFor = new Set(programmes.filter((p) => removals.some((r) => r.group === null || r.group === p)));
   const [keeps, setKeeps] = useState<Set<string>>(() => new Set(programmes));
   const [group, setGroup] = useState("");
-  const [every, setEvery] = useState(false);
-  const [dates, setDates] = useState<string[]>([c.date]);
+  const slot = useSlotDates(c);
+  const { dates, finding } = slot;
   const [onlyThis, setOnlyThis] = useState(true);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [finding, find] = useTransition();
   const [saving, start] = useTransition();
-
-  function chooseEvery(on: boolean) {
-    setEvery(on);
-    setError(null);
-    if (!on) { setDates([c.date]); return; }
-    find(async () => {
-      const res = await slotDates(c.module, c.code, c.day, c.start);
-      if (res.ok) setDates(res.dates.length ? res.dates : [c.date]);
-      else { setError(res.error); setEvery(false); }
-    });
-  }
 
   const byGroup = group.trim() !== "" || !programmes.length;
   const dropped = programmes.filter((p) => !keeps.has(p) && !removedFor.has(p));
@@ -349,7 +377,7 @@ function RemoveForm({ c, removals, props, onDone }: {
   const changes: TimetableChange[] = targets.map((g) => ({
     courseKey: props.programme, group: g, kind: "remove",
     module: c.module, activityCode: onlyThis ? c.code : null, title: null,
-    dates, start: c.start, end: null, room: null, note: note.trim() || null,
+    dates, start: c.start, end: null, room: null, staff: null, note: note.trim() || null,
   }));
   const problems = findingsOf(changes);
 
@@ -373,14 +401,7 @@ function RemoveForm({ c, removals, props, onDone }: {
             programmes={programmes.length ? [] : props.programmeGroups}
             placeholder={programmes.length ? "C, D.1" : "Everyone"} disabled={dropped.length > 0} />
         </div>
-        <div className="field">
-          <label>Dates</label>
-          <div className="row" style={{ alignItems: "center", gap: 12 }}>
-            <label className="check"><input type="radio" checked={!every} onChange={() => chooseEvery(false)} /> {c.day} {shortDate(c.date)} only</label>
-            <label className="check"><input type="radio" checked={every} onChange={() => chooseEvery(true)} /> Every week it runs</label>
-            {finding && <Spinner />}
-          </div>
-        </div>
+        <DatesField c={c} slot={slot} />
         <div className="field">
           <label>Which class</label>
           <label className="check"><input type="checkbox" checked={onlyThis} onChange={(e) => setOnlyThis(e.target.checked)} /> Only {c.code}</label>
@@ -390,9 +411,9 @@ function RemoveForm({ c, removals, props, onDone }: {
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why — for the audit log" />
         </div>
       </div>
-      {every && !finding && <p className="dim" style={{ fontSize: 12 }}>{dates.length} date{dates.length === 1 ? "" : "s"}: {dates.map(shortDate).join(", ")}</p>}
+      <DatesList slot={slot} />
       {problems.map((p, i) => <p key={i} className={p.level === "error" ? "tag off" : "tag warn"}>{p.message}</p>)}
-      {error && <p className="err">{error}</p>}
+      {(slot.error ?? error) && <p className="err">{slot.error ?? error}</p>}
       <button className="primary" onClick={save}
         disabled={saving || finding || !changes.length || problems.some((p) => p.level === "error")}>
         {saving ? <><Spinner /> Saving</>
@@ -402,6 +423,123 @@ function RemoveForm({ c, removals, props, onDone }: {
       </button>
     </div>
   );
+}
+
+/// A class that still runs, somewhere else or with someone else. A field left blank keeps
+/// DCU's, so a new lecturer alone doesn't freeze today's room into the change.
+function EditForm({ c, props, onDone }: { c: DcuClass; props: Props; onDone: () => void }) {
+  const programmes = props.programmeGroups.map((p) => p.code);
+  const [room, setRoom] = useState("");
+  const [staff, setStaff] = useState("");
+  const [has, setHas] = useState<Set<string>>(() => new Set(programmes));
+  const [group, setGroup] = useState("");
+  const slot = useSlotDates(c);
+  const [onlyThis, setOnlyThis] = useState(true);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, start] = useTransition();
+
+  const byGroup = group.trim() !== "" || !programmes.length;
+  const ticked = programmes.filter((p) => has.has(p));
+  // Every programme ticked is one edit for everyone, not six.
+  const targets: (string | null)[] = byGroup ? groupList(group) : ticked.length === programmes.length ? [null] : ticked;
+  // What DCU already says is no change.
+  const newRoom = room.trim() && room.trim() !== c.rooms.join(", ") ? room.trim() : null;
+  const newStaff = staff.trim() && staff.trim() !== c.staff.join(", ") ? staff.trim() : null;
+  const changes: TimetableChange[] = newRoom || newStaff ? targets.map((g) => ({
+    courseKey: props.programme, group: g, kind: "edit",
+    module: c.module, activityCode: onlyThis ? c.code : null, title: null,
+    dates: slot.dates, start: c.start, end: null, room: newRoom, staff: newStaff, note: note.trim() || null,
+  })) : [];
+  const problems = findingsOf(changes);
+
+  const save = () => start(async () => {
+    const res = await saveChanges(changes);
+    if (res.ok) onDone(); else setError(res.error);
+  });
+
+  return (
+    <div className="tt-edit">
+      {programmes.length > 0 && (
+        <ProgrammeTicks label="Programmes it changes for" programmes={props.programmeGroups} ticked={has}
+          disabled={group.trim() !== ""} onChange={setHas} />
+      )}
+      <div className="row" style={{ flexWrap: "wrap" }}>
+        <div className="field" style={{ width: 160 }}>
+          <label>New room</label>
+          <input value={room} onChange={(e) => setRoom(e.target.value)} placeholder={c.rooms.join(", ") || "None listed"} maxLength={80} />
+        </div>
+        <div className="field" style={{ width: 200 }}>
+          <label>New lecturer</label>
+          <input value={staff} onChange={(e) => setStaff(e.target.value)} placeholder={c.staff.join(", ") || "None listed"} maxLength={120} />
+        </div>
+        <div className="field" style={{ width: 190 }}>
+          <label>{programmes.length ? "Or only lab groups" : "For"}</label>
+          <GroupInput value={group} onChange={setGroup} groups={props.groups}
+            programmes={programmes.length ? [] : props.programmeGroups}
+            placeholder={programmes.length ? "C, D.1" : "Everyone"} disabled={ticked.length < programmes.length} />
+        </div>
+        <DatesField c={c} slot={slot} />
+        <div className="field">
+          <label>Which class</label>
+          <label className="check"><input type="checkbox" checked={onlyThis} onChange={(e) => setOnlyThis(e.target.checked)} /> Only {c.code}</label>
+        </div>
+        <div className="field" style={{ flex: 1, minWidth: 160 }}>
+          <label>Note (optional)</label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why — for the audit log" />
+        </div>
+      </div>
+      <DatesList slot={slot} />
+      {problems.map((p, i) => <p key={i} className={p.level === "error" ? "tag off" : "tag warn"}>{p.message}</p>)}
+      {(slot.error ?? error) && <p className="err">{slot.error ?? error}</p>}
+      <button className="primary" onClick={save}
+        disabled={saving || slot.finding || !changes.length || problems.some((p) => p.level === "error")}>
+        {saving ? <><Spinner /> Saving</>
+          : !newRoom && !newStaff ? "Type a new room or lecturer"
+          : !changes.length ? "Tick the programmes it changes for"
+          : `Change to ${edited({ room: newRoom, staff: newStaff })} for ${targets.map(audience).join(", ")}`}
+      </button>
+    </div>
+  );
+}
+
+/// The dates a change to one class covers: its own, or every week it runs — read from DCU,
+/// not assumed from a week pattern.
+function useSlotDates(c: DcuClass) {
+  const [every, setEvery] = useState(false);
+  const [dates, setDates] = useState<string[]>([c.date]);
+  const [error, setError] = useState<string | null>(null);
+  const [finding, find] = useTransition();
+
+  function choose(on: boolean) {
+    setEvery(on);
+    setError(null);
+    if (!on) { setDates([c.date]); return; }
+    find(async () => {
+      const res = await slotDates(c.module, c.code, c.day, c.start);
+      if (res.ok) setDates(res.dates.length ? res.dates : [c.date]);
+      else { setError(res.error); setEvery(false); }
+    });
+  }
+  return { every, dates, error, finding, choose };
+}
+
+function DatesField({ c, slot }: { c: DcuClass; slot: ReturnType<typeof useSlotDates> }) {
+  return (
+    <div className="field">
+      <label>Dates</label>
+      <div className="row" style={{ alignItems: "center", gap: 12 }}>
+        <label className="check"><input type="radio" checked={!slot.every} onChange={() => slot.choose(false)} /> {c.day} {shortDate(c.date)} only</label>
+        <label className="check"><input type="radio" checked={slot.every} onChange={() => slot.choose(true)} /> Every week it runs</label>
+        {slot.finding && <Spinner />}
+      </div>
+    </div>
+  );
+}
+
+function DatesList({ slot }: { slot: ReturnType<typeof useSlotDates> }) {
+  if (!slot.every || slot.finding) return null;
+  return <p className="dim" style={{ fontSize: 12 }}>{slot.dates.length} date{slot.dates.length === 1 ? "" : "s"}: {slot.dates.map(shortDate).join(", ")}</p>;
 }
 
 function AddForm(props: Props & { onDone: () => void }) {
@@ -416,6 +554,7 @@ function AddForm(props: Props & { onDone: () => void }) {
   const [startTime, setStartTime] = useState("");
   const [end, setEnd] = useState("");
   const [room, setRoom] = useState("");
+  const [staff, setStaff] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, start] = useTransition();
@@ -428,7 +567,7 @@ function AddForm(props: Props & { onDone: () => void }) {
   const changes: TimetableChange[] = targets.map((g) => ({
     courseKey: props.programme, group: g, kind: "add",
     module, activityCode: null, title: title.trim() || null, dates, start: startTime,
-    end: end || null, room: room.trim() || null, note: note.trim() || null,
+    end: end || null, room: room.trim() || null, staff: staff.trim() || null, note: note.trim() || null,
   }));
   const problems = findingsOf(changes);
 
@@ -478,6 +617,10 @@ function AddForm(props: Props & { onDone: () => void }) {
         <div className="field" style={{ width: 130 }}>
           <label>Room</label>
           <input value={room} onChange={(e) => setRoom(e.target.value)} placeholder="GLA.S210" />
+        </div>
+        <div className="field" style={{ width: 180 }}>
+          <label>Lecturer (optional)</label>
+          <input value={staff} onChange={(e) => setStaff(e.target.value)} maxLength={120} />
         </div>
         <div className="field" style={{ flex: 1, minWidth: 160 }}>
           <label>Note (optional)</label>
@@ -545,7 +688,8 @@ function Saved({ changes }: { changes: SavedChange[] }) {
 /// One box per programme of the course, ticked when the class is on its timetable. Several
 /// can share a slot: the 10:00 kept for CE1 and ECE1, the 11:00 for the other four. A
 /// student is on one programme, so each box is a separate change when saved.
-function ProgrammeTicks({ programmes, ticked, locked, disabled, onChange }: {
+function ProgrammeTicks({ label = "Programmes with this class", programmes, ticked, locked, disabled, onChange }: {
+  label?: string;
   programmes: { code: string; name: string }[];
   ticked: Set<string>;
   /// Removed on this date already: shown unticked, and put back only under Saved changes.
@@ -558,7 +702,7 @@ function ProgrammeTicks({ programmes, ticked, locked, disabled, onChange }: {
   return (
     <div className="field">
       <div className="tt-who-head">
-        <label>Programmes with this class</label>
+        <label>{label}</label>
         <button type="button" className="link" disabled={disabled} onClick={() => set(open.map((p) => p.code))}>All</button>
         <button type="button" className="link" disabled={disabled} onClick={() => set([])}>None</button>
       </div>

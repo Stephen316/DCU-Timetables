@@ -271,6 +271,7 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
     start: (a.start ?? "").trim().padStart(5, "0"),
     end: kind === "add" && a.end ? a.end.trim().padStart(5, "0") : null,
     room: kind === "add" ? a.room?.trim() || null : null,
+    staff: null,
     note: a.note?.trim() || null,
   };
   const codes = (list?: string[] | null) =>

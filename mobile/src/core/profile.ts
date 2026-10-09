@@ -223,17 +223,19 @@ function compare(a: string, b: string): number {
 // MARK: - Timetable changes
 
 /**
- * A class removed from a course's timetable, or one added to it, for everyone on the
- * course or one group of it. Saved from the console (supabase/phase17_timetable_changes.sql).
+ * A class removed from a course's timetable, one added to it, or one given a new room or
+ * lecturer, for everyone on the course or one group of it. Saved from the console
+ * (supabase/phase17_timetable_changes.sql, phase30_class_edits.sql).
  */
 export interface TimetableChange {
   id: string;
   courseKey: string;
   /** "C", "C.2", one of the course's programmes ("CE1"), or null for everyone on the course. */
   group: string | null;
-  kind: 'remove' | 'add';
+  /** An edit finds its class as a removal does, and puts `room` and/or `staff` on it. */
+  kind: 'remove' | 'add' | 'edit';
   module: string;
-  /** Remove only: one activity code; null hides every class of the module starting then. */
+  /** Remove or edit: one activity code; null means every class of the module starting then. */
   activityCode: string | null;
   title: string | null;
   /** Dublin calendar dates, yyyy-MM-dd. */
@@ -241,11 +243,13 @@ export interface TimetableChange {
   start: string;
   end: string | null;
   room: string | null;
+  /** The lecturer, as a person reads it. */
+  staff: string | null;
 }
 
 export function makeChange(fields: Partial<TimetableChange> & Pick<TimetableChange, 'id' | 'courseKey' | 'kind' | 'module' | 'dates' | 'start'>): TimetableChange {
   return {
-    group: null, activityCode: null, title: null, end: null, room: null,
+    group: null, activityCode: null, title: null, end: null, room: null, staff: null,
     ...fields,
   };
 }
@@ -255,7 +259,7 @@ export function changeFromRow(row: Record<string, unknown>): TimetableChange | n
   const opt = (v: unknown) => (typeof v === 'string' ? v : null);
   if (
     typeof row.id !== 'string' || typeof row.course_key !== 'string' ||
-    (row.kind !== 'remove' && row.kind !== 'add') || typeof row.module !== 'string' ||
+    (row.kind !== 'remove' && row.kind !== 'add' && row.kind !== 'edit') || typeof row.module !== 'string' ||
     !Array.isArray(row.dates) || typeof row.start_time !== 'string'
   ) {
     return null;
@@ -272,6 +276,7 @@ export function changeFromRow(row: Record<string, unknown>): TimetableChange | n
     start: row.start_time,
     end: opt(row.end_time),
     room: opt(row.room),
+    staff: opt(row.staff),
   };
 }
 
@@ -350,16 +355,24 @@ export const TimetableChanges = {
     const mine = changes.filter((c) => audience.includes(c));
     if (mine.length === 0) return events;
 
+    const finds = (c: TimetableChange, event: TimetableEvent) =>
+      c.module === moduleCodeOf(event) && c.start === DublinTime.timeString(event.start) &&
+      c.dates.includes(DublinTime.dateString(event.start)) &&
+      (c.activityCode === null || c.activityCode === TimetableChanges.code(event.activity.raw));
     const removals = mine.filter((c) => c.kind === 'remove');
-    const out = events.filter((event) => {
-      const date = DublinTime.dateString(event.start);
-      const time = DublinTime.timeString(event.start);
-      return !removals.some(
-        (r) =>
-          r.module === moduleCodeOf(event) && r.start === time && r.dates.includes(date) &&
-          (r.activityCode === null || r.activityCode === TimetableChanges.code(event.activity.raw)),
-      );
-    });
+    const edits = mine.filter((c) => c.kind === 'edit');
+    const out = events
+      .filter((event) => !removals.some((r) => finds(r, event)))
+      // In the order they were saved, so a later edit wins: a room for everyone, then one
+      // for this student's programme, leaves them the programme's.
+      .map((event) => edits.filter((e) => finds(e, event)).reduce(
+        (shown, e) => ({
+          ...shown,
+          ...(e.room !== null ? { locations: [e.room] } : {}),
+          ...(e.staff !== null ? { staff: [e.staff] } : {}),
+        }),
+        event,
+      ));
 
     if (weekStart !== null) {
       // Whole days on the Dublin calendar, counted from the Dublin date the week starts on.
@@ -402,7 +415,7 @@ function added(change: TimetableChange, date: string): TimetableEvent | null {
     type: 'onCampus',
     locations: change.room !== null ? [change.room] : [],
     moduleName: `${title} · ${change.module}`,
-    staff: [],
+    staff: change.staff !== null ? [change.staff] : [],
     activity: parseActivityCode(change.module),
     weekLabels: [],
   };

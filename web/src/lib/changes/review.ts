@@ -14,8 +14,8 @@ async function weeksFor(dates: string[]): Promise<number[]> {
   return [...new Set(dates.flatMap((d) => all.filter((w) => within(d, w.firstDay)).map((w) => w.number)))];
 }
 
-/// Everything saving would refuse or warn about, including — for a removal — whether each
-/// date has a class to remove. For callers that have already checked the console is open;
+/// Everything saving would refuse or warn about, including — for a removal or an edit —
+/// whether each date has the class. For callers that have already checked the console is open;
 /// kept out of the `"use server"` file so it isn't itself a public action.
 export async function review(change: TimetableChange): Promise<Finding[]> {
   let course;
@@ -25,7 +25,7 @@ export async function review(change: TimetableChange): Promise<Finding[]> {
     return [{ level: "error", message: `DCU's timetable couldn't be reached to check ${change.courseKey}. Try again.` }];
   }
   const findings = checkChange(change, course);
-  if (change.kind !== "remove" || findings.some((f) => f.level === "error")) return findings;
+  if (change.kind === "add" || findings.some((f) => f.level === "error")) return findings;
   try {
     const found = await classes([change.module], await weeksFor(change.dates));
     return [...findings, ...hitFindings(change, removalHits(change, found))];

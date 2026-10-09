@@ -40,6 +40,8 @@ export type DcuClass = {
   start: string;  // HH:mm
   end: string;
   rooms: string[];
+  /// The lecturer DCU names, "Staff Member" in its extra properties — the app reads the same one.
+  staff: string[];
 };
 
 type WeekDTO = { WeekNumber: number; WeekLabel: string; FirstDayInWeek: string };
@@ -104,7 +106,8 @@ export async function classes(moduleCodes: string[], weekNumbers: number[]): Pro
   return cachedClasses([...moduleCodes].sort(), [...weekNumbers].sort((a, b) => a - b));
 }
 
-const cachedClasses = unstable_cache(fetchClasses, ["dcu-classes"], { revalidate: 600 });
+// v2: classes carry their lecturer; an entry cached before that has none.
+const cachedClasses = unstable_cache(fetchClasses, ["dcu-classes-v2"], { revalidate: 600 });
 
 async function fetchClasses(moduleCodes: string[], weekNumbers: number[]): Promise<DcuClass[]> {
   const vo = await viewOptions();
@@ -155,6 +158,7 @@ async function fetchClasses(moduleCodes: string[], weekNumbers: number[]): Promi
       start: start.time,
       end: dublin(e.EndDateTime).time,
       rooms: (e.Location ?? "").split(",").map((r) => r.trim()).filter(Boolean),
+      staff: [e.ExtraProperties?.find((p) => p.Name === "Staff Member")?.Value?.trim() ?? ""].filter(Boolean),
     });
   }
   return out.sort((a, b) => `${a.date}${a.start}${a.code}`.localeCompare(`${b.date}${b.start}${b.code}`));

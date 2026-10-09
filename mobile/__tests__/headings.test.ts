@@ -38,7 +38,7 @@ describe('Module headings', () => {
   test("an added class keeps its own name, since headings go on before changes", () => {
     const added = TimetableChanges.apply(ModuleTitles.apply([], [materialsHeading]), [{
       id: 'c1', courseKey: 'EEG1', group: null, kind: 'add', module: 'EEG1006', activityCode: null, title: 'Make-up lab',
-      dates: ['2026-09-29'], start: '14:00', end: '16:00', room: null,
+      dates: ['2026-09-29'], start: '14:00', end: '16:00', room: null, staff: null,
     }], TimetableAudience.forProgramme('ECE1'), at(2026, 9, 28));
     expect(added.map(shortTitleOf)).toEqual(['Make-up lab · EEG1006']);
   });

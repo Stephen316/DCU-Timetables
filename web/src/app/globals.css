@@ -363,6 +363,7 @@ button.send { display: inline-flex; align-items: center; gap: 6px; min-width: 84
 .wk-block.removed strong, .wk-block.removed span { text-decoration: line-through; }
 .wk-block.added { outline: 1px dashed var(--c); outline-offset: -1px; }
 .wk-block.added em { color: var(--ok); }
+.wk-block em.edit { color: var(--warn); }
 .wk-block.selected { box-shadow: 0 0 0 2px var(--text); z-index: 1; }
 
 .tt-detail { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
@@ -378,6 +379,11 @@ label.check input { width: auto; }
 .tt-who-head label { margin: 0; }
 .tt-who-head button.link { font-size: 12px; }
 .tt-who { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.tt-modes { display: flex; gap: 18px; margin: 4px 0 12px; border-bottom: 1px solid var(--border); }
+.tt-modes button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0;
+                   padding: 6px 0; margin-bottom: -1px; color: var(--muted); }
+.tt-modes button:hover { background: none; color: var(--text); }
+.tt-modes button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
 
 /* Moving between console pages: shown at once, while the server renders the next one. */
 .page-loading { display: flex; align-items: center; gap: 8px; color: var(--muted); padding: 24px 0; }
