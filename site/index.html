@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DCU Timetable</title>
-<link rel="stylesheet" href="style.css">
+<meta name="description" content="Your DCU timetable on your phone and your Mac. Free, for anyone with a DCU email.">
+<link rel="stylesheet" href="style.css?v=2">
 <script>
   // Supabase sends confirmation and password-reset links back to this address, with the
   // session in the URL fragment (#access_token=…) or a failure in its place. A fragment
@@ -18,18 +19,87 @@
       /[?&](error|error_code)=/.test(search);
     if (carriesAuth) window.location.replace('app/' + search + hash);
   })();
+
+  // Which way in suits this device: its card goes first and only its steps show. iPadOS asks
+  // for desktop pages and says Macintosh, so a touch screen is what gives it away.
+  (function () {
+    var ua = navigator.userAgent;
+    var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    var device = ios ? 'ios' : /Android/.test(ua) ? 'android' : /Macintosh/.test(ua) ? 'mac' : 'computer';
+    document.documentElement.setAttribute('data-device', device);
+  })();
 </script>
 </head>
 <body>
 <main>
 <nav><a href="index.html">DCU Timetable</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="support.html">Help and contact</a></nav>
 <h1>DCU Timetable</h1>
-<p>An iPhone app that shows a DCU student their own timetable: their programme, their groups and their labs. Classmates can also share deadlines and say when a class was cancelled.</p>
+<p>Your DCU timetable on your phone and your Mac: your programme, your groups and your labs, with deadlines and cancelled classes shared by your classmates. Free, for anyone with a DCU email.</p>
+
+<h2 id="get">Get the app</h2>
+<div class="get">
+  <section class="get-card get-phone" aria-labelledby="get-phone">
+    <h3 id="get-phone">On your phone</h3>
+    <p class="note">iPhone or Android. It goes on your Home Screen like any other app; there&rsquo;s no app store to search.</p>
+    <p><a class="button" href="app/">Open DCU Timetable</a></p>
+    <div class="only-ios">
+      <p>Then put it on your Home Screen, in Safari:</p>
+      <ol>
+        <li>Tap Share, the square with an arrow. In newer Safari it&rsquo;s under the &bull;&bull;&bull; button.</li>
+        <li>Tap Add to Home Screen. If it isn&rsquo;t listed, scroll down or tap More.</li>
+        <li>Tap Add. It&rsquo;s now on your Home Screen, and you stay signed in.</li>
+      </ol>
+    </div>
+    <div class="only-android">
+      <p>Then put it on your Home Screen, in Chrome:</p>
+      <ol>
+        <li>Tap &#8942; at the top right.</li>
+        <li>Tap Add to Home screen, or Install app.</li>
+        <li>Tap Add or Install.</li>
+      </ol>
+    </div>
+    <div class="only-computer scan">
+      <img src="app-qr.svg" width="148" height="148" alt="QR code that opens DCU Timetable on a phone">
+      <div>
+        <p>On a computer now? Point your phone&rsquo;s camera at the code to open it there, then add it to your Home Screen from Safari&rsquo;s Share menu, or Chrome&rsquo;s &#8942; menu.</p>
+        <p class="note">Or use it right here in your browser: <a href="app/">open DCU Timetable</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="get-card get-mac" aria-labelledby="get-mac">
+    <h3 id="get-mac">On your Mac</h3>
+    <p class="note">Your week and deadlines in a window of their own, with class alerts as Mac notifications. macOS 14 or later.</p>
+    <p><a class="button" href="https://github.com/Stephen316/DCU-Timetables/releases/latest/download/DCU-Timetable-mac.zip">Download for Mac</a></p>
+    <ol>
+      <li>Open the download, and drag DCU Timetable into Applications.</li>
+      <li>Open it. The first time, macOS says it can&rsquo;t check the app: click Done.</li>
+      <li>Go to System Settings &rarr; Privacy &amp; Security, and click Open Anyway. You only do this once.</li>
+    </ol>
+    <p class="note only-phone">On your phone now? Copy the link below and open it on your Mac.</p>
+  </section>
+</div>
+
+<p class="share">
+  <span>Sending it to someone?</span>
+  <code id="site-link">https://stephen316.github.io/DCU-Timetables/</code>
+  <button type="button" id="copy-link">Copy link</button>
+</p>
+<script>
+  // Copy where it can be, a selected link where it can't, so the link can be copied by hand.
+  (function () {
+    var button = document.getElementById('copy-link');
+    var link = document.getElementById('site-link');
+    button.addEventListener('click', function () {
+      var done = function () { button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy link'; }, 2000); };
+      var select = function () { var range = document.createRange(); range.selectNodeContents(link); var s = window.getSelection(); s.removeAllRanges(); s.addRange(range); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link.textContent).then(done, select);
+      else select();
+    });
+  })();
+</script>
+
 <p class="note">An independent student project. Not affiliated with or endorsed by Dublin City University.</p>
-<h2>On a Mac</h2>
-<p>The week and your deadlines in a window of their own, with class alerts as Mac notifications. For macOS 14 or later.</p>
-<p><a href="https://github.com/Stephen316/DCU-Timetables/releases/latest/download/DCU-Timetable-mac.zip">Download DCU Timetable for Mac</a></p>
-<p class="note">Open the download and drag DCU Timetable into Applications. The first time it opens, macOS says it can't verify the app: click Done, then go to System Settings → Privacy &amp; Security and click Open Anyway. You only need to do this once.</p>
 <ul>
   <li><a href="privacy.html">Privacy policy</a></li>
   <li><a href="terms.html">Terms of use</a></li>

@@ -1,5 +1,39 @@
 # DCU-Timetables
 
+Your DCU timetable, groups, labs and deadlines, on your phone and your Mac. Free, for anyone
+with a DCU email.
+
+## Get the app
+
+### On your phone (iPhone or Android)
+
+**[Open DCU Timetable →](https://stephen316.github.io/DCU-Timetables/app/)** then add it to
+your Home Screen, so it opens like any other app. There's no app store listing to search for.
+
+- **iPhone, in Safari:** tap Share (the square with an arrow; in newer Safari it's under the
+  ••• button), then **Add to Home Screen**, then **Add**.
+- **Android, in Chrome:** tap ⋮ at the top right, then **Add to Home screen** or
+  **Install app**.
+
+Reading this on a computer? Point your phone's camera at this code to open it there:
+
+<img src="site/app-qr.svg" width="140" alt="QR code that opens DCU Timetable on a phone">
+
+### On your Mac
+
+**[Download DCU Timetable for Mac](https://github.com/Stephen316/DCU-Timetables/releases/latest/download/DCU-Timetable-mac.zip)**
+(macOS 14 or later), then:
+
+1. Open the download and drag **DCU Timetable** into Applications.
+2. Open it. The first time, macOS says it can't check the app: click **Done**.
+3. Go to **System Settings → Privacy & Security** and click **Open Anyway**. You only do this
+   once.
+
+To send it to someone, share [stephen316.github.io/DCU-Timetables](https://stephen316.github.io/DCU-Timetables/):
+it has both, and shows each person the one for their device first.
+
+## About the project
+
 An iPhone app to help DCU students keep track of all their modules, classes, and
 deadlines — built on DCU's live public timetable API. React Native with Expo, in
 [`mobile/`](mobile); the home-screen widgets are SwiftUI, in
