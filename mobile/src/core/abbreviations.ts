@@ -1,7 +1,7 @@
 import { TimetableEvent } from './timetableEvent';
 
 /**
- * What a module is called on the week grid, set on the console's Abbreviations page
+ * What a module is called on the week grid, set in the console from any of its classes on the Timetable page
  * (`module_abbreviations`): "Eng. Maths I" for DCU's "EEG1007[1] Engineering Mathematics I".
  */
 export interface ModuleAbbreviation {

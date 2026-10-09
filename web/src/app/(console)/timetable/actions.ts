@@ -6,6 +6,11 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { classes, weeks } from "@/lib/dcu/timetable";
 import { audience, toRow, type TimetableChange } from "@/lib/changes/change";
 import { review } from "@/lib/changes/review";
+import { entryProblem, normalEntry, type Entry } from "@/lib/abbreviations/check";
+import { stripModuleCode } from "@/lib/abbreviations/names";
+import { suggestAbbreviations, type Suggestion } from "@/lib/mistral/abbreviate";
+import { mistralKey, MISTRAL_MODEL } from "@/lib/mistral/client";
+import { classify } from "@/lib/mistral/api";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -58,5 +63,43 @@ export async function slotDates(module: string, code: string, day: string, start
     return { ok: true, dates: [...new Set(dates)].sort() };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Couldn't reach DCU's timetable." };
+  }
+}
+
+/// A module's name on the app's week grid, for every class of it on every course. An entry
+/// with no abbreviation and no flag deletes the row, and the app shortens DCU's name again.
+/// The definer function checks the caller is an admin and audits the change.
+export async function saveAbbreviation(code: string, entry: Entry): Promise<Result> {
+  if (!(await consoleOpen())) return { ok: false, error: NOT_ALLOWED };
+  const row = { module_key: code, ...normalEntry(entry) };
+  const problem = entryProblem(code, row);
+  if (problem) return { ok: false, error: problem };
+  const db = await supabaseServer();
+  const { error } = await db.rpc("save_module_abbreviations", { p_rows: [row] });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/timetable");
+  return { ok: true };
+}
+
+/// The assistant's week-grid name for one module, from DCU's name with the code taken off
+/// first, so the code never reaches the model. Nothing is saved. Saved names for other
+/// modules go with it, so one that would read the same as theirs comes back flagged.
+export async function suggestAbbreviation(code: string, dcuName: string):
+  Promise<{ ok: true; suggestion: Suggestion } | { ok: false; error: string }> {
+  if (!(await consoleOpen())) return { ok: false, error: NOT_ALLOWED };
+  const db = await supabaseServer();
+  const { data, error } = await db.from("module_abbreviations").select("module_key, abbreviation").neq("module_key", code);
+  if (error) return { ok: false, error: error.message };
+  try {
+    const out = await suggestAbbreviations({
+      key: mistralKey(),
+      modules: [{ code, name: stripModuleCode(dcuName, code) }],
+      // Their names aren't to hand here; the code stands in, so any two that read alike are flagged.
+      others: (data ?? []).filter((r) => r.abbreviation).map((r) => ({ code: r.module_key, name: r.module_key, abbreviation: r.abbreviation })),
+      model: MISTRAL_MODEL,
+    });
+    return { ok: true, suggestion: out.suggestions[0] };
+  } catch (e) {
+    return { ok: false, error: classify(e).message };
   }
 }

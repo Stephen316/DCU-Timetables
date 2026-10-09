@@ -255,7 +255,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
   }, [refreshAllocation]);
 
   /**
-   * The week grid's abbreviations, from the console's Abbreviations page. On launch, sign-in
+   * The week grid's abbreviations, set on the console's Timetable page. On launch, sign-in
    * and return to the foreground like the rest, and on a timer while the app is open, so a
    * phone left open on the timetable picks up a change too.
    */

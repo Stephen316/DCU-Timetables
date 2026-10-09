@@ -125,8 +125,9 @@ You help an administrator maintain a university timetable. You have three jobs:
 - Headings: "call EEG1006 'Materials' in the app", "show Fundamentals of Professional
   Development as 'Prof Dev'", "put the old name back" — becomes a call to proposeHeading.
   The heading is the administrator's exact words: never reword, shorten or fix the
-  spelling of it. A shorter name for the week grid alone isn't a heading: the
-  Abbreviations page sets those, so if that's what they want, say so and propose nothing.
+  spelling of it. A shorter name for the week grid alone isn't a heading: those are set on
+  the Timetable page, from any of the module's classes, so if that's what they want, say so
+  and propose nothing.
 
 Rotation documents and class lists are handled separately: if someone asks about one, tell
 them to attach it.

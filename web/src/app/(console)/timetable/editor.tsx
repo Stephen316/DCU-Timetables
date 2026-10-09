@@ -6,7 +6,9 @@ import type { DcuClass, Week } from "@/lib/dcu/timetable";
 import { audience, checkChange, describeChange, edited, groupList, weekday, type SavedChange, type TimetableChange } from "@/lib/changes/change";
 import type { Finding } from "@/lib/extraction/rotation";
 import { PROGRAMME_CODE } from "@/lib/proposals/courses";
-import { saveChanges, deleteChange, slotDates } from "./actions";
+import { ABBREVIATION_AIM, ABBREVIATION_LIMIT, abbreviationProblem, clashes, NO_ENTRY, type Entry } from "@/lib/abbreviations/check";
+import { stripModuleCode } from "@/lib/abbreviations/names";
+import { saveChanges, deleteChange, slotDates, saveAbbreviation, suggestAbbreviation } from "./actions";
 import { Spinner } from "../spinner";
 
 type Props = {
@@ -21,6 +23,10 @@ type Props = {
   groups: string[];
   /// The DCU programmes the course covers, each a group of it.
   programmeGroups: { code: string; name: string }[];
+  /// Every module's saved name on the app's week grid, by module code.
+  abbreviations: Record<string, Entry>;
+  /// DCU's names for the modules on the page, codes taken off.
+  moduleNames: Record<string, string>;
 };
 
 /// Whose timetable the grid shows: a programme, a lab group, both, or neither (everything,
@@ -302,7 +308,7 @@ function tint(module: string): string {
 function ClassDetail({ c, removals, edits, props, onDone }: {
   c: DcuClass; removals: SavedChange[]; edits: SavedChange[]; props: Props; onDone: () => void;
 }) {
-  const [mode, setMode] = useState<"remove" | "edit">("remove");
+  const [mode, setMode] = useState<"remove" | "edit" | "name">("remove");
   return (
     <>
       <div className="tt-detail-head">
@@ -311,7 +317,7 @@ function ClassDetail({ c, removals, edits, props, onDone }: {
       </div>
       <p>
         {weekday(c.date)} {c.date} · {c.start}–{c.end}{c.rooms.length ? ` · ${c.rooms.join(", ")}` : ""}
-        {c.staff.length ? ` · ${c.staff.join(", ")}` : ""}{c.title ? ` · ${c.title}` : ""}
+        {c.staff.length ? ` · ${c.staff.join(", ")}` : ""}{c.title ? ` · ${stripModuleCode(c.title, c.module)}` : ""}
       </p>
       {removals.length > 0 && (
         <p>Already removed for {removals.map((r) => audience(r.group)).join(", ")}. Delete those under Saved changes to undo.</p>
@@ -322,10 +328,11 @@ function ClassDetail({ c, removals, edits, props, onDone }: {
       <div className="tt-modes" role="tablist">
         <button type="button" role="tab" aria-selected={mode === "remove"} onClick={() => setMode("remove")}>Remove</button>
         <button type="button" role="tab" aria-selected={mode === "edit"} onClick={() => setMode("edit")}>Change room or lecturer</button>
+        <button type="button" role="tab" aria-selected={mode === "name"} onClick={() => setMode("name")}>Week-grid name</button>
       </div>
-      {mode === "remove"
-        ? <RemoveForm c={c} removals={removals} props={props} onDone={onDone} />
-        : <EditForm c={c} props={props} onDone={onDone} />}
+      {mode === "remove" ? <RemoveForm c={c} removals={removals} props={props} onDone={onDone} />
+        : mode === "edit" ? <EditForm c={c} props={props} onDone={onDone} />
+        : <NameForm c={c} props={props} />}
     </>
   );
 }
@@ -499,6 +506,112 @@ function EditForm({ c, props, onDone }: { c: DcuClass; props: Props; onDone: () 
           : !changes.length ? "Tick the programmes it changes for"
           : `Change to ${edited({ room: newRoom, staff: newStaff })} for ${targets.map(audience).join(", ")}`}
       </button>
+    </div>
+  );
+}
+
+/// What the module is called on the app's week grid — for every class of it, on every
+/// course, not this class alone. Left empty, the app shortens DCU's name itself. Typed here,
+/// or suggested by the assistant from DCU's name with the code taken off; nothing reaches
+/// the app until it's saved.
+function NameForm({ c, props }: { c: DcuClass; props: Props }) {
+  const saved = props.abbreviations[c.module] ?? NO_ENTRY;
+  const dcuName = props.moduleNames[c.module] ?? "";
+  const [text, setText] = useState(saved.abbreviation ?? "");
+  // The assistant's until a person changes it.
+  const [source, setSource] = useState<Entry["source"]>(saved.source);
+  const [flag, setFlag] = useState<{ reason: string; suggestion: string | null } | null>(
+    saved.flag ? { reason: saved.flag, suggestion: saved.suggestion } : null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [suggesting, startSuggest] = useTransition();
+  const [saving, startSave] = useTransition();
+
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  const problem = trimmed ? abbreviationProblem(trimmed) : null;
+  const clash = trimmed ? clashes([
+    ...Object.entries(props.abbreviations).filter(([code]) => code !== c.module)
+      .map(([code, e]) => ({ code, name: props.moduleNames[code] ?? code, abbreviation: e.abbreviation })),
+    { code: c.module, name: dcuName || c.module, abbreviation: trimmed },
+  ]).get(c.module) : undefined;
+  // Saving clears a saved flag too: a person has looked.
+  const changed = trimmed !== (saved.abbreviation ?? "") || !!saved.flag;
+
+  function save(entry: Entry, done: string) {
+    setError(null);
+    setNotice(null);
+    startSave(async () => {
+      const res = await saveAbbreviation(c.module, entry);
+      if (res.ok) { setNotice(done); setFlag(null); } else setError(res.error);
+    });
+  }
+
+  function suggest() {
+    setError(null);
+    setNotice(null);
+    startSuggest(async () => {
+      const res = await suggestAbbreviation(c.module, c.title ?? dcuName);
+      if (!res.ok) { setError(res.error); return; }
+      const s = res.suggestion;
+      // An unsure one waits for a person to pick it.
+      if (s.flag) { setFlag({ reason: s.flag, suggestion: s.abbreviation }); return; }
+      setText(s.abbreviation ?? "");
+      setSource("ai");
+      setFlag(null);
+    });
+  }
+
+  return (
+    <div className="tt-edit">
+      <p>
+        {dcuName ? <>DCU calls it <strong>{dcuName}</strong>. </> : <span className="dim">DCU gives it no name. </span>}
+        On the week grid it&rsquo;s{" "}
+        {saved.abbreviation
+          ? <><strong>{saved.abbreviation}</strong> <span className="dim">({saved.source === "ai" ? "from the assistant" : "set by hand"})</span></>
+          : <span className="dim">DCU&rsquo;s name, shortened by the app</span>}.
+      </p>
+      <div className="field">
+        <label>Name on the week grid, for every {c.module} class on every course</label>
+        <div className="abbr-input">
+          <input value={text} placeholder="Automatic" maxLength={40} aria-invalid={problem ? true : undefined}
+            onChange={(e) => { setText(e.target.value); setSource("manual"); setNotice(null); }} />
+          <span className={trimmed.length > ABBREVIATION_AIM ? "abbr-count warn" : "abbr-count"}
+            title={trimmed.length > ABBREVIATION_AIM ? "Wraps onto a second line in a one-hour block" : undefined}>
+            {trimmed.length ? `${trimmed.length}/${ABBREVIATION_LIMIT}` : ""}
+          </span>
+        </div>
+        {problem && <div className="err abbr-note">{problem}</div>}
+        {!problem && clash && <div className="tag warn abbr-note">Reads the same as {clash.name === clash.code ? clash.code : `${clash.name} (${clash.code})`}.</div>}
+      </div>
+      {flag && (
+        <p className="tag warn">
+          The assistant isn&rsquo;t sure: {flag.reason}
+          {flag.suggestion && (
+            <> <button type="button" className="link" onClick={() => { setText(flag.suggestion!); setSource("manual"); setFlag(null); }}>
+              Use &ldquo;{flag.suggestion}&rdquo;
+            </button></>
+          )}
+        </p>
+      )}
+      {error && <p className="err">{error}</p>}
+      {notice && <p className="tag ok">{notice}</p>}
+      <div className="abbr-actions">
+        <button type="button" className="primary" disabled={saving || suggesting || !trimmed || !!problem || !changed}
+          onClick={() => save({ abbreviation: trimmed, source: source === "ai" ? "ai" : "manual", flag: null, suggestion: null },
+            `Saved. Phones show “${trimmed}” for ${c.module} within 15 minutes, or when the app next opens.`)}>
+          {saving ? <><Spinner /> Saving</> : "Save"}
+        </button>
+        <button type="button" disabled={saving || suggesting} onClick={suggest}
+          title="Suggests a name from DCU's. Nothing reaches the app until you save.">
+          {suggesting ? <><Spinner /> Suggesting</> : "Suggest with the assistant"}
+        </button>
+        {saved.abbreviation && (
+          <button type="button" className="link" disabled={saving || suggesting}
+            onClick={() => { setText(""); save(NO_ENTRY, `${c.module} is back to DCU's name, shortened by the app.`); }}>
+            Go back to DCU&rsquo;s name
+          </button>
+        )}
+      </div>
     </div>
   );
 }

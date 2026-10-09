@@ -4,8 +4,8 @@
 
 import type { Finding } from "@/lib/extraction/rotation";
 
-/// `title` null puts DCU's name back. The week grid's shorter names are set on the
-/// Abbreviations page, not here.
+/// `title` null puts DCU's name back. The week grid's shorter names are set on the Timetable
+/// page, from any of the module's classes, not here.
 export type Heading = { moduleKey: string; title: string | null };
 
 /// The limit `supabase/phase27_module_titles.sql` enforces, checked here first so the panel
@@ -23,7 +23,7 @@ export function checkHeading(h: Heading): Finding[] {
   if (h.title && h.title.length > 20) {
     out.push({
       level: "info",
-      message: "Long for the week grid, where the app shortens it unless the module has an abbreviation. Set one on the Abbreviations page to choose the words there.",
+      message: "Long for the week grid, where the app shortens it unless the module has an abbreviation. Set one on the Timetable page, under a class's Week-grid name, to choose the words there.",
     });
   }
   return out;

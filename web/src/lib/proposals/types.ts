@@ -39,7 +39,7 @@ export type Proposal =
   | { kind: "heading"; scope: Scope; heading: Heading;
       /**
        * What the app shows now: DCU's name, any heading already saved, and the week grid's
-       * abbreviation from the Abbreviations page, which a heading doesn't change.
+       * name, set on the Timetable page, which a heading doesn't change.
        */
       current: { dcu: string | null; saved: string | null; abbreviation: string | null };
       findings: Finding[]; source: string };

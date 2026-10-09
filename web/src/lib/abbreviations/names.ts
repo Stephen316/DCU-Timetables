@@ -1,6 +1,6 @@
 // DCU puts the module's code in front of its name: "EEG1000[1,2] Fundamentals of Professional
 // Development", "EE402A[2]OOP with Embedded Systems", "EE425/EE453[1] Image Processing &
-// Analysis (Plus)". This takes it off before the Abbreviations page or the model sees the
+// Analysis (Plus)". This takes it off before the console or the model shows or reads the
 // name. It is plain code, not the model's job, because a code always has the same shape, and
 // a model asked to drop it could take a word with it or leave part of it behind.
 //

@@ -227,7 +227,7 @@ async function savedHeading(moduleKey: string): Promise<{ title: string } | null
   return data ? { title: data.title } : null;
 }
 
-/// The week grid's name from the Abbreviations page, which a heading leaves in place.
+/// The week grid's name, set on the Timetable page, which a heading leaves in place.
 async function savedAbbreviation(moduleKey: string): Promise<string | null> {
   const db = await supabaseServer();
   const { data } = await db.from("module_abbreviations").select("abbreviation").eq("module_key", moduleKey).maybeSingle();

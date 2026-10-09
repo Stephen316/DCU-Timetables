@@ -638,7 +638,7 @@ function HeadingPanel({ p }: { p: Extract<Proposal, { kind: "heading" }> }) {
           <tr><th>Now</th><td>{p.current.saved ?? p.current.dcu ?? <span className="dim">DCU's name</span>}</td></tr>
           <tr><th>Day view</th><td>{h.title ?? p.current.dcu ?? <span className="dim">DCU's name</span>}</td></tr>
           <tr><th>Week grid</th><td>{p.current.abbreviation
-            ? <>{p.current.abbreviation} <span className="dim">from the Abbreviations page</span></>
+            ? <>{p.current.abbreviation} <span className="dim">set on the Timetable page</span></>
             : <span className="dim">{h.title ?? "DCU's name"}, shortened by the app</span>}</td></tr>
         </tbody>
       </table>

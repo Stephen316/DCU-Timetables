@@ -391,32 +391,11 @@ label.check input { width: auto; }
 /* Ask — while a document waits to be accepted, the composer says what a message will do. */
 .correcting { font-size: 12px; color: var(--warn); margin: 0 0 8px; }
 
-/* Abbreviations */
-.abbr-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 24px; }
-.abbr-head h2 { margin: 0; }
-.abbr-head button { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 6px; }
-.abbr-covers { font-size: 12px; color: var(--dim); margin: 2px 0 10px; }
-.abbr-notice { margin: 0; font-size: 13px; }
-.abbr-input { display: flex; align-items: center; gap: 8px; }
-.abbr-input input { flex: 1; min-width: 0; padding: 4px 8px; }
+/* Timetable — a module's week-grid name, set from any of its classes. */
+.abbr-input { display: flex; align-items: center; gap: 8px; max-width: 320px; }
+.abbr-input input { flex: 1; min-width: 0; }
 .abbr-input input[aria-invalid] { border-color: var(--off); }
 .abbr-count { flex: none; width: 38px; font-size: 12px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
 .abbr-count.warn { color: var(--warn); }
 .abbr-note { margin-top: 4px; font-size: 12px; }
-.abbr-status { font-size: 13px; }
-.abbr-actions { display: flex; gap: 12px; margin-top: 4px; font-size: 12px; }
-.savebar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 16px; margin-top: 16px;
-           padding: 12px 0; background: var(--bg); border-top: 1px solid var(--border); font-size: 13px; }
-.savebar .grow { flex: 1; }
-.abbr-table th.abbr-code { width: 96px; }
-.abbr-table th.abbr-grid { width: 260px; }
-.abbr-table th.abbr-state { width: 32%; }
-/* Narrow: each module is two lines, its name beside its code and the input under the name. */
-@media (max-width: 900px) {
-  .abbr-table thead { display: none; }
-  .abbr-table tr { display: grid; grid-template-columns: 72px minmax(0, 1fr); column-gap: 12px;
-                   padding: 10px 0; border-bottom: 1px solid var(--border); }
-  .abbr-table td { padding: 0; border: none; background: none !important; }
-  .abbr-table td:nth-child(n+3) { grid-column: 2; margin-top: 6px; }
-  .abbr-table td[colspan] { grid-column: 1 / -1; margin: 0; }
-}
+.abbr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }

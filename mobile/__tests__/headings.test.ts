@@ -21,7 +21,7 @@ describe('Module headings', () => {
   });
 
   test('a heading is shortened on the week grid like any name', () => {
-    // The week grid's own names come from the Abbreviations page (abbreviations.test.ts).
+    // The week grid's own names come from the console's Timetable page (abbreviations.test.ts).
     const [p] = ModuleTitles.apply([profDev], [profDevHeading]);
     expect(compactTitleOf(p)).toBe('Prof. Dev.');
     const [e] = ModuleTitles.apply([materials], [{ moduleKey: 'EEG1006', title: 'Materials Engineering Lab' }]);

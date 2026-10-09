@@ -1,6 +1,7 @@
-// Abbreviations for the app's week grid, for many modules at once. The model gets each name
-// with its code already taken off (lib/abbreviations/names.ts) and numbered in place of the
-// code, so the code never reaches it and can't find its way into an answer.
+// Abbreviations for the app's week grid, for one module or many at once — the Timetable page
+// asks for one. The model gets each name with its code already taken off
+// (lib/abbreviations/names.ts) and numbered in place of the code, so the code never reaches
+// it and can't find its way into an answer.
 //
 // What it can't shorten well, it says so, and the page flags it for a person. The checks in
 // `suggestAbbreviations` flag some more that the model let through.
