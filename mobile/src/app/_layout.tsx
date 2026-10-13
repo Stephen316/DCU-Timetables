@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createAppServices } from '../data/platform';
 import { Services } from '../data/services';
 import { PrefKey } from '../data/storage';
+import { registerOfflineCopy } from '../data/webOffline';
 import { startWebUpdateChecks } from '../data/webUpdate';
 import { ServicesContext, usePref } from '../state/hooks';
 import { RootProvider, useRoot } from '../state/root';
@@ -24,8 +25,12 @@ export default function RootLayout() {
       .finally(() => void SplashScreen.hideAsync());
   }, []);
 
-  // The web build on a Home Screen is never reloaded by iOS, so it updates itself.
-  useEffect(() => startWebUpdateChecks(), []);
+  // The web build on a Home Screen is never reloaded by iOS, so it updates itself, and it
+  // keeps a copy of itself to open offline.
+  useEffect(() => {
+    registerOfflineCopy();
+    return startWebUpdateChecks();
+  }, []);
 
   if (!services) return null;
   return (

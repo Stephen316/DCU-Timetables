@@ -24,6 +24,12 @@ export const WebUpdate = {
 
 const TRIED_KEY = 'webUpdate:tried';
 
+/** The app's root, where the manifest is, as a URL ending in "/": the router moves the address off it. */
+export function webAppRoot(): string {
+  const manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.href;
+  return manifest ? new URL('.', manifest).href : location.origin + '/';
+}
+
 /**
  * Checks at launch and each time the app comes back to the front — the moment a student has
  * just opened it, before they're part-way through anything — and reloads onto a newer build.
@@ -38,9 +44,7 @@ export function startWebUpdateChecks(): () => void {
     const typing = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
     if (typing) return;
     try {
-      // The app's root, where the manifest is: the router moves the URL off it.
-      const manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.href;
-      const root = manifest ? new URL('.', manifest).href : location.origin + '/';
+      const root = webAppRoot();
       const response = await fetch(root, { cache: 'no-store' });
       if (!response.ok) return;
       const live = WebUpdate.entryScript(await response.text());
