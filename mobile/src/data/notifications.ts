@@ -57,7 +57,9 @@ export class ExpoAlertScheduler implements AlertScheduler {
           body: alert.body,
           sound: 'default',
           data: { eventID: alert.eventID },
-          // Through Focus and the scheduled summary, as Calendar's alerts are.
+          // Through Focus and the scheduled summary, as Calendar's alerts are — once the app
+          // carries the time-sensitive entitlement, which a free Apple team can't sign. Until
+          // then iOS delivers it as an ordinary alert.
           interruptionLevel: 'timeSensitive',
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: alert.fireAt, channelId: CHANNEL },

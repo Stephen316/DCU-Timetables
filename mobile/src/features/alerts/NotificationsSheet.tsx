@@ -19,7 +19,7 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
 
   // Read again on the way back from Settings, where the student may have just turned them on.
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !alerts) return;
     const read = () => void alerts.permission().then(setPermission).catch(() => setPermission(null));
     read();
     const sub = AppState.addEventListener('change', (next) => {
@@ -31,6 +31,7 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
   const choose = (which: keyof AlertSettings, offset: AlertOffset) => setSaved({ ...settings, [which]: offset });
 
   const allow = async () => {
+    if (!alerts) return;
     const answer = await alerts.requestPermission().catch(() => null);
     setPermission(answer);
     if (answer === 'granted') week.scheduleAlerts(true);
@@ -39,7 +40,9 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
   return (
     <Sheet visible={visible} title="Notifications" onClose={onClose} right={<BarButton title="Done" onPress={onClose} />}>
       <ListScroll>
-        {permission === 'undetermined' ? (
+        {!alerts ? (
+          <Section footer="Notifications don't work in a web browser, which can't alert you once the page is closed." />
+        ) : permission === 'undetermined' ? (
           <Section footer="DCU Timetable needs your permission before it can alert you about classes.">
             <ActionRow title="Turn On Notifications" icon="bell" onPress={() => void allow()} />
           </Section>
@@ -53,11 +56,12 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
           </Section>
         ) : null}
 
-        <OffsetList header="Class alert" selected={settings.first} onChoose={(o) => choose('first', o)} />
+        <OffsetList header="Class alert" selected={settings.first} onChoose={(o) => choose('first', o)} disabled={!alerts} />
         <OffsetList
           header="Second alert"
           selected={settings.second}
           onChoose={(o) => choose('second', o)}
+          disabled={!alerts}
           footer="Alerts cover this week and next — the weeks the app has loaded — so open it at least once a week. Classes reported cancelled don't alert you."
         />
       </ListScroll>
@@ -66,10 +70,11 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
 }
 
 /** Rows with a checkmark, as Appearance does: rows wrap at large text sizes, a picker doesn't. */
-function OffsetList({ header, selected, onChoose, footer }: {
+function OffsetList({ header, selected, onChoose, disabled, footer }: {
   header: string;
   selected: AlertOffset;
   onChoose: (offset: AlertOffset) => void;
+  disabled?: boolean;
   footer?: string;
 }) {
   const theme = useTheme();
@@ -79,7 +84,7 @@ function OffsetList({ header, selected, onChoose, footer }: {
         const label = ClassAlerts.label(offset);
         const isSelected = offset === selected;
         return (
-          <Row key={String(offset)} onPress={() => onChoose(offset)} accessibilityLabel={isSelected ? `${label}, selected` : label}>
+          <Row key={String(offset)} onPress={() => onChoose(offset)} disabled={disabled} accessibilityLabel={isSelected ? `${label}, selected` : label}>
             <View style={styles.line}>
               <Txt>{label}</Txt>
               {isSelected ? <Icon name="check" color={theme.accent} /> : null}

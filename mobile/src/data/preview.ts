@@ -4,6 +4,7 @@ import { parseActivityCode } from '../core/activityCode';
 import { addDays, daysBetween, HOUR, startOfDay, startOfWeek } from '../core/time';
 import { EventType, TimetableCategory, TimetableEvent, WeekCalendar } from '../core/timetableEvent';
 import { TimetableSource } from './dcuApi';
+import { AlertScheduler } from './alerts';
 import { createServices, Services } from './services';
 import { SecretStore } from './session';
 import { AsyncKV, MemoryKV, PrefKey } from './storage';
@@ -158,7 +159,8 @@ class PreviewDeadlineStore implements DeadlineStore {
   async unhideAllAuthors() {}
 }
 
-export async function createPreviewServices(_deviceKV: AsyncKV): Promise<Services> {
+/** `alerts` as for the real thing, so the web preview shows notifications off as the web build does. */
+export async function createPreviewServices(_deviceKV: AsyncKV, alerts?: AlertScheduler | null): Promise<Services> {
   const kv = new MemoryKV();
   await kv.setItem(`pref:${PrefKey.signedInUser}`, JSON.stringify(PreviewData.user));
   await kv.setItem(`pref:${PrefKey.studentID}`, 'A00000000');
@@ -169,7 +171,7 @@ export async function createPreviewServices(_deviceKV: AsyncKV): Promise<Service
     set: async (k, v) => void secrets.set(k, v),
     remove: async (k) => void secrets.delete(k),
   };
-  const services = await createServices({ kv, secrets: secretStore, env: {} });
+  const services = await createServices({ kv, secrets: secretStore, env: {}, alerts });
   services.sourceOverride = new PreviewTimetableSource();
   services.cancellations = new PreviewCancellationStore();
   services.deadlines = new PreviewDeadlineStore();

@@ -15,7 +15,7 @@ export interface AlertScheduler {
   clear(): Promise<void>;
 }
 
-/** For tests, the web build and the preview: remembers the last plan and fires nothing. */
+/** For tests and the preview: remembers the last plan and fires nothing. */
 export class MemoryAlertScheduler implements AlertScheduler {
   scheduled: PlannedAlert[] = [];
   replaceCount = 0;

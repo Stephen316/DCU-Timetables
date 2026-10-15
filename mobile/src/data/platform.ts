@@ -53,7 +53,7 @@ export function isPreview(): boolean {
 
 export function createAppServices(): Promise<Services> {
   const kv = AsyncStorage as unknown as AsyncKV;
-  if (isPreview()) return createPreviewServices(kv);
+  if (isPreview()) return createPreviewServices(kv, RNPlatform.OS === 'web' && !MacShell.isPresent() ? null : undefined);
   if (RNPlatform.OS === 'web') return createWebServices(kv);
   return createServices({ kv, secrets: keychain, env: env(), alerts: new ExpoAlertScheduler() });
 }
@@ -93,8 +93,9 @@ async function createWebServices(kv: AsyncKV): Promise<Services> {
       }
     },
   };
-  // In the Mac app, class alerts go to the Mac; in a browser there's nothing to fire them.
-  services = await createServices({ kv, secrets, env: env(), alerts: MacShell.alerts() ?? undefined });
+  // In the Mac app, class alerts go to the Mac. A browser has nothing to fire them: a page
+  // can't schedule a notification, and one shown from a push needs a server sending it.
+  services = await createServices({ kv, secrets, env: env(), alerts: MacShell.alerts() });
   for (const key of HANDOVER_PREFS) services.prefs.subscribe(key, publish);
   publish();
   return services;

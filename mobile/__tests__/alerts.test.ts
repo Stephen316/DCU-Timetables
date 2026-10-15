@@ -114,4 +114,19 @@ describe('Class alerts from the week model', () => {
     await settle();
     expect(alerts.scheduled).toEqual([]);
   });
+
+  test('a browser, with nothing to fire alerts, still loads the week, and changing the settings or signing out is harmless', async () => {
+    jest.useFakeTimers({ now: at(2026, 9, 28, 8), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
+    const services = await createServices({ kv: new MemoryKV(), secrets: { get: async () => null, set: async () => {}, remove: async () => {} }, env: {}, alerts: null });
+    expect(services.alerts).toBeNull();
+    const model = new WeekModel(services, programme, source, null);
+    await model.start();
+    await settle();
+    expect(model.events.map((e) => e.id)).toEqual(['mon', 'tue']);
+
+    services.prefs.setJSON(PrefKey.classAlerts, { first: 5, second: null });
+    model.scheduleAlerts(true);
+    services.signOut();
+    await settle();
+  });
 });

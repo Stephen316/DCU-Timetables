@@ -429,7 +429,7 @@ export class WeekModel extends Observable {
    * schedules even an unchanged plan: after permission is granted, say.
    */
   scheduleAlerts(force = false): void {
-    if (!this.started || this.disposed) return;
+    if (!this.started || this.disposed || !this.services.alerts) return;
     const settings = ClassAlerts.settings(this.services.prefs.getJSON<unknown>(PrefKey.classAlerts, null));
     const events = [...this.eventsByWeekNumber.values()].flat();
     const plan = ClassAlerts.plan(
@@ -439,6 +439,31 @@ export class WeekModel extends Observable {
     if (!force && signature === this.alertPlan) return;
     this.alertPlan = signature;
     void this.services.alerts.replaceAll(plan);
+  }
+
+  /**
+   * Every class from today to the end of the year, as the timetable shows them, for Export
+   * to Calendar. The weeks not yet loaded come in one request, with the course's other
+   * classes, which carry any the student added.
+   */
+  async remainingEvents(now: Date = new Date()): Promise<TimetableEvent[]> {
+    const today = startOfDay(now);
+    const ahead = this.weeks.filter((w) => addDays(w.firstDay, 7) > today);
+    const missing = ahead.filter((w) => !this.rawByWeekNumber.has(w.number));
+    if (missing.length > 0) {
+      const [fetched, others] = await Promise.all([
+        this.source.events(this.programme, missing),
+        this.source.otherEvents?.(this.programme, missing).catch(() => null) ?? Promise.resolve(null),
+      ]);
+      const inWeek = (week: TeachingWeek, list: TimetableEvent[]) =>
+        list.filter((e) => e.start >= week.firstDay && e.start < addDays(week.firstDay, 7));
+      for (const week of missing) {
+        this.rawByWeekNumber.set(week.number, inWeek(week, fetched));
+        if (others) this.rawOthersByWeekNumber.set(week.number, inWeek(week, others));
+      }
+      this.applyFilter();
+    }
+    return ahead.flatMap((w) => this.eventsByWeekNumber.get(w.number) ?? []).filter((e) => e.start >= today);
   }
 
   private neighbours(index: number): TeachingWeek[] {

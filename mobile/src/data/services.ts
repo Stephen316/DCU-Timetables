@@ -56,8 +56,8 @@ export interface Services {
   dcu: DCUAPIClient;
   /** Replaces `dcu` for timetables when set — the preview fixtures. */
   sourceOverride: TimetableSource | null;
-  /** Class alerts on the phone. */
-  alerts: AlertScheduler;
+  /** Class alerts on the phone or the Mac. Null in a browser, which has nothing to fire them. */
+  alerts: AlertScheduler | null;
   /**
    * Everything this student left on the device goes, not just their credentials: the next
    * person to sign in here is a different person.
@@ -70,8 +70,8 @@ export interface Platform {
   secrets: SecretStore;
   env: Record<string, string | undefined>;
   fetchFn?: typeof fetch;
-  /** Defaults to one that fires nothing: tests, the web build, the preview. */
-  alerts?: AlertScheduler;
+  /** Left out, one that fires nothing: tests, the preview. Null where alerts can't work at all. */
+  alerts?: AlertScheduler | null;
 }
 
 export async function createServices(platform: Platform): Promise<Services> {
@@ -96,7 +96,7 @@ export async function createServices(platform: Platform): Promise<Services> {
   const rest = config ? new SupabaseREST(config, session, fetchFn) : null;
   const reporter = new ReporterID(prefs, user);
   const role = new CachedRole(prefs);
-  const alerts = platform.alerts ?? new MemoryAlertScheduler();
+  const alerts = platform.alerts === undefined ? new MemoryAlertScheduler() : platform.alerts;
 
   const services: Services = {
     prefs,
@@ -143,7 +143,7 @@ export async function createServices(platform: Platform): Promise<Services> {
       }
       // Last, so nothing re-planned while the rest was cleared survives: the next person to
       // sign in here shouldn't be told where this one's classes are.
-      void alerts.clear();
+      void alerts?.clear();
     },
   };
   return services;
