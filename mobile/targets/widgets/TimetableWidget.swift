@@ -129,11 +129,17 @@ struct TimetableRow: View {
         }
         .padding(.vertical, 3)
         .padding(.horizontal, 6)
-        // The highlight is a fill plus weight, not a border: at this size a 1pt stroke
-        // around a two-line row is thinner than the text it is meant to be framing.
-        .background(isHighlighted ? Color.accentColor.opacity(0.16) : .clear,
-                    in: RoundedRectangle(cornerRadius: 6))
+        // Outline, wash and weight together. The weight alone is lost at caption size, and
+        // the outline is what still marks the row once tinted mode strips the colour out.
+        .background {
+            if isHighlighted {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(WidgetPalette.accent.opacity(0.12))
+                    .strokeBorder(WidgetPalette.accent, lineWidth: 1)
+            }
+        }
         .padding(.horizontal, -6)
+        .padding(.vertical, isHighlighted ? 1 : 0)
     }
 
     @ViewBuilder
@@ -177,7 +183,8 @@ struct TimetableSmallView: View {
                     Text("\(focus.start.widgetTime) – \(focus.end.widgetTime)")
                         .font(.caption)
                         .monospacedDigit()
-                        .foregroundStyle(entry.highlighted == nil ? .secondary : Color.accentColor)
+                        .foregroundStyle(entry.highlighted == nil ? AnyShapeStyle(.secondary)
+                                                                  : AnyShapeStyle(WidgetPalette.accent))
                     Text(focus.title)
                         .font(.subheadline)
                         .fontWeight(.semibold)
@@ -206,20 +213,6 @@ struct TimetableSmallView: View {
     }
 }
 
-/// "+2 more" on its own line, without the list's leading gutter.
-private struct WidgetOverflowInline: View {
-    let count: Int
-    let suffix: String?
-
-    var body: some View {
-        if count > 0 {
-            Text(["+\(count) more", suffix].compactMap { $0 }.joined(separator: " "))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
 /// Medium and large: the rest of the day as a list.
 struct TimetableListView: View {
     let entry: TimetableEntry
@@ -236,8 +229,8 @@ struct TimetableListView: View {
         return list
     }
 
-    private var shown: ArraySlice<WidgetClass> {
-        visible.prefix(WidgetChrome.rowLimit(for: family))
+    private var shown: [WidgetClass] {
+        Array(visible.prefix(WidgetChrome.rowLimit(for: family)))
     }
 
     var body: some View {
@@ -254,7 +247,8 @@ struct TimetableListView: View {
                                      ? (entry.classes.isEmpty ? "No classes today" : "Nothing left today")
                                      : "Open DCU Timetable to fill this in")
             } else {
-                ForEach(shown) { item in
+                WidgetRows(items: shown,
+                           isSeparated: { $0.id != entry.highlightedID && $1.id != entry.highlightedID }) { item in
                     TimetableRow(item: item, isHighlighted: item.id == entry.highlightedID)
                 }
                 WidgetOverflow(count: visible.count - shown.count)
@@ -277,7 +271,8 @@ struct TimetableWidgetEntryView: View {
                 TimetableListView(entry: entry, family: family)
             }
         }
-        .containerBackground(.fill.tertiary, for: .widget)
+        .foregroundStyle(WidgetPalette.ink)
+        .containerBackground(WidgetPalette.canvas, for: .widget)
     }
 }
 

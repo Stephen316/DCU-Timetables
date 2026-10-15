@@ -63,7 +63,7 @@ struct DeadlineRow: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: item.symbol)
                 .font(.caption)
-                .foregroundStyle(isUrgent ? TimetableTint.test : Color.secondary)
+                .foregroundStyle(isUrgent ? AnyShapeStyle(TimetableTint.test) : AnyShapeStyle(.secondary))
                 .frame(width: 16, alignment: .leading)
                 .frame(width: WidgetChrome.gutter - 24, alignment: .leading)
 
@@ -104,11 +104,7 @@ struct DeadlinesSmallView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                if entry.deadlines.count > 1 {
-                    Text("+\(entry.deadlines.count - 1) more")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                WidgetOverflowInline(count: entry.deadlines.count - 1)
             } else {
                 WidgetEmptyState(symbol: entry.hasData ? "checkmark.circle" : "arrow.down.app",
                                  message: entry.hasData
@@ -124,8 +120,8 @@ struct DeadlinesListView: View {
     let entry: DeadlinesEntry
     let family: WidgetFamily
 
-    private var shown: ArraySlice<WidgetDeadline> {
-        entry.deadlines.prefix(WidgetChrome.rowLimit(for: family))
+    private var shown: [WidgetDeadline] {
+        Array(entry.deadlines.prefix(WidgetChrome.rowLimit(for: family)))
     }
 
     var body: some View {
@@ -137,7 +133,7 @@ struct DeadlinesListView: View {
                                      ? "Nothing due"
                                      : "Open DCU Timetable to fill this in")
             } else {
-                ForEach(shown) { item in
+                WidgetRows(items: shown) { item in
                     DeadlineRow(item: item, now: entry.date)
                 }
                 WidgetOverflow(count: entry.deadlines.count - shown.count)
@@ -168,7 +164,8 @@ struct DeadlinesWidgetEntryView: View {
                 DeadlinesListView(entry: entry, family: family)
             }
         }
-        .containerBackground(.fill.tertiary, for: .widget)
+        .foregroundStyle(WidgetPalette.ink)
+        .containerBackground(WidgetPalette.canvas, for: .widget)
     }
 }
 
