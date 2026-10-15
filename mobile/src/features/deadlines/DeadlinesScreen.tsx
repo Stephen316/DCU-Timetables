@@ -9,6 +9,7 @@ import { EmptyState, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt
 import { Space, useTheme } from '../../ui/theme';
 import { DeadlineRow } from './DeadlineRows';
 import { DeadlinesModel } from './DeadlinesModel';
+import { useTutorial } from '../tutorial/Tutorial';
 
 /**
  * Every assignment, quiz and exam the student's modules have, soonest first. The timetable
@@ -31,6 +32,9 @@ export function DeadlinesScreen() {
       void model.load(modules);
     }, [model, modules]),
   );
+  // The tutorial has the student open this tab.
+  const tutorial = useTutorial();
+  useFocusEffect(useCallback(() => tutorial?.signal('deadlinesShown'), [tutorial]));
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + Space.s, borderBottomColor: theme.separator }]}>

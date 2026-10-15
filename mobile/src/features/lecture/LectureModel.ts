@@ -24,8 +24,19 @@ export class LectureModel extends Observable {
    */
   canDecide: boolean;
   readonly lecturers: Lecturer[];
+  /**
+   * The tutorial's practice run: a report changes what this page shows and nothing else —
+   * no request, so no classmate sees a class flagged by someone learning the app.
+   */
+  practice = false;
+
+  setPractice(practice: boolean): void {
+    this.practice = practice;
+  }
 
   private readonly reporterID: string;
+  /** What the page showed before a practice report, put back when it's undone. */
+  private beforePractice: CancellationStatus | null = null;
 
   constructor(private readonly services: Services, readonly event: TimetableEvent, known: Deadline[] = []) {
     super();
@@ -108,6 +119,20 @@ export class LectureModel extends Observable {
 
   /** Post a definitive verdict. The database refuses it for anyone who isn't trusted. */
   async decide(state: VerdictState): Promise<void> {
+    // The tutorial's practice: a moderator's verdict decides everyone's timetable, so in the
+    // tour it's only shown here. Marking it on again puts back what was there.
+    if (this.practice) {
+      if (state === 'running' && this.beforePractice) {
+        this.status = this.beforePractice;
+        this.beforePractice = null;
+      } else {
+        const s = this.status;
+        this.beforePractice ??= s;
+        this.status = new CancellationStatus(s.reportCount, s.onCount, s.myStance, { eventKey: this.eventKey, state });
+      }
+      this.changed();
+      return;
+    }
     const userID = this.services.user.current?.id;
     if (!userID) return;
     await this.busy(
@@ -122,6 +147,15 @@ export class LectureModel extends Observable {
    * `cancelled` would otherwise succeed and change nothing.
    */
   report(stance: ReportStance): Promise<void> {
+    if (this.practice) {
+      const s = this.status;
+      this.beforePractice ??= s;
+      this.status = new CancellationStatus(
+        s.reportCount + (stance === 'cancelled' ? 1 : 0), s.onCount + (stance === 'on' ? 1 : 0), stance, s.verdict,
+      );
+      this.changed();
+      return Promise.resolve();
+    }
     return this.busy(async () => {
       if (this.status.myStance !== null) await this.services.cancellations.withdraw(this.eventKey, this.reporterID);
       await this.services.cancellations.submit(makeReport(this.eventKey, this.reporterID, stance));
@@ -130,6 +164,12 @@ export class LectureModel extends Observable {
 
   /** Take back whichever way this student voted. */
   async withdrawReport(): Promise<void> {
+    if (this.beforePractice) {
+      this.status = this.beforePractice;
+      this.beforePractice = null;
+      this.changed();
+      return;
+    }
     if (this.status.myStance === null) return;
     await this.busy(() => this.services.cancellations.withdraw(this.eventKey, this.reporterID), "Couldn't undo that report.");
   }

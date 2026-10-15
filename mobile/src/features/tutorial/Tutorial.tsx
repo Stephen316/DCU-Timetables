@@ -185,6 +185,11 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
   const reduceMotion = useReduceMotion();
   // Read by the measuring loop, which shouldn't restart (and reset its patience) on a render.
   const missing = useRef(onMissing);
+  /**
+   * Once this step's control has been on screen it isn't missing, whatever happens next: a
+   * rotation or a window resize re-lays the page out, and the control is briefly nowhere.
+   */
+  const seen = useRef(false);
   useEffect(() => {
     missing.current = onMissing;
   });
@@ -204,7 +209,7 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
     if (!step.target) return;
     const target = step.target;
     const began = Date.now();
-    let found = false;
+    let found = seen.current;
     let stopped = false;
     let measuring = false;
     let frame = 0;
@@ -217,7 +222,10 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
         if (stopped) return;
         // A scroll step's section is there all along, just below the fold: waiting for the
         // student to bring it up isn't the same as it missing.
-        if (best || (step.action === 'scrollDown' && refs.some((r) => r.current))) found = true;
+        if (best || (step.action === 'scrollDown' && refs.some((r) => r.current))) {
+          found = true;
+          seen.current = true;
+        }
         setRect((old) => (same(old, best) ? old : best));
         if (!found && Date.now() - began > MISSING_MS) {
           found = true;
