@@ -43,7 +43,7 @@ export interface PagerControl {
  * index is committed. It stops at both ends (`PagerIndex`).
  */
 export function Pager({
-  count, index, onIndexChange, swipe = 'standard', renderPage, controlRef,
+  count, index, onIndexChange, swipe = 'standard', renderPage, controlRef, locked = false, onDragChange,
 }: {
   count: number;
   index: number;
@@ -51,17 +51,21 @@ export function Pager({
   swipe?: keyof typeof SWIPE;
   renderPage: (index: number) => ReactNode;
   controlRef?: RefObject<PagerControl | null>;
+  /** Holds the page still: the tutorial, on a step that isn't about turning it. */
+  locked?: boolean;
+  /** A drag starting and ending, for the tutorial to get its card out of the way. */
+  onDragChange?: (dragging: boolean) => void;
 }) {
   const [width, setWidth] = useState(0);
   const [drag] = useState(() => new Animated.Value(0));
   const [dragState] = useState(() => new PagerDragState());
   /** The latest props, for the gesture handlers, which outlive a render. */
-  const live = useRef({ index, count, width, onIndexChange, swipe });
+  const live = useRef({ index, count, width, onIndexChange, swipe, locked, onDragChange });
   const committing = useRef(false);
   const clip = useRef<View>(null);
 
   useLayoutEffect(() => {
-    live.current = { index, count, width, onIndexChange, swipe };
+    live.current = { index, count, width, onIndexChange, swipe, locked, onDragChange };
   });
 
   // The new centre page is already rendered by the time this runs, so resetting the offset
@@ -82,6 +86,7 @@ export function Pager({
     /** Slides on to the next page (1) or back (-1), from wherever a drag left it. */
     const turn = (step: 1 | -1) => {
       const { index: i, count: n, width: w } = live.current;
+      if (live.current.locked) return settle();
       const destination = PagerIndex.resolve(i + step, n);
       if (destination === null || w === 0) return settle();
       if (committing.current) return;
@@ -91,6 +96,7 @@ export function Pager({
     };
     const finish = (dx: number, dy: number, vx: number) => {
       dragState.end();
+      live.current.onDragChange?.(false);
       const { width: w, swipe: kind } = live.current;
       if (Math.abs(dx) <= Math.abs(dy) || w === 0) return settle();
       const { commitFraction, flickVelocity } = SWIPE[kind];
@@ -106,8 +112,12 @@ export function Pager({
       // Only decisively horizontal drags, so each page's own vertical scrolling still works.
       // The capture phase takes it from the rows, so a swipe that starts on one isn't a tap.
       onMoveShouldSetPanResponderCapture: (_, g) =>
-        !committing.current && Math.abs(g.dx) > SWIPE[live.current.swipe].startDistance && Math.abs(g.dx) > Math.abs(g.dy),
-      onPanResponderGrant: () => dragState.begin(),
+        !committing.current && !live.current.locked &&
+        Math.abs(g.dx) > SWIPE[live.current.swipe].startDistance && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderGrant: () => {
+        dragState.begin();
+        live.current.onDragChange?.(true);
+      },
       onPanResponderMove: (_, g) => {
         // Past the last page the content resists rather than freezing, so the gesture
         // reads as "there is nothing here", not as a dropped touch.
@@ -116,6 +126,7 @@ export function Pager({
       onPanResponderRelease: (_, g) => finish(g.dx, g.dy, g.vx),
       onPanResponderTerminate: () => {
         dragState.end();
+        live.current.onDragChange?.(false);
         settle();
       },
       onPanResponderTerminationRequest: () => false,

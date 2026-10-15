@@ -265,7 +265,15 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
   }, [step, targets, window.width, window.height]);
 
   // Padded, but kept on screen: a full-width row would otherwise lose its outline's sides.
-  const hole = rect ? inside({ x: rect.x - PAD, y: rect.y - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }, window) : null;
+  // An area — the day's list, the week grid — runs to the foot of the screen; its top part
+  // says "here" just as well, and leaves the card room beneath it.
+  const isArea = step.target === 'dayList' || step.target === 'weekGrid';
+  const hole = rect
+    ? inside({
+        x: rect.x - PAD, y: rect.y - PAD, width: rect.width + PAD * 2,
+        height: isArea ? Math.min(rect.height + PAD * 2, window.height * 0.42) : rect.height + PAD * 2,
+      }, window)
+    : null;
   // The page stays usable — lightly dimmed, nothing blocked — while a scroll step waits for its
   // control to come into view, and while the student finds Back.
   const free = (step.action === 'scrollDown' && !hole) || step.action === 'back';
