@@ -50,6 +50,7 @@ export function DayPage({
   const today = day !== null && isToday(day, now);
   // The same rule the widget uses, so the app and the home screen never point at different classes.
   const nextID = today ? NextClassWindow.highlighted(sessions, now)?.id ?? null : null;
+  const dayList = useTutorialTarget('dayList');
 
   const stopFor = (event: TimetableEvent): RailStop => {
     // News outranks "next": a cancelled class you'd otherwise be walking to is drawn in orange.
@@ -97,7 +98,7 @@ export function DayPage({
           </View>
         ) : null
       ) : (
-        <View style={styles.rail}>
+        <View ref={dayList} collapsable={false} style={styles.rail}>
           {slots.map((slot: DaySlot, i) =>
             slot.kind === 'session' ? (
               <ClassStop
@@ -111,7 +112,6 @@ export function DayPage({
                 due={dueAt(slot.event)}
                 isClashing={clashingIDs.has(slot.event.id)}
                 now={now}
-                isFirst={i === 0}
                 onSelect={() => onSelect(slot.event)}
               />
             ) : (
@@ -149,7 +149,7 @@ function DayHeading({ day, slots, now }: { day: Date | null; slots: DaySlot[]; n
 
 /** A class on the rail: tap to open its page. */
 function ClassStop({
-  event, stop, index, count, followsClass, highlight, due, isClashing, now, edit, isFirst = false, onSelect,
+  event, stop, index, count, followsClass, highlight, due, isClashing, now, edit, onSelect,
 }: {
   event: TimetableEvent;
   stop: RailStop;
@@ -164,11 +164,8 @@ function ClassStop({
   now: Date;
   /** Set while editing: what a tap does to the student's timetable. */
   edit?: EditKind;
-  /** The day's first class, which the tutorial points at. */
-  isFirst?: boolean;
   onSelect: () => void;
 }) {
-  const tutorialTarget = useTutorialTarget('firstClass', isFirst);
   const theme = useTheme();
   const pagerDrag = usePagerDrag();
   const [top, setTop] = useState(0);
@@ -206,7 +203,6 @@ function ClassStop({
 
   return (
     <Pressable
-      ref={tutorialTarget}
       // Read at tap time: a swipe that ends on this row must not open it.
       onPress={() => !pagerDrag.isSuppressingTaps() && onSelect()}
       accessibilityRole="button"

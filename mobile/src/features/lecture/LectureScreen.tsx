@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 import { CANCELLATION_NET_THRESHOLD, CANCELLATION_THRESHOLD, ReportStance, VERDICT_STATES, VerdictState } from '../../core/cancellation';
 import {
@@ -35,17 +35,27 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
     void model.load();
   }, [model]);
 
-  // The tutorial follows a class tapped from the day list here, to show where it's reported.
+  // The tutorial follows a class opened from the week grid here: the student reports it
+  // cancelled — a practice, kept on this page — takes that back, and goes back out.
   const tutorial = useTutorial();
-  const reportSection = useTutorialTarget('reportSection');
-  useEffect(() => tutorial?.signal('classOpened'), [tutorial]);
+  const reportButton = useTutorialTarget('reportButton');
+  const undoReport = useTutorialTarget('undoReport');
+  const latestTutorial = useRef(tutorial);
+  useEffect(() => {
+    latestTutorial.current = tutorial;
+    model.setPractice(tutorial?.practising ?? false);
+  });
+  useEffect(() => {
+    latestTutorial.current?.signal('classOpened');
+    return () => latestTutorial.current?.signal('classClosed');
+  }, []);
 
   const verdictIcon = (state: VerdictState): IconName => (state === 'cancelled' ? 'cancelled' : state === 'running' ? 'running' : 'moved');
   const verdictTitle = (state: VerdictState) => (state === 'cancelled' ? 'Mark as cancelled' : state === 'running' ? 'Mark as on' : 'Mark as moved');
 
   return (
     <>
-      <ListScroll refreshing={model.isLoading && model.deadlines.length > 0} onRefresh={() => void model.load()}>
+      <ListScroll refreshing={model.isLoading && model.deadlines.length > 0} onRefresh={() => void model.load()} onDragChange={tutorial?.setDragging}>
         {/*
           What has been reported, in orange, before anything else: a student opening this
           page ten minutes before a 9am has one question. Their own report leads, because
@@ -107,62 +117,76 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           )}
         </Section>
 
-        <View ref={reportSection} collapsable={false}>
-          <Section
-            header="Is it on?"
-            footer={
-              model.canDecide
-                ? 'Your decision replaces the count for everyone straight away. Say it\'s on to clear a wrong report.'
-                : `Reports are anonymous. A class is flagged with an orange ! once ${CANCELLATION_THRESHOLD} people report it and they stay ${CANCELLATION_NET_THRESHOLD} ahead of anyone saying it went ahead.`
-            }
-          >
-            {/*
-              A stated verdict and a tally of guesses are different claims, so they are drawn
-              differently. Collapsing the two would make one person's mistake look like a consensus.
-            */}
-            {status.verdict ? (
-              <Row>
-                <Label
-                  icon={verdictIcon(status.verdict.state)}
-                  text={status.summary}
-                  type="headline"
-                  color={status.verdict.state === 'running' ? theme.ink : theme.tint.off}
-                />
-                {status.verdict.note ? <Txt type="callout" color={theme.inkSecondary}>{status.verdict.note}</Txt> : null}
-                {/* The crowd is shown underneath rather than replaced: disagreement is worth seeing. */}
-                {status.crowdSummary ? <Txt type="caption" color={theme.inkSecondary}>{status.crowdSummary}</Txt> : null}
-              </Row>
-            ) : status.isFlagged ? (
-              <Row><Label icon="alert" text={status.summary} color={theme.tint.off} /></Row>
-            ) : (
-              <Row><Txt color={theme.inkSecondary}>{status.summary}</Txt></Row>
-            )}
+        <Section
+          header="Is it on?"
+          footer={
+            model.canDecide
+              ? 'Your decision replaces the count for everyone straight away. Say it\'s on to clear a wrong report.'
+              : `Reports are anonymous. A class is flagged with an orange ! once ${CANCELLATION_THRESHOLD} people report it and they stay ${CANCELLATION_NET_THRESHOLD} ahead of anyone saying it went ahead.`
+          }
+        >
+          {/*
+            A stated verdict and a tally of guesses are different claims, so they are drawn
+            differently. Collapsing the two would make one person's mistake look like a consensus.
+          */}
+          {status.verdict ? (
+            <Row>
+              <Label
+                icon={verdictIcon(status.verdict.state)}
+                text={status.summary}
+                type="headline"
+                color={status.verdict.state === 'running' ? theme.ink : theme.tint.off}
+              />
+              {status.verdict.note ? <Txt type="callout" color={theme.inkSecondary}>{status.verdict.note}</Txt> : null}
+              {/* The crowd is shown underneath rather than replaced: disagreement is worth seeing. */}
+              {status.crowdSummary ? <Txt type="caption" color={theme.inkSecondary}>{status.crowdSummary}</Txt> : null}
+            </Row>
+          ) : status.isFlagged ? (
+            <Row><Label icon="alert" text={status.summary} color={theme.tint.off} /></Row>
+          ) : (
+            <Row><Txt color={theme.inkSecondary}>{status.summary}</Txt></Row>
+          )}
 
-            {model.canDecide
-              ? VERDICT_STATES.map((state) => (
+          {model.canDecide
+            ? VERDICT_STATES.map((state) => (
+                // A moderator's tour practises here: Mark as cancelled, then Mark as on to undo it.
+                <View key={state} ref={state === 'cancelled' ? reportButton : state === 'running' ? undoReport : undefined} collapsable={false}>
                   <ActionRow
-                    key={state}
                     title={verdictTitle(state)}
                     icon={verdictIcon(state)}
                     disabled={model.isBusy || status.verdict?.state === state}
-                    onPress={() => void model.decide(state)}
+                    onPress={() => void model.decide(state).then(() => {
+                      if (state === 'cancelled') tutorial?.signal('reportMade');
+                      if (state === 'running') tutorial?.signal('reportUndone');
+                    })}
                   />
-                ))
-              : status.myStance !== null
-                // Not destructive: taking back your own report isn't a delete.
-                ? <ActionRow title="Undo my report" icon="undo" disabled={model.isBusy} onPress={() => void model.withdrawReport()} />
-                : [
-                    <ActionRow key="c" title="Report: lecture cancelled" icon="reportOutline" disabled={model.isBusy} onPress={() => setPendingReport('cancelled')} />,
-                    // Only when there's a cancellation to contradict: silence already means "it ran".
-                    status.reportCount > 0
-                      ? <ActionRow key="o" title="Report: lecture is on" icon="runningOutline" disabled={model.isBusy} onPress={() => setPendingReport('on')} />
-                      : null,
-                  ]}
+                </View>
+              ))
+            : status.myStance !== null
+              // Not destructive: taking back your own report isn't a delete.
+              ? (
+                  <View ref={undoReport} collapsable={false}>
+                    <ActionRow
+                      title="Undo my report"
+                      icon="undo"
+                      disabled={model.isBusy}
+                      onPress={() => void model.withdrawReport().then(() => tutorial?.signal('reportUndone'))}
+                    />
+                  </View>
+                )
+              : [
+                  <View key="c" ref={reportButton} collapsable={false}>
+                    <ActionRow title="Report: lecture cancelled" icon="reportOutline" disabled={model.isBusy} onPress={() => setPendingReport('cancelled')} />
+                  </View>,
+                  // Only when there's a cancellation to contradict: silence already means "it ran".
+                  status.reportCount > 0
+                    ? <ActionRow key="o" title="Report: lecture is on" icon="runningOutline" disabled={model.isBusy} onPress={() => setPendingReport('on')} />
+                    : null,
+                ]}
 
-            {/* Every write on this page reports its failure; a refused report must not look like a working one. */}
-            {model.errorText ? <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.tint.off} /></Row> : null}
-          </Section>
-        </View>
+          {/* Every write on this page reports its failure; a refused report must not look like a working one. */}
+          {model.errorText ? <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.tint.off} /></Row> : null}
+        </Section>
 
         <Section
           header={`All ${model.moduleKey} dates`}
@@ -207,13 +231,17 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
         visible={pendingReport !== null}
         onClose={() => setPendingReport(null)}
         title={pendingReport === 'on' ? 'Report that this lecture went ahead?' : 'Report this lecture as cancelled?'}
-        message="Everyone taking this module sees the count. You can undo it afterwards."
+        message={
+          model.practice
+            ? "This is the tutorial's practice run: it stays on this phone, and nobody else sees it."
+            : 'Everyone taking this module sees the count. You can undo it afterwards.'
+        }
         confirmTitle={pendingReport === 'on' ? 'Report it was on' : 'Report cancelled'}
         icon={pendingReport === 'on' ? 'running' : 'report'}
         // The same orange the banner and the timetable outline use.
         tint={pendingReport === 'on' ? theme.accent : theme.tint.off}
         fill={pendingReport === 'on' ? undefined : theme.tint.offFill}
-        onConfirm={() => pendingReport && void model.report(pendingReport)}
+        onConfirm={() => pendingReport && void model.report(pendingReport).then(() => tutorial?.signal('reportMade'))}
       />
     </>
   );

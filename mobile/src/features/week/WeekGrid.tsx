@@ -49,12 +49,10 @@ export function WeekGridView({
   const shownDays = editing ? [...eventsByDay, ...ghostsByDay] : eventsByDay;
   const all = shownDays.flatMap((d) => d.events);
   const ghostIDs = new Set(editing ? ghostsByDay.flatMap((d) => d.events.map((e) => e.id)) : []);
-  // The Mac's tutorial points at the grid and at the week's first class. The phone's runs on
-  // the day list.
+  // The tutorial has the student open the week's first class from here; the Mac's also
+  // points at the grid itself, which is all its timetable is.
   const gridTarget = useTutorialTarget('weekGrid', onMac);
-  const firstID = onMac
-    ? eventsByDay.flatMap((d) => d.events).reduce<TimetableEvent | null>((a, e) => (!a || e.start < a.start ? e : a), null)?.id ?? null
-    : null;
+  const firstID = eventsByDay.flatMap((d) => d.events).reduce<TimetableEvent | null>((a, e) => (!a || e.start < a.start ? e : a), null)?.id ?? null;
 
   // Mon–Fri, plus a weekend day only when something is scheduled on it.
   const anchor = shownDays[0]?.day ?? weekStart;
@@ -199,7 +197,7 @@ function Block({
   isClashing: boolean;
   /** Set while editing: what a tap does to the student's timetable. */
   edit?: EditKind;
-  /** The week's first class, which the Mac's tutorial points at. */
+  /** The week's first class, which the tutorial has the student open. */
   isFirst?: boolean;
   onPress: () => void;
 }) {

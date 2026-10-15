@@ -17,6 +17,7 @@ import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
 import { NotificationsSheet } from '../alerts/NotificationsSheet';
 import { DayPage } from './DayPage';
 import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
+import { ExportCalendarCard } from './ExportCalendarCard';
 import { Pager, PagerControl } from './Pager';
 import { WeekGridView } from './WeekGrid';
 
@@ -32,7 +33,7 @@ export function TimetableScreen() {
   const [onMac] = useState(() => MacShell.isPresent());
   const showsCalendar = onMac || prefersCalendar;
   const weekPager = useRef<PagerControl>(null);
-  const [sheet, setSheet] = useState<'menu' | 'account' | 'alerts' | null>(null);
+  const [sheet, setSheet] = useState<'menu' | 'account' | 'alerts' | 'export' | null>(null);
   /** Edit timetable: the course's other classes show as ghosts, and a tap adds or removes. */
   const [editing, setEditing] = useState(false);
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
@@ -75,11 +76,16 @@ export function TimetableScreen() {
 
   const open = (event: TimetableEvent) => router.push({ pathname: '/class/[id]', params: { id: event.id } });
   const askToEdit = (event: TimetableEvent, kind: EditKind) => setPendingEdit({ event, kind });
+  const openMenu = () => {
+    setSheet('menu');
+    tutorial?.signal('menuOpened');
+  };
 
   const menu: SheetAction[] = [
     { label: 'Edit timetable', icon: 'edit', onPress: () => setEditing(true) },
     { label: 'Account', icon: 'account', onPress: () => setSheet('account') },
     { label: 'Notifications', icon: 'bell', onPress: () => setSheet('alerts') },
+    { label: 'Export to Calendar', icon: 'calendar', onPress: () => setSheet('export') },
     { label: 'Sign out', icon: 'swap', onPress: signOut },
   ];
 
@@ -101,6 +107,8 @@ export function TimetableScreen() {
         index={model.weekIndex}
         onIndexChange={(i) => model.setWeekIndex(i)}
         controlRef={weekPager}
+        locked={tutorial ? !tutorial.swipeAllowed : false}
+        onDragChange={tutorial?.setDragging}
         renderPage={(i) => (
           <WeekGridView
             eventsByDay={model.eventsByDayForWeekIndex(i)}
@@ -124,6 +132,8 @@ export function TimetableScreen() {
         count={Math.max(model.weeks.length * WeekdayIndex.daysPerWeek, 1)}
         index={WeekdayIndex.flat(model.weekIndex, model.dayIndex)}
         swipe="easy"
+        locked={tutorial ? !tutorial.swipeAllowed : false}
+        onDragChange={tutorial?.setDragging}
         onIndexChange={(i) => {
           const { week, day } = WeekdayIndex.split(i);
           model.setDay(week, day);
@@ -166,7 +176,10 @@ export function TimetableScreen() {
             <IconButton
               icon={showsCalendar ? 'list' : 'calendar'}
               label={showsCalendar ? 'Show list' : 'Show weekly calendar'}
-              onPress={() => setShowsCalendar(!showsCalendar)}
+              onPress={() => {
+                setShowsCalendar(!showsCalendar);
+                if (!showsCalendar) tutorial?.signal('weekShown');
+              }}
             />
           </View>
         )}
@@ -182,10 +195,10 @@ export function TimetableScreen() {
         ) : onMac ? (
           <View style={[styles.side, styles.sideRight]}>
             <BarButton title="Today" onPress={() => model.showCurrentWeek()} />
-            <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={() => setSheet('menu')} /></View>
+            <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={openMenu} /></View>
           </View>
         ) : (
-          <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={() => setSheet('menu')} /></View>
+          <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={openMenu} /></View>
         )}
       </View>
 
@@ -196,9 +209,17 @@ export function TimetableScreen() {
         ) : null}
       </View>
 
-      <ActionSheet visible={sheet === 'menu'} onClose={() => setSheet(null)} actions={menu} />
+      <ActionSheet
+        visible={sheet === 'menu'}
+        onClose={() => {
+          setSheet(null);
+          tutorial?.signal('menuClosed');
+        }}
+        actions={menu}
+      />
       <AccountSheet visible={sheet === 'account'} onClose={() => setSheet(null)} />
       <NotificationsSheet visible={sheet === 'alerts'} onClose={() => setSheet(null)} />
+      <ExportCalendarCard visible={sheet === 'export'} onClose={() => setSheet(null)} />
       <EditChoiceSheet
         pending={pendingEdit}
         onChoose={({ event, kind }, repeat) => model.edit(kind, repeat, event)}

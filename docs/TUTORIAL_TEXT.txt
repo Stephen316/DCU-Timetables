@@ -11,6 +11,10 @@ what it should highlight. Button labels can be changed too.
 "POINTS AT" is for me — it says what the cut-out goes around. Change it if you want a
 step to highlight something else.
 "ACTION" is an animated feature to suggest a movement the user should make to progress steps.
+Every control a step points at, the student presses themselves: those steps have no Next.
+
+The order runs forward through the app so the student rarely has to come back:
+day → week → a class (and back) → Deadlines → More, which ends on the week.
 
 
 PHONE AND WEB
@@ -25,28 +29,30 @@ BUTTONS: Start | Skip
 
 
 Step 2 — Your day
-POINTS AT: the first class on today's list
+POINTS AT: the day's list of classes
 --------------------------------------------------------
 TITLE: Your day
 BODY: View each day's modules here. See locations, class type and lecturers.
+BUTTONS: Next
 
 
 Step 3 — Other days
 POINTS AT: the day's heading ("Wednesday")
 --------------------------------------------------------
 TITLE: Swipe left to see tomorrow
-ACTION: Animated swiping feature
+ACTION: Animated swiping feature (Next also works: a swipe isn't a button)
 
 
 Step 4 — The week
 POINTS AT: the week / day button, top left
 --------------------------------------------------------
 TITLE: See the whole week
-BODY: Switch between today's list and the week grid.
+BODY: Tap here to switch to the week grid.   (drafted by Claude — edit freely)
+ACTION: Tap the button; the timetable switches to the week grid
 
 
-Step 5 — A class
-POINTS AT: the first class on today's list
+Step 5 — A class (on the week grid)
+POINTS AT: the week's first class in the grid
 --------------------------------------------------------
 TITLE: Tap a class
 BODY: See its room, lecturer and what's due — and report it cancelled so your classmates know.
@@ -54,36 +60,66 @@ ACTION: Tap the class to open it
 
 
 Step 5b — Report cancelled (on the class's page; counts as part of step 5)
-POINTS AT: the "Is it on?" section, once it's scrolled into view
+POINTS AT: the "Report: lecture cancelled" button, once it's scrolled into view
+           ("Mark as cancelled" for a moderator)
 --------------------------------------------------------
 TITLE: Swipe down to see report cancelled
-ACTION: Animated swipe up the page, until "Is it on?" is on screen
+ACTION: Animated swipe up the page, until the button is on screen; then tap it and confirm
 Then, once it's in view (drafted by Claude — edit freely):
 TITLE: Report it cancelled
-BODY: If a class isn't on, say so here and your classmates will see it.
+BODY: Tap here to report it. It's a practice run — nobody else sees it.
+(A practice: the report stays on this phone and is never sent.)
 
 
-Step 6 — More
-POINTS AT: the ⋯ button, top right
+Step 5c — Take it back (counts as part of step 5)
+POINTS AT: the "Undo my report" button ("Mark as on" for a moderator)
 --------------------------------------------------------
-TITLE: More
-BODY: Edit your timetable, set class alerts, and manage your account.
+TITLE: Now take it back   (drafted by Claude — edit freely)
+BODY: Tap here to undo it. A report can always be undone.   (drafted by Claude — edit freely)
+ACTION: Tap the button
 
 
-Step 7 — Deadlines
+Step 5d — Back to the week (counts as part of step 5)
+POINTS AT: nothing; a hand points at Back, top left
+--------------------------------------------------------
+TITLE: Go back   (drafted by Claude — edit freely)
+BODY: Tap Back, at the top left, to return to your week.   (drafted by Claude — edit freely)
+ACTION: Tap Back
+
+
+Step 6 — Deadlines
 POINTS AT: the Deadlines tab at the bottom
 --------------------------------------------------------
 TITLE: Deadlines
+BODY: Tap here to open them.   (drafted by Claude — edit freely)
+ACTION: Tap the tab
+
+
+Step 6b — On the Deadlines page (counts as part of step 6)
+POINTS AT: nothing (a card over the Deadlines page)
+--------------------------------------------------------
+TITLE: Deadlines
 BODY: Assignments and tests shared by your classmates. Add one and everyone on the module sees it.
+BUTTONS: Next
+
+
+Step 7 — More
+(The tour brings the student back to the timetable first: ⋯ is only there.)
+POINTS AT: the ⋯ button, top right
+--------------------------------------------------------
+TITLE: More
+BODY: Edit your timetable, set class alerts, export it to your calendar, and manage your account.
+ACTION: Tap ⋯; the menu opens, and the tour waits for it to close
 
 
 Step 8 — Thank you!
-(Returns the user to the timetable, on today)
+(Back on the timetable, in the week grid the student switched to)
 POINTS AT: nothing (a card in the middle of the screen)
 --------------------------------------------------------
 TITLE: Thank you!
 BODY: You're all set. Replay this tour any time from Account.   (drafted by Claude — edit freely)
 BUTTONS: Done
+
 
 MAC APP (no day view)
 =====================
@@ -101,28 +137,24 @@ POINTS AT: the week grid
 --------------------------------------------------------
 TITLE: Your week
 BODY: Every class this week, by day and time. Use the arrows or swipe on the trackpad for other weeks.
+BUTTONS: Next
 
 
-Step 3 — A class
-POINTS AT: the first class in the grid
+Step 3 — A class, then 3b–3d as the phone's 5b–5d
+POINTS AT: the week's first class in the grid
 --------------------------------------------------------
 TITLE: Click a class
 BODY: See its room, lecturer and what's due — and report it cancelled so your classmates know.
+ACTION: Click the class to open it
 
 
-Step 4 — More
-POINTS AT: the ⋯ button, top right
---------------------------------------------------------
-TITLE: More
-BODY: Edit your timetable, set class alerts, and manage your account.
+Step 4 — Deadlines (as the phone's step 6)
 
 
-Step 5 — Deadlines
-POINTS AT: the Deadlines tab
---------------------------------------------------------
-TITLE: Deadlines
-BODY: Assignments and tests shared by your classmates. Add one and everyone on the module sees it.
-BUTTONS: Done
+Step 5 — More (as the phone's step 7)
+
+
+Step 6 — Thank you! (as the phone's step 8)
 
 
 ON EVERY CARD

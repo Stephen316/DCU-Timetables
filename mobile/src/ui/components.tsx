@@ -59,7 +59,6 @@ const ICONS = {
   delete: 'trash-outline',
   edit: 'create-outline',
   close: 'close',
-  hand: 'hand-left-outline',
   arrowUp: 'arrow-up',
   arrowDown: 'arrow-down',
   arrowLeft: 'arrow-back',
@@ -133,7 +132,7 @@ export function AdaptiveStack({ children, gap = Space.s, style }: { children: Re
 
 /** A grouped list on the app's canvas. */
 export function ListScroll({
-  children, refreshing, onRefresh, contentStyle, footer,
+  children, refreshing, onRefresh, contentStyle, footer, onDragChange,
 }: {
   children: ReactNode;
   refreshing?: boolean;
@@ -141,6 +140,8 @@ export function ListScroll({
   contentStyle?: StyleProp<ViewStyle>;
   /** Pinned under the list, over the canvas — a summary that stays while the list scrolls. */
   footer?: ReactNode;
+  /** A finger on the list and off it again — the tutorial hides its card meanwhile. */
+  onDragChange?: (dragging: boolean) => void;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -150,6 +151,8 @@ export function ListScroll({
         style={styles.fill}
         contentContainerStyle={[styles.listContent, styles.readable, { paddingBottom: Space.xxl + (footer ? 0 : insets.bottom) }, contentStyle]}
         keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={onDragChange && (() => onDragChange(true))}
+        onScrollEndDrag={onDragChange && (() => onDragChange(false))}
         refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={theme.inkSecondary} /> : undefined}
       >
         {children}
