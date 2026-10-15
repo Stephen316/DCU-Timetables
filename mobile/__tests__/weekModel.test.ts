@@ -188,4 +188,19 @@ describe('Week model', () => {
     await settle();
     expect(m.highlight(lectureWed)).toEqual({ kind: 'cancelled', reportCount: 3, decidedBy: null });
   });
+  test('Export to Calendar fetches the rest of the year and gives every class from today on', async () => {
+    jest.useFakeTimers({ now: at(2026, 9, 14, 12), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
+    const earlierToday = event('EEG1002[1]OC/L1/01', at(2026, 9, 14, 9), undefined, { id: 'today' });
+    const { source, model } = await setup([earlierToday, lectureWed, nextWeek]);
+    const m = model();
+    await m.start();
+    await settle();
+    expect(source.calls.sort()).toEqual([1, 2]);
+
+    expect((await m.remainingEvents(at(2026, 9, 14, 12))).map((e) => e.id)).toEqual(['today', 'lec', 'next']);
+    expect(source.calls.sort()).toEqual([1, 2, 3]);
+    // Already loaded: nothing fetched again, and the past is left out.
+    expect((await m.remainingEvents(at(2026, 9, 24))).map((e) => e.id)).toEqual(['next']);
+    expect(source.calls).toHaveLength(3);
+  });
 });

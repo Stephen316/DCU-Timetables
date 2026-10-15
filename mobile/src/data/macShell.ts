@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { PlannedAlert } from '../core/classAlerts';
 import { AlertPermission, AlertScheduler } from './alerts';
+import { userFacing } from './rest';
 
 /**
  * The Mac app (`mac/` in the repo): this web build in a native window. It answers messages
@@ -27,6 +28,13 @@ export const MacShell = {
   alerts(): AlertScheduler | null {
     const b = bridge();
     return b ? new MacAlertScheduler(b) : null;
+  },
+
+  /** Opens an .ics in Calendar, which asks which calendar to add it to. Rejects in a Mac app too old to know how. */
+  async openCalendarFile(ics: string, name: string): Promise<void> {
+    await bridge()?.postMessage({ kind: 'calendar.open', ics, name }).catch(() => {
+      throw userFacing('Update the Mac app to export to Calendar.');
+    });
   },
 
   /** Notifications in System Settings, where a refusal is undone. */

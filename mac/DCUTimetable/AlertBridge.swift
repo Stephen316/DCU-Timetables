@@ -5,6 +5,7 @@ import WebKit
 /// Class alerts for the web build, which can't schedule a notification itself. The page's
 /// `MacAlertScheduler` (mobile/src/data/macShell.ts) posts here, and these become ordinary
 /// Mac notifications, so they fire with the window closed. A clicked one opens its class.
+/// Export to Calendar's file comes through here too, for Calendar to open.
 ///
 /// Messages are `{ kind, … }`; every one is answered, so the page can await it.
 @MainActor
@@ -46,6 +47,18 @@ final class AlertBridge: NSObject, WKScriptMessageHandlerWithReply {
                     NSWorkspace.shared.open(url)
                 }
                 replyHandler(nil, nil)
+            case "calendar.open":
+                // Export to Calendar: a WKWebView drops a page's download, so the file comes here.
+                guard let ics = body["ics"] as? String else { return replyHandler(nil, "No calendar") }
+                let name = (body["name"] as? String).map { ($0 as NSString).lastPathComponent } ?? "DCU Timetable.ics"
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+                do {
+                    try ics.write(to: url, atomically: true, encoding: .utf8)
+                    NSWorkspace.shared.open(url)
+                    replyHandler(nil, nil)
+                } catch {
+                    replyHandler(nil, error.localizedDescription)
+                }
             default:
                 replyHandler(nil, "Unknown message \(kind)")
             }
