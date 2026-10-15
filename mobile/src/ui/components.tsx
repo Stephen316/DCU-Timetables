@@ -59,6 +59,10 @@ const ICONS = {
   delete: 'trash-outline',
   edit: 'create-outline',
   close: 'close',
+  hand: 'hand-left-outline',
+  arrowUp: 'arrow-up',
+  arrowDown: 'arrow-down',
+  arrowLeft: 'arrow-back',
 } as const;
 
 export type IconName = keyof typeof ICONS;

@@ -9,6 +9,7 @@ import { PrefKey } from '../data/storage';
 import { registerOfflineCopy } from '../data/webOffline';
 import { startWebUpdateChecks } from '../data/webUpdate';
 import { ServicesContext, usePref } from '../state/hooks';
+import { TutorialProvider } from '../features/tutorial/Tutorial';
 import { RootProvider, useRoot } from '../state/root';
 import { dark, light, ThemeContext } from '../ui/theme';
 
@@ -38,7 +39,9 @@ export default function RootLayout() {
       <ServicesContext.Provider value={services}>
         <Themed>
           <RootProvider>
-            <RootStack />
+            <TutorialProvider>
+              <RootStack />
+            </TutorialProvider>
           </RootProvider>
         </Themed>
       </ServicesContext.Provider>

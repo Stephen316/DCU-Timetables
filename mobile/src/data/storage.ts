@@ -114,6 +114,8 @@ export const PrefKey = {
   skipped: 'skippedEvents',
   /** `TimetableEdit[]`: classes the student added to or dropped from their own timetable. */
   timetableEdits: 'timetableEdits',
+  /** Set when an account is created here, or the tutorial asked for again; cleared once it's done. */
+  tutorialDue: 'tutorialDue',
   allocationTried: 'allocationTried',
   weekShowsCalendar: 'weekShowsCalendar',
   appearance: 'appearance',

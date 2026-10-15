@@ -13,6 +13,7 @@ import { useRoot, useWeekModel } from '../../state/root';
 import { ActionSheet, BarButton, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 import { AccountSheet } from '../account/AccountSheet';
+import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
 import { NotificationsSheet } from '../alerts/NotificationsSheet';
 import { DayPage } from './DayPage';
 import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
@@ -35,10 +36,19 @@ export function TimetableScreen() {
   /** Edit timetable: the course's other classes show as ghosts, and a tap adds or removes. */
   const [editing, setEditing] = useState(false);
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+  const tutorial = useTutorial();
+  const viewToggle = useTutorialTarget('viewToggle');
+  const more = useTutorialTarget('more');
 
   useEffect(() => {
     void model.start();
   }, [model]);
+
+  // The tutorial waits for a week to point at.
+  const hasWeek = !model.isLoading && model.weeks.length > 0;
+  useEffect(() => {
+    if (hasWeek) tutorial?.markReady();
+  }, [hasWeek, tutorial]);
 
   // Coming back to the app is a fresh look at the timetable, so start again from today (or
   // tomorrow evening) — but only after a real trip to the background, not Control Centre.
@@ -117,6 +127,7 @@ export function TimetableScreen() {
         onIndexChange={(i) => {
           const { week, day } = WeekdayIndex.split(i);
           model.setDay(week, day);
+          tutorial?.signal('daySwiped');
         }}
         renderPage={(i) => {
           const { week, day: offset } = WeekdayIndex.split(i);
@@ -151,11 +162,13 @@ export function TimetableScreen() {
             <IconButton icon="forward" label="Next week" onPress={() => weekPager.current?.turn(1)} />
           </View>
         ) : (
-          <IconButton
-            icon={showsCalendar ? 'list' : 'calendar'}
-            label={showsCalendar ? 'Show list' : 'Show weekly calendar'}
-            onPress={() => setShowsCalendar(!showsCalendar)}
-          />
+          <View ref={viewToggle} collapsable={false}>
+            <IconButton
+              icon={showsCalendar ? 'list' : 'calendar'}
+              label={showsCalendar ? 'Show list' : 'Show weekly calendar'}
+              onPress={() => setShowsCalendar(!showsCalendar)}
+            />
+          </View>
         )}
         <View style={styles.titleBlock} accessible accessibilityRole="header">
           <Txt type="headline" numberOfLines={1}>{editing ? 'Edit timetable' : shell?.title ?? ''}</Txt>
@@ -169,10 +182,10 @@ export function TimetableScreen() {
         ) : onMac ? (
           <View style={[styles.side, styles.sideRight]}>
             <BarButton title="Today" onPress={() => model.showCurrentWeek()} />
-            <IconButton icon="more" label="More" onPress={() => setSheet('menu')} />
+            <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={() => setSheet('menu')} /></View>
           </View>
         ) : (
-          <IconButton icon="more" label="More" onPress={() => setSheet('menu')} />
+          <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={() => setSheet('menu')} /></View>
         )}
       </View>
 

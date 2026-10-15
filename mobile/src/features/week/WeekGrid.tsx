@@ -12,6 +12,7 @@ import { moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
 import { usePagerDrag } from './Pager';
 import { EditKind } from './editing';
+import { useTutorialTarget } from '../tutorial/Tutorial';
 
 const HOUR_HEIGHT = 58;
 const GUTTER = 40;
@@ -48,6 +49,12 @@ export function WeekGridView({
   const shownDays = editing ? [...eventsByDay, ...ghostsByDay] : eventsByDay;
   const all = shownDays.flatMap((d) => d.events);
   const ghostIDs = new Set(editing ? ghostsByDay.flatMap((d) => d.events.map((e) => e.id)) : []);
+  // The Mac's tutorial points at the grid and at the week's first class. The phone's runs on
+  // the day list.
+  const gridTarget = useTutorialTarget('weekGrid', onMac);
+  const firstID = onMac
+    ? eventsByDay.flatMap((d) => d.events).reduce<TimetableEvent | null>((a, e) => (!a || e.start < a.start ? e : a), null)?.id ?? null
+    : null;
 
   // Mon–Fri, plus a weekend day only when something is scheduled on it.
   const anchor = shownDays[0]?.day ?? weekStart;
@@ -67,7 +74,7 @@ export function WeekGridView({
   const offsetY = (date: Date) => ((date.getHours() - hours[0]) * 60 + date.getMinutes()) / 60 * HOUR_HEIGHT;
 
   return (
-    <View style={[styles.fill, { backgroundColor: theme.canvas }, onMac && styles.macSides]}>
+    <View ref={gridTarget} collapsable={false} style={[styles.fill, { backgroundColor: theme.canvas }, onMac && styles.macSides]}>
       <GridBody
         days={days}
         hours={hours}
@@ -87,6 +94,7 @@ export function WeekGridView({
                 due={edit === 'add' ? [] : dueAt(item.event)}
                 isClashing={!editing && clashingIDs.has(item.event.id)}
                 edit={edit}
+                isFirst={!editing && item.event.id === firstID}
                 onPress={() => {
                   if (pagerDrag.isSuppressingTaps()) return;
                   if (edit) onEdit(item.event, edit);
@@ -181,7 +189,7 @@ function NowLine({ days, hours, dayWidth, now }: { days: Date[]; hours: number[]
 }
 
 function Block({
-  item, dayWidth, top, highlight, due, isClashing, edit, onPress,
+  item, dayWidth, top, highlight, due, isClashing, edit, isFirst = false, onPress,
 }: {
   item: PlacedEvent;
   dayWidth: number;
@@ -191,9 +199,12 @@ function Block({
   isClashing: boolean;
   /** Set while editing: what a tap does to the student's timetable. */
   edit?: EditKind;
+  /** The week's first class, which the Mac's tutorial points at. */
+  isFirst?: boolean;
   onPress: () => void;
 }) {
   const theme = useTheme();
+  const tutorialTarget = useTutorialTarget('firstClass', isFirst);
   const { event } = item;
   const ghost = edit === 'add';
   const width = dayWidth / item.columnCount;
@@ -221,6 +232,7 @@ function Block({
 
   return (
     <Pressable
+      ref={tutorialTarget}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={spoken}

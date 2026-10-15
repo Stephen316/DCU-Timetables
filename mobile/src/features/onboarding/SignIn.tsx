@@ -4,6 +4,7 @@ import { DCUEmail, parseDCUEmail, PasswordValidation } from '../../core/identity
 import { AuthError, AuthService } from '../../data/auth';
 import { errorMessage } from '../../data/rest';
 import { AuthenticatedUser } from '../../data/session';
+import { PrefKey } from '../../data/storage';
 import { useServices } from '../../state/hooks';
 import { AppLinks } from '../../ui/links';
 import { ActionRow, ListScroll, PrimaryButton, Row, Section, Segmented, Txt } from '../../ui/components';
@@ -24,7 +25,7 @@ type Mode = 'signIn' | 'createAccount';
  */
 export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: AuthenticatedUser) => void; notice?: string | null }) {
   const theme = useTheme();
-  const { auth } = useServices();
+  const { auth, prefs } = useServices();
   const [mode, setMode] = useState<Mode>('signIn');
   const [address, setAddress] = useState('');
   const [password, setPassword] = useState('');
@@ -94,6 +95,9 @@ export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: Authenticate
     } else {
       run(async (service) => {
         const outcome = await service.signUp(email, password);
+        // A new account gets the tutorial when its timetable first opens, after the email
+        // link, the student number and the programme — on this phone, where it was made.
+        if (outcome.kind !== 'alreadyRegistered') prefs.setBool(PrefKey.tutorialDue, true);
         if (outcome.kind === 'needsEmailConfirmation') startConfirmation(email, null);
         else if (outcome.kind === 'alreadyRegistered') {
           // Back to Sign in with the address kept, so signing in or resetting is one tap.

@@ -7,6 +7,8 @@ import { userEmail } from '../../data/session';
 import { PrefKey } from '../../data/storage';
 import { usePref, useServices } from '../../state/hooks';
 import { AppLinks } from '../../ui/links';
+import { TutorialText } from '../../core/tutorial';
+import { useTutorial } from '../tutorial/Tutorial';
 import {
   ActionRow, ActionSheet, BarButton, Icon, LabeledRow, ListScroll, Row, Section, Sheet, Txt,
 } from '../../ui/components';
@@ -16,6 +18,7 @@ const SETTINGS: AppearanceSetting[] = ['system', 'light', 'dark'];
 
 /** Who you're signed in as, the identifier you share to be made trusted, and the way out. */
 export function AccountSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const tutorial = useTutorial();
   const theme = useTheme();
   const services = useServices();
   const { profiles, deadlines, role, user: signedIn, events } = services;
@@ -146,6 +149,15 @@ export function AccountSheet({ visible, onClose }: { visible: boolean; onClose: 
           <ActionRow title="Privacy policy" onPress={() => void Linking.openURL(AppLinks.privacy)} />
           <ActionRow title="Terms of use" onPress={() => void Linking.openURL(AppLinks.terms)} />
           <ActionRow title="Help and contact" onPress={() => void Linking.openURL(AppLinks.support)} />
+          {tutorial ? (
+            <ActionRow
+              title={TutorialText.replay}
+              onPress={() => {
+                onClose();
+                tutorial.replay();
+              }}
+            />
+          ) : null}
         </Section>
 
         <Section footer="Removes your account and everything on this device.">

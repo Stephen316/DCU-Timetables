@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { ComponentProps, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, LayoutChangeEvent, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { Txt } from '../../ui/components';
+import { useTutorialTarget } from '../tutorial/Tutorial';
 import { Desktop, MIN_TARGET, Radius, Space, useTheme } from '../../ui/theme';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
@@ -79,6 +80,7 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
     });
   }, [offset]);
 
+  const deadlinesTab = useTutorialTarget('deadlinesTab');
   const selected = hovered ?? state.index;
   // White reads on the dark canvas; on Solarized Light's cream it would vanish, so ink.
   const selectedInk = theme.scheme === 'dark' ? '#FFFFFF' : theme.ink;
@@ -105,6 +107,7 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
           return (
             <Pressable
               key={route.key}
+              ref={route.name === 'deadlines' ? deadlinesTab : undefined}
               onPress={() => go(i)}
               accessibilityRole="tab"
               accessibilityLabel={title}

@@ -11,6 +11,7 @@ import { highlightIcon, highlightTint } from '../../ui/meaning';
 import { Desktop, Space, useTheme } from '../../ui/theme';
 import { usePagerDrag } from './Pager';
 import { EditKind } from './editing';
+import { useTutorialTarget } from '../tutorial/Tutorial';
 import { RailGap, RailRow, railPosition, RailStop } from './Rail';
 
 /**
@@ -110,6 +111,7 @@ export function DayPage({
                 due={dueAt(slot.event)}
                 isClashing={clashingIDs.has(slot.event.id)}
                 now={now}
+                isFirst={i === 0}
                 onSelect={() => onSelect(slot.event)}
               />
             ) : (
@@ -131,8 +133,9 @@ function DayHeading({ day, slots, now }: { day: Date | null; slots: DaySlot[]; n
     dateLine = isToday(day, now) ? `Today, ${date}` : isTomorrow(day, now) ? `Tomorrow, ${date}` : date;
   }
   const free = DaySchedule.freeMinutes(slots);
+  const tutorialTarget = useTutorialTarget('dayHeading');
   return (
-    <View style={styles.heading} accessible accessibilityRole="header">
+    <View ref={tutorialTarget} collapsable={false} style={styles.heading} accessible accessibilityRole="header">
       <Txt type="dayName" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{day ? weekdayName(day) : ''}</Txt>
       <View style={styles.headingLine}>
         <Txt type="subheadline" color={theme.inkSecondary}>{dateLine}</Txt>
@@ -146,7 +149,7 @@ function DayHeading({ day, slots, now }: { day: Date | null; slots: DaySlot[]; n
 
 /** A class on the rail: tap to open its page. */
 function ClassStop({
-  event, stop, index, count, followsClass, highlight, due, isClashing, now, edit, onSelect,
+  event, stop, index, count, followsClass, highlight, due, isClashing, now, edit, isFirst = false, onSelect,
 }: {
   event: TimetableEvent;
   stop: RailStop;
@@ -161,8 +164,11 @@ function ClassStop({
   now: Date;
   /** Set while editing: what a tap does to the student's timetable. */
   edit?: EditKind;
+  /** The day's first class, which the tutorial points at. */
+  isFirst?: boolean;
   onSelect: () => void;
 }) {
+  const tutorialTarget = useTutorialTarget('firstClass', isFirst);
   const theme = useTheme();
   const pagerDrag = usePagerDrag();
   const [top, setTop] = useState(0);
@@ -200,6 +206,7 @@ function ClassStop({
 
   return (
     <Pressable
+      ref={tutorialTarget}
       // Read at tap time: a swipe that ends on this row must not open it.
       onPress={() => !pagerDrag.isSuppressingTaps() && onSelect()}
       accessibilityRole="button"

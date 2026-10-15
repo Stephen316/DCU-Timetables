@@ -1,0 +1,139 @@
+DCU Timetable — tutorial text
+==============================
+
+Edit anything below the dashed lines. Each step has a TITLE (one bold line) and a BODY
+(one or two short sentences). Keep titles under about 30 characters and bodies under
+about 140, so the card fits on a small phone with large text.
+
+To drop a step, delete its whole block. To add one, copy a block and say in POINTS AT
+what it should highlight. Button labels can be changed too.
+
+"POINTS AT" is for me — it says what the cut-out goes around. Change it if you want a
+step to highlight something else.
+"ACTION" is an animated feature to suggest a movement the user should make to progress steps.
+
+
+PHONE AND WEB
+=============
+
+Step 1 — Welcome
+POINTS AT: nothing (a card in the middle of the screen)
+--------------------------------------------------------
+TITLE: Welcome to DCU Timetable
+BODY: Here's a quick tour of the basics.
+BUTTONS: Start | Skip
+
+
+Step 2 — Your day
+POINTS AT: the first class on today's list
+--------------------------------------------------------
+TITLE: Your day
+BODY: View each day's modules here. See locations, class type and lecturers.
+
+
+Step 3 — Other days
+POINTS AT: the day's heading ("Wednesday")
+--------------------------------------------------------
+TITLE: Swipe left to see tomorrow
+ACTION: Animated swiping feature
+
+
+Step 4 — The week
+POINTS AT: the week / day button, top left
+--------------------------------------------------------
+TITLE: See the whole week
+BODY: Switch between today's list and the week grid.
+
+
+Step 5 — A class
+POINTS AT: the first class on today's list
+--------------------------------------------------------
+TITLE: Tap a class
+BODY: See its room, lecturer and what's due — and report it cancelled so your classmates know.
+ACTION: Tap the class to open it
+
+
+Step 5b — Report cancelled (on the class's page; counts as part of step 5)
+POINTS AT: the "Is it on?" section, once it's scrolled into view
+--------------------------------------------------------
+TITLE: Swipe down to see report cancelled
+ACTION: Animated swipe up the page, until "Is it on?" is on screen
+Then, once it's in view (drafted by Claude — edit freely):
+TITLE: Report it cancelled
+BODY: If a class isn't on, say so here and your classmates will see it.
+
+
+Step 6 — More
+POINTS AT: the ⋯ button, top right
+--------------------------------------------------------
+TITLE: More
+BODY: Edit your timetable, set class alerts, and manage your account.
+
+
+Step 7 — Deadlines
+POINTS AT: the Deadlines tab at the bottom
+--------------------------------------------------------
+TITLE: Deadlines
+BODY: Assignments and tests shared by your classmates. Add one and everyone on the module sees it.
+
+
+Step 8 — Thank you!
+(Returns the user to the timetable, on today)
+POINTS AT: nothing (a card in the middle of the screen)
+--------------------------------------------------------
+TITLE: Thank you!
+BODY: You're all set. Replay this tour any time from Account.   (drafted by Claude — edit freely)
+BUTTONS: Done
+
+MAC APP (no day view)
+=====================
+
+Step 1 — Welcome
+POINTS AT: nothing (a card in the middle of the window)
+--------------------------------------------------------
+TITLE: Welcome to DCU Timetable
+BODY: Here's a quick tour of the basics.
+BUTTONS: Start | Skip
+
+
+Step 2 — Your week
+POINTS AT: the week grid
+--------------------------------------------------------
+TITLE: Your week
+BODY: Every class this week, by day and time. Use the arrows or swipe on the trackpad for other weeks.
+
+
+Step 3 — A class
+POINTS AT: the first class in the grid
+--------------------------------------------------------
+TITLE: Click a class
+BODY: See its room, lecturer and what's due — and report it cancelled so your classmates know.
+
+
+Step 4 — More
+POINTS AT: the ⋯ button, top right
+--------------------------------------------------------
+TITLE: More
+BODY: Edit your timetable, set class alerts, and manage your account.
+
+
+Step 5 — Deadlines
+POINTS AT: the Deadlines tab
+--------------------------------------------------------
+TITLE: Deadlines
+BODY: Assignments and tests shared by your classmates. Add one and everyone on the module sees it.
+BUTTONS: Done
+
+
+ON EVERY CARD
+=============
+--------------------------------------------------------
+STEP COUNT: {n} of {total}
+SKIP LINK: Skip tutorial
+NEXT BUTTON: Next
+
+
+IN THE ACCOUNT SHEET (to replay it)
+===================================
+--------------------------------------------------------
+ROW: Show the tutorial again

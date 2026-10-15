@@ -15,6 +15,7 @@ import {
 import { Space, useTheme, withAlpha } from '../../ui/theme';
 import { DeadlineForm, DeadlineRow } from '../deadlines/DeadlineRows';
 import { LectureModel } from './LectureModel';
+import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
 
 /**
  * Everything known about one class, on its own page. Two kinds of information share it and
@@ -33,6 +34,11 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
   useEffect(() => {
     void model.load();
   }, [model]);
+
+  // The tutorial follows a class tapped from the day list here, to show where it's reported.
+  const tutorial = useTutorial();
+  const reportSection = useTutorialTarget('reportSection');
+  useEffect(() => tutorial?.signal('classOpened'), [tutorial]);
 
   const verdictIcon = (state: VerdictState): IconName => (state === 'cancelled' ? 'cancelled' : state === 'running' ? 'running' : 'moved');
   const verdictTitle = (state: VerdictState) => (state === 'cancelled' ? 'Mark as cancelled' : state === 'running' ? 'Mark as on' : 'Mark as moved');
@@ -101,60 +107,62 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           )}
         </Section>
 
-        <Section
-          header="Is it on?"
-          footer={
-            model.canDecide
-              ? 'Your decision replaces the count for everyone straight away. Say it\'s on to clear a wrong report.'
-              : `Reports are anonymous. A class is flagged with an orange ! once ${CANCELLATION_THRESHOLD} people report it and they stay ${CANCELLATION_NET_THRESHOLD} ahead of anyone saying it went ahead.`
-          }
-        >
-          {/*
-            A stated verdict and a tally of guesses are different claims, so they are drawn
-            differently. Collapsing the two would make one person's mistake look like a consensus.
-          */}
-          {status.verdict ? (
-            <Row>
-              <Label
-                icon={verdictIcon(status.verdict.state)}
-                text={status.summary}
-                type="headline"
-                color={status.verdict.state === 'running' ? theme.ink : theme.tint.off}
-              />
-              {status.verdict.note ? <Txt type="callout" color={theme.inkSecondary}>{status.verdict.note}</Txt> : null}
-              {/* The crowd is shown underneath rather than replaced: disagreement is worth seeing. */}
-              {status.crowdSummary ? <Txt type="caption" color={theme.inkSecondary}>{status.crowdSummary}</Txt> : null}
-            </Row>
-          ) : status.isFlagged ? (
-            <Row><Label icon="alert" text={status.summary} color={theme.tint.off} /></Row>
-          ) : (
-            <Row><Txt color={theme.inkSecondary}>{status.summary}</Txt></Row>
-          )}
-
-          {model.canDecide
-            ? VERDICT_STATES.map((state) => (
-                <ActionRow
-                  key={state}
-                  title={verdictTitle(state)}
-                  icon={verdictIcon(state)}
-                  disabled={model.isBusy || status.verdict?.state === state}
-                  onPress={() => void model.decide(state)}
+        <View ref={reportSection} collapsable={false}>
+          <Section
+            header="Is it on?"
+            footer={
+              model.canDecide
+                ? 'Your decision replaces the count for everyone straight away. Say it\'s on to clear a wrong report.'
+                : `Reports are anonymous. A class is flagged with an orange ! once ${CANCELLATION_THRESHOLD} people report it and they stay ${CANCELLATION_NET_THRESHOLD} ahead of anyone saying it went ahead.`
+            }
+          >
+            {/*
+              A stated verdict and a tally of guesses are different claims, so they are drawn
+              differently. Collapsing the two would make one person's mistake look like a consensus.
+            */}
+            {status.verdict ? (
+              <Row>
+                <Label
+                  icon={verdictIcon(status.verdict.state)}
+                  text={status.summary}
+                  type="headline"
+                  color={status.verdict.state === 'running' ? theme.ink : theme.tint.off}
                 />
-              ))
-            : status.myStance !== null
-              // Not destructive: taking back your own report isn't a delete.
-              ? <ActionRow title="Undo my report" icon="undo" disabled={model.isBusy} onPress={() => void model.withdrawReport()} />
-              : [
-                  <ActionRow key="c" title="Report: lecture cancelled" icon="reportOutline" disabled={model.isBusy} onPress={() => setPendingReport('cancelled')} />,
-                  // Only when there's a cancellation to contradict: silence already means "it ran".
-                  status.reportCount > 0
-                    ? <ActionRow key="o" title="Report: lecture is on" icon="runningOutline" disabled={model.isBusy} onPress={() => setPendingReport('on')} />
-                    : null,
-                ]}
+                {status.verdict.note ? <Txt type="callout" color={theme.inkSecondary}>{status.verdict.note}</Txt> : null}
+                {/* The crowd is shown underneath rather than replaced: disagreement is worth seeing. */}
+                {status.crowdSummary ? <Txt type="caption" color={theme.inkSecondary}>{status.crowdSummary}</Txt> : null}
+              </Row>
+            ) : status.isFlagged ? (
+              <Row><Label icon="alert" text={status.summary} color={theme.tint.off} /></Row>
+            ) : (
+              <Row><Txt color={theme.inkSecondary}>{status.summary}</Txt></Row>
+            )}
 
-          {/* Every write on this page reports its failure; a refused report must not look like a working one. */}
-          {model.errorText ? <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.tint.off} /></Row> : null}
-        </Section>
+            {model.canDecide
+              ? VERDICT_STATES.map((state) => (
+                  <ActionRow
+                    key={state}
+                    title={verdictTitle(state)}
+                    icon={verdictIcon(state)}
+                    disabled={model.isBusy || status.verdict?.state === state}
+                    onPress={() => void model.decide(state)}
+                  />
+                ))
+              : status.myStance !== null
+                // Not destructive: taking back your own report isn't a delete.
+                ? <ActionRow title="Undo my report" icon="undo" disabled={model.isBusy} onPress={() => void model.withdrawReport()} />
+                : [
+                    <ActionRow key="c" title="Report: lecture cancelled" icon="reportOutline" disabled={model.isBusy} onPress={() => setPendingReport('cancelled')} />,
+                    // Only when there's a cancellation to contradict: silence already means "it ran".
+                    status.reportCount > 0
+                      ? <ActionRow key="o" title="Report: lecture is on" icon="runningOutline" disabled={model.isBusy} onPress={() => setPendingReport('on')} />
+                      : null,
+                  ]}
+
+            {/* Every write on this page reports its failure; a refused report must not look like a working one. */}
+            {model.errorText ? <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.tint.off} /></Row> : null}
+          </Section>
+        </View>
 
         <Section
           header={`All ${model.moduleKey} dates`}
