@@ -133,7 +133,7 @@ function GridBody({
         <View style={styles.gridRow}>
           <View style={{ width: GUTTER, height: gridHeight }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
             {hours.map((hour) => (
-              <Txt key={hour} type="caption2" color={theme.inkSecondary} style={[styles.hourLabel, { height: HOUR_HEIGHT }]}>
+              <Txt key={hour} type="caption2" color={theme.inkSecondary} style={[styles.hourLabel, { top: (hour - hours[0]) * HOUR_HEIGHT - 6 }]}>
                 {hourLabel(hour)}
               </Txt>
             ))}
@@ -288,7 +288,8 @@ const styles = StyleSheet.create({
   bold: { fontWeight: '700' },
   gridScroll: { paddingTop: Space.s, paddingBottom: 64 },
   gridRow: { flexDirection: 'row' },
-  hourLabel: { textAlign: 'right', paddingRight: Space.xs, marginTop: -6 },
+  // Placed like the hour lines, centred on its own line, so nothing accumulates down the column.
+  hourLabel: { position: 'absolute', left: 0, right: 0, textAlign: 'right', paddingRight: Space.xs },
   column: { borderLeftWidth: StyleSheet.hairlineWidth },
   hourLine: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth },
   block: { position: 'absolute', borderRadius: Radius.block, overflow: 'hidden', flexDirection: 'row' },
