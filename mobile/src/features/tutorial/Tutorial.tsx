@@ -62,6 +62,15 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   /** The view the student had before the tour switched to the day list, put back after. */
   const savedView = useRef<boolean | null>(null);
 
+  // TEMPORARY — remove once existing students have had it (from early November 2026): the
+  // tour is new, so everyone already signed in on this phone is offered it once, as a new
+  // account is. Remove this effect and `PrefKey.tutorialOfferedToExisting` together.
+  useEffect(() => {
+    if (flow !== 'shell' || services.prefs.getBool(PrefKey.tutorialOfferedToExisting)) return;
+    services.prefs.setBool(PrefKey.tutorialOfferedToExisting, true);
+    setDue(true);
+  }, [flow, services, setDue]);
+
   // Not the moment the timetable appears: a sheet may still be closing (a replay from
   // Account), and the first week may still be drawing.
   useEffect(() => {

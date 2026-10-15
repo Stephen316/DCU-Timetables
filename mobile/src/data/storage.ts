@@ -116,6 +116,11 @@ export const PrefKey = {
   timetableEdits: 'timetableEdits',
   /** Set when an account is created here, or the tutorial asked for again; cleared once it's done. */
   tutorialDue: 'tutorialDue',
+  /**
+   * TEMPORARY: set once the tour has been offered to a student who signed up before it
+   * existed. Remove with the block in TutorialProvider that reads it.
+   */
+  tutorialOfferedToExisting: 'tutorialOfferedToExisting',
   allocationTried: 'allocationTried',
   weekShowsCalendar: 'weekShowsCalendar',
   appearance: 'appearance',
