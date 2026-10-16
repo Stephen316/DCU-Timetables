@@ -80,8 +80,11 @@ export function Pager({
       const { index: i, count: n } = live.current;
       return PagerIndex.resolve(dx > 0 ? i - 1 : i + 1, n) === null;
     };
+    // "Moving" lasts until the page is still: through the slide after a finger lifts, and
+    // through a turn by key or trackpad, so the tutorial never shows over a page in motion.
     const settle = () => {
-      Animated.timing(drag, { toValue: 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
+      Animated.timing(drag, { toValue: 0, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: false })
+        .start(() => live.current.onDragChange?.(false));
     };
     /** Slides on to the next page (1) or back (-1), from wherever a drag left it. */
     const turn = (step: 1 | -1) => {
@@ -91,12 +94,15 @@ export function Pager({
       if (destination === null || w === 0) return settle();
       if (committing.current) return;
       committing.current = true;
+      live.current.onDragChange?.(true);
       Animated.timing(drag, { toValue: step > 0 ? -w : w, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: false })
-        .start(() => live.current.onIndexChange(destination));
+        .start(() => {
+          live.current.onIndexChange(destination);
+          live.current.onDragChange?.(false);
+        });
     };
     const finish = (dx: number, dy: number, vx: number) => {
       dragState.end();
-      live.current.onDragChange?.(false);
       const { width: w, swipe: kind } = live.current;
       if (Math.abs(dx) <= Math.abs(dy) || w === 0) return settle();
       const { commitFraction, flickVelocity } = SWIPE[kind];
@@ -126,7 +132,6 @@ export function Pager({
       onPanResponderRelease: (_, g) => finish(g.dx, g.dy, g.vx),
       onPanResponderTerminate: () => {
         dragState.end();
-        live.current.onDragChange?.(false);
         settle();
       },
       onPanResponderTerminationRequest: () => false,

@@ -4,7 +4,6 @@ import {
 } from 'react';
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Tutorial, TutorialSignal, TutorialStep, TutorialTarget, TutorialText } from '../../core/tutorial';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MacShell } from '../../data/macShell';
 import { PrefKey } from '../../data/storage';
 import { usePrefBool, useServices } from '../../state/hooks';
@@ -21,7 +20,7 @@ import { Radius, Space, useTheme, withAlpha } from '../../ui/theme';
  * one on screen and measures it as it goes, so a scroll or a page turn is followed.
  */
 
-interface Rect { x: number; y: number; width: number; height: number }
+export interface Rect { x: number; y: number; width: number; height: number }
 
 interface TutorialState {
   register(target: TutorialTarget, ref: RefObject<View | null>): () => void;
@@ -49,12 +48,36 @@ export function useTutorialTarget(target: TutorialTarget, active = true): RefObj
   return ref;
 }
 
+/**
+ * A target with no view of its own to measure — Back, which the navigation header draws —
+ * placed by where its owner knows it is. Null while it isn't known.
+ */
+export function useTutorialRect(target: TutorialTarget, rect: Rect | null): void {
+  const tutorial = useContext(TutorialContext);
+  const latest = useRef(rect);
+  useEffect(() => {
+    latest.current = rect;
+  });
+  const [ref] = useState<RefObject<View | null>>(() => ({
+    current: {
+      measureInWindow: (done: (x: number, y: number, width: number, height: number) => void) => {
+        const r = latest.current;
+        done(r?.x ?? 0, r?.y ?? 0, r?.width ?? 0, r?.height ?? 0);
+      },
+    } as unknown as View,
+  }));
+  useEffect(() => (tutorial ? tutorial.register(target, ref) : undefined), [tutorial, target, ref]);
+}
+
 export function useTutorial(): TutorialState | null {
   return useContext(TutorialContext);
 }
 
 /** How long a step waits for its control to appear before it's left out (an empty day, say). */
 const MISSING_MS = 1500;
+/** How long a control must hold still before the tour shows: a page still sliding into place isn't ready. */
+const SETTLE_MS = 220;
+const FADE_MS = 180;
 /** Breathing room between the control and the edge of the cut-out. */
 const PAD = 6;
 
@@ -118,7 +141,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     const current = run.steps[run.index];
     const index = Tutorial.next(run.steps, run.index, false);
     // Left a class's page without its own Back step: take the student out of it.
-    if (current.continues && run.steps[index]?.action !== 'back' && router.canGoBack()) router.back();
+    if (current.continues && run.steps[index]?.advancesOn !== 'classClosed' && router.canGoBack()) router.back();
     if (index >= run.steps.length) finish();
     else setRun({ ...run, index });
   }, [run, finish]);
@@ -182,6 +205,8 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
   const [rect, setRect] = useState<Rect | null>(null);
   const [cardHeight, setCardHeight] = useState(180);
   const [fade] = useState(() => new Animated.Value(0));
+  /** The control has stopped moving: the page under the tour has finished loading or sliding. */
+  const [settled, setSettled] = useState(false);
   const reduceMotion = useReduceMotion();
   // Read by the measuring loop, which shouldn't restart (and reset its patience) on a render.
   const missing = useRef(onMissing);
@@ -194,9 +219,6 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
     missing.current = onMissing;
   });
 
-  useEffect(() => {
-    Animated.timing(fade, { toValue: 1, duration: reduceMotion ? 0 : 200, useNativeDriver: true }).start();
-  }, [fade, reduceMotion]);
 
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility([step.title, step.body].filter(Boolean).join('. '));
@@ -213,6 +235,8 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
     let stopped = false;
     let measuring = false;
     let frame = 0;
+    let last: Rect | null = null;
+    let movedAt = Date.now();
     const measure = (finished: () => void) => {
       const refs = [...(targets.current?.get(target) ?? [])];
       let best: Rect | null = null;
@@ -227,6 +251,15 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
           seen.current = true;
         }
         setRect((old) => (same(old, best) ? old : best));
+        // Shown only once it holds still, so a page mid-slide — two days' headings both
+        // half on screen — doesn't have the tour jumping between them.
+        const now = Date.now();
+        if (!same(last, best)) {
+          last = best;
+          movedAt = now;
+        }
+        const still = best !== null && now - movedAt >= SETTLE_MS;
+        setSettled((old) => (old === still ? old : still));
         if (!found && Date.now() - began > MISSING_MS) {
           found = true;
           missing.current();
@@ -276,7 +309,7 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
     : null;
   // The page stays usable — lightly dimmed, nothing blocked — while a scroll step waits for its
   // control to come into view, and while the student finds Back.
-  const free = (step.action === 'scrollDown' && !hole) || step.action === 'back';
+  const free = step.action === 'scrollDown' && !hole;
   const scrolling = step.action === 'scrollDown' && !hole;
   // Touches reach the control under the cut-out whenever the step is for pressing it.
   const passThrough = step.action === 'swipeLeft' || step.action === 'tap' || step.action === 'scrollDown';
@@ -298,7 +331,7 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
   let cardTop: number;
   let arrow: { top: number; left: number; up: boolean } | null = null;
   if (!hole) {
-    cardTop = scrolling ? window.height * 0.12 : step.action === 'back' ? window.height * 0.3 : (window.height - cardHeight) / 2;
+    cardTop = scrolling ? window.height * 0.12 : (window.height - cardHeight) / 2;
   } else {
     const above = hole.y;
     const below = window.height - (hole.y + hole.height);
@@ -313,6 +346,13 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
       cardTop = Math.min(hole.y + hole.height, window.height) - cardHeight - MARGIN * 2;
     }
   }
+
+  // Out while a finger moves the page, and while the page is still moving into place; in,
+  // gently, once it's still.
+  const shown = !dragging && (step.target === null || settled || scrolling);
+  useEffect(() => {
+    Animated.timing(fade, { toValue: shown ? 1 : 0, duration: reduceMotion ? 0 : FADE_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+  }, [fade, shown, reduceMotion]);
 
   const dim = 'rgba(0, 0, 0, 0.6)';
   return (
@@ -356,14 +396,14 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
         <Blocker style={StyleSheet.absoluteFill} />
       )}
 
-      {arrow && !dragging ? (
+      {arrow ? (
         <View pointerEvents="none" style={{ position: 'absolute', top: arrow.top, left: arrow.left }}>
           <Icon name={arrow.up ? 'arrowUp' : 'arrowDown'} size={ARROW} color={theme.accent} />
         </View>
       ) : null}
-      {gesture && (hole || free) && !dragging ? <Gesture action={gesture} hole={hole} window={window} /> : null}
+      {gesture && (hole || free) ? <Gesture action={gesture} hole={hole} window={window} /> : null}
 
-      {dragging ? null : <View
+      <View
         // Only when there's nothing else to press: VoiceOver must still reach a control the step is for.
         accessibilityViewIsModal={!passThrough && !free}
         onLayout={(e) => setCardHeight(e.nativeEvent.layout.height)}
@@ -388,7 +428,7 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
             </Pressable>
           ) : null}
         </View>
-      </View>}
+      </View>
     </Animated.View>
   );
 }
@@ -412,7 +452,6 @@ function Gesture({ action, hole, window }: {
   window: { width: number; height: number };
 }) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
   const [t] = useState(() => new Animated.Value(0));
   const moves = action === 'swipeLeft' || action === 'scrollDown';
@@ -443,9 +482,6 @@ function Gesture({ action, hole, window }: {
     origin = { x: window.width / 2, y: window.height * 0.5 };
     // Bottom to top, bowing slightly to the side.
     path = { dx: [0, 22, 0], dy: [span, 0, -span] };
-  } else if (action === 'back') {
-    origin = { x: Space.l + Space.s, y: insets.top + 22 };
-    path = { dx: [0, 0, 0], dy: [0, 0, 0] };
   } else {
     origin = { x: area.x + area.width / 2, y: area.y + area.height / 2 };
     path = { dx: [0, 0, 0], dy: [0, 0, 0] };

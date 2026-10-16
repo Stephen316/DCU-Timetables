@@ -80,7 +80,7 @@ ACTION: Tap the button
 
 
 Step 5d — Back to the week (counts as part of step 5)
-POINTS AT: nothing; a hand points at Back, top left
+POINTS AT: the Back button, top left of the class's page
 --------------------------------------------------------
 TITLE: Go back   (drafted by Claude — edit freely)
 BODY: Tap Back, at the top left, to return to your week.   (drafted by Claude — edit freely)

@@ -15,7 +15,9 @@ import {
 import { Space, useTheme, withAlpha } from '../../ui/theme';
 import { DeadlineForm, DeadlineRow } from '../deadlines/DeadlineRows';
 import { LectureModel } from './LectureModel';
-import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
+import { useTutorial, useTutorialRect, useTutorialTarget } from '../tutorial/Tutorial';
+import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * Everything known about one class, on its own page. Two kinds of information share it and
@@ -39,6 +41,11 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
   // cancelled — a practice, kept on this page — takes that back, and goes back out.
   const tutorial = useTutorial();
   const reportButton = useTutorialTarget('reportButton');
+  // Back is drawn by the navigation header, so it's placed from the header's own height:
+  // the button's hit area at the left end of the bar below the status bar.
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
+  useTutorialRect('backButton', headerHeight > insets.top ? { x: Space.xs, y: insets.top, width: 48, height: headerHeight - insets.top } : null);
   const undoReport = useTutorialTarget('undoReport');
   const latestTutorial = useRef(tutorial);
   useEffect(() => {

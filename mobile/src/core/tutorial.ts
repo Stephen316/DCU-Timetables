@@ -16,6 +16,7 @@ export type TutorialTarget =
   | 'weekGrid' // the whole week grid, on a Mac
   | 'reportButton' // "Report: lecture cancelled" on a class's page ("Mark as cancelled" for a moderator)
   | 'undoReport' // "Undo my report" on a class's page ("Mark as on" for a moderator)
+  | 'backButton' // Back, in a class page's header
   | 'more' // ⋯, top right
   | 'deadlinesTab'; // the Deadlines tab
 
@@ -23,7 +24,7 @@ export type TutorialTarget =
  * A movement the student makes to go on — shown by a moving hand, and passed through the
  * dimmed screen to the control underneath.
  */
-export type TutorialAction = 'swipeLeft' | 'tap' | 'scrollDown' | 'back';
+export type TutorialAction = 'swipeLeft' | 'tap' | 'scrollDown';
 
 /** What the app tells the tutorial when the student does something a step waits for. */
 export type TutorialSignal =
@@ -105,8 +106,8 @@ function classSteps(tapTitle: string): TutorialStep[] {
       id: 'undo', target: 'undoReport', advancesOn: 'reportUndone', continues: true, practice: true,
       title: 'Now take it back', body: 'Tap here to undo it. A report can always be undone.',
     }),
-    step({
-      id: 'back', advancesOn: 'classClosed', continues: true, action: 'back', primary: null,
+    press({
+      id: 'back', target: 'backButton', advancesOn: 'classClosed', continues: true,
       title: 'Go back', body: 'Tap Back, at the top left, to return to your week.',
     }),
   ];
@@ -183,7 +184,7 @@ export const Tutorial = {
     if (didAction) return next;
     // Already on a class's page (a report step with nothing to report): still go back out.
     const inside = steps[index]?.continues ?? false;
-    while (steps[next]?.continues && !(inside && steps[next].action === 'back')) next += 1;
+    while (steps[next]?.continues && !(inside && steps[next].advancesOn === 'classClosed')) next += 1;
     return next;
   },
 };
