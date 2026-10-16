@@ -1,14 +1,11 @@
-import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
   ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DeadlineFields, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
   DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, displayTitle, LABEL_LIMIT, reportReasonLabel,
   gradeWeightLabel, TITLE_LIMIT,
 } from '../../core/deadline';
-import {
-  addDays, formatAbbreviated, formatTime, formatWeekdayDayMonth, formatWeekdayDayMonthTime, localDateString, startOfDay,
-} from '../../core/time';
+import { addDays, formatAbbreviated, formatWeekdayDayMonthTime } from '../../core/time';
 import {
   ActionRow, ActionSheet, AdaptiveStack, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
   useLargeText,
@@ -16,6 +13,7 @@ import {
 import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
 import { useNow } from '../../state/hooks';
 import { Space, useTheme } from '../../ui/theme';
+import { DuePicker } from './DuePicker';
 
 export interface DeadlineActions {
   onConfirm: () => void;
@@ -381,86 +379,6 @@ function editFooter({ deadline, standing }: { deadline: Deadline; standing: Dead
   return parts.join(' ');
 }
 
-/**
- * The due date and the time as two small controls on one line. The form already opens on
- * the class's own time, so these are there to be changed, not filled in: iOS's compact
- * pickers (a pill that opens a calendar or a wheel), Android's dialogs behind two chips,
- * typed on the web. Changing one keeps the other.
- */
-function DuePicker({ value, onChange }: { value: Date; onChange: (date: Date) => void }) {
-  const theme = useTheme();
-  const today = startOfDay(new Date());
-  const setDay = (day: Date) =>
-    onChange(new Date(day.getFullYear(), day.getMonth(), day.getDate(), value.getHours(), value.getMinutes()));
-  const setTime = (time: Date) =>
-    onChange(new Date(value.getFullYear(), value.getMonth(), value.getDate(), time.getHours(), time.getMinutes()));
-
-  if (Platform.OS === 'ios') {
-    return (
-      <View style={styles.dueControls}>
-        <DateTimePicker
-          value={value}
-          mode="date"
-          display="compact"
-          minimumDate={today}
-          accentColor={theme.accent}
-          themeVariant={theme.scheme}
-          onValueChange={(_, date) => setDay(date)}
-        />
-        <DateTimePicker
-          value={value}
-          mode="time"
-          display="compact"
-          accentColor={theme.accent}
-          themeVariant={theme.scheme}
-          onValueChange={(_, date) => setTime(date)}
-        />
-      </View>
-    );
-  }
-  if (Platform.OS === 'android') {
-    return (
-      <View style={styles.dueControls}>
-        <InlineAction
-          title={formatWeekdayDayMonth(value)}
-          onPress={() => DateTimePickerAndroid.open({ value, mode: 'date', minimumDate: today, onValueChange: (_, date) => setDay(date) })}
-        />
-        <InlineAction
-          title={formatTime(value)}
-          onPress={() => DateTimePickerAndroid.open({ value, mode: 'time', is24Hour: true, onValueChange: (_, date) => setTime(date) })}
-        />
-      </View>
-    );
-  }
-  return <TypedDate value={value} onChange={onChange} />;
-}
-
-function TypedDate({ value, onChange }: { value: Date; onChange: (date: Date) => void }) {
-  const theme = useTheme();
-  const [text, setText] = useState(`${localDateString(value)} ${formatTime(value)}`);
-  const parsed = (() => {
-    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/.exec(text.trim());
-    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
-  })();
-  return (
-    <View>
-      <TextInput
-        value={text}
-        onChangeText={(next) => {
-          setText(next);
-          const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/.exec(next.trim());
-          if (m) onChange(new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
-        }}
-        placeholder="YYYY-MM-DD HH:MM"
-        placeholderTextColor={theme.inkTertiary}
-        style={[styles.input, { color: theme.ink }]}
-        accessibilityLabel="Due date and time"
-      />
-      {parsed === null ? <Txt type="caption" color={theme.inkSecondary}>Write it as 2026-10-14 17:00.</Txt> : null}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   rowBody: { gap: Space.xs },
   kindIcon: { width: 22, alignItems: 'center' },
@@ -472,7 +390,6 @@ const styles = StyleSheet.create({
   input: { fontSize: 17, minHeight: 40 },
   fieldLabel: { marginBottom: Space.xs },
   dueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.m },
-  dueControls: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   kinds: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.s },
   kind: { borderRadius: 8, paddingHorizontal: Space.m, paddingVertical: Space.s },
   weight: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
