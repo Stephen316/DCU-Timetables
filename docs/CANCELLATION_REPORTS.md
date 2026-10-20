@@ -1,7 +1,10 @@
 # Crowd-sourced "lecture cancelled" reports
 
 Students report that a class isn't running. Once **3 independent devices** report the same
-occurrence, it's flagged with an orange box and a `!` in both the day view and the calendar.
+occurrence (and those saying it went ahead don't pull it back under the bar), or an organiser
+confirms it cancelled, it's **greyed out** in both the day view and the calendar. Short of
+that — at least one report, more saying cancelled than saying it went ahead — it carries an
+orange box and a `!`, as a warning rather than a fact.
 
 ## How it decides
 
@@ -54,7 +57,10 @@ crowd.
 - **Anyone can report.** The anon key allows inserts from any client, and the only abuse
   control is one-vote-per-install — a determined person could reinstall or script the API.
   Rate limiting or device attestation would be the next step if it's abused.
-- **Orange is overloaded**: clashes already use orange. A crowd-reported cancellation draws a
+- **Orange is overloaded**: clashes already use orange. A reported cancellation draws a
   solid orange box and takes precedence over the fainter clash outline.
+- **One report is visible.** Below the threshold a single report still turns a class orange,
+  so one person can raise a warning on any class. It can't grey one out — that still takes
+  the threshold or a verdict.
 - Reports are never cleared; old rows for past classes accumulate. A scheduled delete of rows
   older than a week would keep the table small.

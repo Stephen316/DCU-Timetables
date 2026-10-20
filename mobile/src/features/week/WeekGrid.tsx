@@ -205,12 +205,14 @@ function Block({
   const tutorialTarget = useTutorialTarget('firstClass', isFirst);
   const { event } = item;
   const ghost = edit === 'add';
+  // Settled as not running: greyed out, its module colour gone, so it reads as not there.
+  const cancelled = highlight?.kind === 'cancelled';
   const width = dayWidth / item.columnCount;
   const height = Math.max(26, (event.end.getTime() - event.start.getTime()) / 3_600_000 * HOUR_HEIGHT);
-  const tint = moduleTint(theme, event.activity.moduleCode ?? titleOf(event));
+  const tint = cancelled ? theme.inkTertiary : moduleTint(theme, event.activity.moduleCode ?? titleOf(event));
   // A highlight outranks a clash outline: not running, or a deadline today, matters more
   // than an overlap the student has already seen.
-  const border = highlight ? highlightTint(highlight, theme) : isClashing ? withAlpha(theme.tint.off, 0.55) : 'transparent';
+  const border = cancelled ? withAlpha(theme.inkTertiary, 0.5) : highlight ? highlightTint(highlight, theme) : isClashing ? withAlpha(theme.tint.off, 0.55) : 'transparent';
   const first = parsedLocations(event)[0];
   const room = first ? first.buildingName ?? first.code : null;
   // The title wraps into whatever height the class has; the room takes the last line only
@@ -243,9 +245,9 @@ function Block({
           width: Math.max(width - 2, 10),
           height: height - 2,
           // A ghost is only an outline: there, but not yet the student's.
-          backgroundColor: withAlpha(tint, ghost ? 0.05 : 0.18),
+          backgroundColor: withAlpha(tint, ghost ? 0.05 : cancelled ? 0.1 : 0.18),
           borderColor: ghost ? withAlpha(tint, 0.7) : border,
-          borderWidth: highlight ? 2 : 1.5,
+          borderWidth: highlight && !cancelled ? 2 : 1.5,
           borderStyle: ghost ? 'dashed' : 'solid',
           opacity: pressed ? 0.7 : 1,
         },
@@ -253,7 +255,7 @@ function Block({
     >
       {isOnline(event) ? <Hatch color={withAlpha(theme.tint.online, 0.28)} spacing={7} origin={{ x: item.column * width + 1, y: top + 1 }} /> : null}
       {ghost ? null : <View style={[styles.bar, { backgroundColor: tint }]} />}
-      <View style={[styles.blockText, ghost && styles.faded]}>
+      <View style={[styles.blockText, (ghost || cancelled) && styles.faded]}>
         <Txt type="caption2" numberOfLines={titleLines} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.bold} maxFontSizeMultiplier={1.4}>
           {compactTitleOf(event)}
         </Txt>
@@ -266,7 +268,7 @@ function Block({
           <Icon name={edit} size={14} color={edit === 'add' ? theme.accent : theme.tint.off} />
         </View>
       ) : null}
-      {/* The "!" wins the corner: the border already says a class is off, but only this says something's due. */}
+      {/* The "!" wins the corner: the border already says a class is off or greyed out, but only this says something's due. */}
       {due.length > 0 ? (
         <View style={styles.corner}>
           <DeadlineMark size={12} />

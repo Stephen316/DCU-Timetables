@@ -53,8 +53,10 @@ export function DayPage({
   const dayList = useTutorialTarget('dayList');
 
   const stopFor = (event: TimetableEvent): RailStop => {
-    // News outranks "next": a cancelled class you'd otherwise be walking to is drawn in orange.
+    // News outranks "next": a class you'd otherwise be walking to is greyed out once it's
+    // settled as cancelled, and drawn in orange while it's only reported or has moved.
     const h = highlight(event);
+    if (h?.kind === 'cancelled') return { kind: 'cancelled' };
     if (h) return { kind: 'flagged', color: highlightTint(h, theme) };
     if (event.id === nextID) return { kind: 'next', live: now.getTime() >= event.start.getTime() && now.getTime() < event.end.getTime() };
     if (today && event.end.getTime() <= now.getTime()) return { kind: 'past' };
@@ -186,7 +188,7 @@ function ClassStop({
   })();
 
   // A deadline has its own lines below, so only a cancellation or a move takes the status line.
-  const news = highlight && (highlight.kind === 'cancelled' || highlight.kind === 'moved') ? highlight : null;
+  const news = highlight && (highlight.kind === 'cancelled' || highlight.kind === 'reported' || highlight.kind === 'moved') ? highlight : null;
   const dueLines = due.map((d) => `${deadlineKindLabel(d.kind)}: ${displayTitle(d)}`);
 
   const spoken = [
@@ -213,33 +215,36 @@ function ClassStop({
     >
       <RailRow start={event.start} end={event.end} stop={stop} position={railPosition(index, count)} divider={followsClass} online={isOnline(event)} top={top}>
         <View style={styles.editLine}>
-          <View style={[styles.fill, { gap: Space.xxs, opacity: stop.kind === 'ghost' ? 0.45 : stop.kind === 'past' ? 0.6 : 1 }]}>
+          <View style={[styles.fill, { gap: Space.xxs }]}>
+            {/* Outside the fade, so a greyed-out class still says plainly why. */}
             {news ? (
-              <Label icon={highlightIcon(news)} text={highlightReason(news)} type="status" color={highlightTint(news, theme)} />
+              <Label icon={highlightIcon(news)} text={highlightReason(news)} type="status" color={news.kind === 'cancelled' ? theme.inkSecondary : highlightTint(news, theme)} />
             ) : stop.kind === 'next' ? (
               <Txt type="status" color={theme.accent}>{nextLine}</Txt>
             ) : null}
 
-            <View style={styles.titleLine}>
-              <Txt type="headline" style={styles.title}>{shortTitleOf(event)}</Txt>
-              {due.length > 0 ? <View style={styles.mark}><DeadlineMark /></View> : null}
-              {isClashing ? <Icon name="warning" size={16} color={theme.tint.off} /> : null}
+            <View style={[styles.faded, { opacity: stop.kind === 'ghost' ? 0.45 : stop.kind === 'cancelled' ? 0.5 : stop.kind === 'past' ? 0.6 : 1 }]}>
+              <View style={styles.titleLine}>
+                <Txt type="headline" style={styles.title}>{shortTitleOf(event)}</Txt>
+                {due.length > 0 ? <View style={styles.mark}><DeadlineMark /></View> : null}
+                {isClashing ? <Icon name="warning" size={16} color={theme.tint.off} /> : null}
+              </View>
+
+              <Txt type="subheadline" color={theme.inkSecondary}>{activitySummary(event.activity)}</Txt>
+
+              {due.map((d) => (
+                <Txt key={d.id} type="footnote" color={theme.tint.test} numberOfLines={2}>
+                  <Txt type="footnote" color={theme.tint.test} style={styles.dueKind}>{deadlineKindLabel(d.kind)}: </Txt>
+                  {displayTitle(d)}
+                </Txt>
+              ))}
+
+              {place ? (
+                <Label icon={event.type === 'onCampus' ? 'place' : 'video'} text={place} type="footnote" color={theme.inkSecondary} />
+              ) : null}
+
+              {staffText(event) ? <Txt type="footnote" color={theme.inkTertiary}>{staffText(event)}</Txt> : null}
             </View>
-
-            <Txt type="subheadline" color={theme.inkSecondary}>{activitySummary(event.activity)}</Txt>
-
-            {due.map((d) => (
-              <Txt key={d.id} type="footnote" color={theme.tint.test} numberOfLines={2}>
-                <Txt type="footnote" color={theme.tint.test} style={styles.dueKind}>{deadlineKindLabel(d.kind)}: </Txt>
-                {displayTitle(d)}
-              </Txt>
-            ))}
-
-            {place ? (
-              <Label icon={event.type === 'onCampus' ? 'place' : 'video'} text={place} type="footnote" color={theme.inkSecondary} />
-            ) : null}
-
-            {staffText(event) ? <Txt type="footnote" color={theme.inkTertiary}>{staffText(event)}</Txt> : null}
           </View>
           {edit ? <Icon name={edit} size={26} color={edit === 'add' ? theme.accent : theme.tint.off} /> : null}
         </View>
@@ -258,6 +263,7 @@ const styles = StyleSheet.create({
   // The + or − sits beside the class, outside its fade, so a ghost's is as clear as any.
   editLine: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   fill: { flex: 1 },
+  faded: { gap: Space.xxs },
   title: { flex: 1 },
   // Sits on the headline's first line rather than its top edge.
   mark: { paddingTop: 3 },

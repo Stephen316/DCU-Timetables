@@ -137,6 +137,15 @@ export class CancellationStatus {
     }
   }
 
+  /**
+   * Some say cancelled, but not enough to call it: no verdict, short of the bar, and more
+   * saying cancelled than saying it went ahead. Any verdict settles the question, so it is
+   * never merely reported.
+   */
+  get isReported(): boolean {
+    return this.verdict === null && !this.isFlagged && this.netReports >= 1;
+  }
+
   /** Cancellation reports less the people who contradicted them, floored at zero. */
   get netReports(): number {
     return Math.max(0, this.reportCount - this.onCount);

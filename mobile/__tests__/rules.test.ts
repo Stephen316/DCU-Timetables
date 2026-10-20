@@ -205,7 +205,30 @@ describe('Verdicts', () => {
 
   test('without a verdict the crowd wording is kept', () => {
     const h = DeadlineRules.highlight(lecture, [], new CancellationStatus(3));
-    expect(h && highlightReason(h)).toBe('Reported cancelled · 3 people');
+    expect(h && highlightReason(h)).toBe('Cancelled · reported by 3 people');
+  });
+
+  test('reaching the bar or a cancelled verdict settles it; short of the bar is only reported', () => {
+    expect(DeadlineRules.highlight(lecture, [], new CancellationStatus(3))?.kind).toBe('cancelled');
+    expect(DeadlineRules.highlight(lecture, [], new CancellationStatus(0, 0, null, verdict('cancelled')))?.kind).toBe('cancelled');
+    expect(DeadlineRules.highlight(lecture, [], new CancellationStatus(1))).toEqual({ kind: 'reported', reportCount: 1 });
+    expect(DeadlineRules.highlight(lecture, [], new CancellationStatus(2))).toEqual({ kind: 'reported', reportCount: 2 });
+    // Enough reports, but disputed back under the agreement bar: still a warning.
+    expect(DeadlineRules.highlight(lecture, [], new CancellationStatus(3, 2))?.kind).toBe('reported');
+  });
+
+  test('a report outweighed by people who saw the class go ahead is no warning', () => {
+    expect(DeadlineRules.highlight(lecture, [], new CancellationStatus(1, 1))).toBeNull();
+    expect(DeadlineRules.highlight(lecture, [], new CancellationStatus(2, 3))).toBeNull();
+  });
+
+  test('an organiser saying it is on silences the reports', () => {
+    expect(DeadlineRules.highlight(lecture, [], new CancellationStatus(2, 0, null, verdict('running')))).toBeNull();
+  });
+
+  test('reported wording counts one person in the singular', () => {
+    expect(highlightReason({ kind: 'reported', reportCount: 1 })).toBe('Reported cancelled · 1 person');
+    expect(highlightReason({ kind: 'reported', reportCount: 2 })).toBe('Reported cancelled · 2 people');
   });
 
   test('a moved class is outlined in its own right', () => {
@@ -252,7 +275,8 @@ describe('Class highlights', () => {
   test('a reported cancellation outranks both', () => {
     const list = [deadline('Quiz 3', 'quiz', 17)];
     expect(DeadlineRules.highlight(practicalThu, list, new CancellationStatus(4))).toEqual({ kind: 'cancelled', reportCount: 4, decidedBy: null });
-    expect(DeadlineRules.highlight(practicalThu, list, new CancellationStatus(2))).toEqual({ kind: 'test', title: 'Quiz 3' });
+    expect(DeadlineRules.highlight(practicalThu, list, new CancellationStatus(2))).toEqual({ kind: 'reported', reportCount: 2 });
+    expect(DeadlineRules.highlight(practicalThu, list, new CancellationStatus(1, 1))).toEqual({ kind: 'test', title: 'Quiz 3' });
   });
 
   test('a pinned deadline only colours its own class', () => {

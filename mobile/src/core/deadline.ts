@@ -192,10 +192,14 @@ export function deadlineTrust(deadline: Deadline, standing: DeadlineStanding): D
 /**
  * Why a class is outlined in the timetable. Ordered by how much it matters: a cancelled
  * class outranks a quiz, which outranks something to hand in.
+ *
+ * `cancelled` is settled — the crowd cleared the bar, or an organiser said so — and the
+ * class is greyed out. `reported` is short of the bar: a warning, not a fact.
  */
 export type ClassHighlight =
   | { kind: 'cancelled'; reportCount: number; decidedBy: string | null }
   | { kind: 'moved'; source: string }
+  | { kind: 'reported'; reportCount: number }
   | { kind: 'test'; title: string }
   | { kind: 'assignment'; title: string };
 
@@ -205,8 +209,10 @@ export function highlightReason(highlight: ClassHighlight): string {
       // A verdict rendered as "Reported cancelled · 0 people" reads as nobody thinks it's
       // cancelled — the opposite of what it means.
       if (highlight.decidedBy !== null) return `Cancelled · confirmed by ${highlight.decidedBy}`;
-      return `Reported cancelled · ${highlight.reportCount} people`;
+      return `Cancelled · reported by ${highlight.reportCount} people`;
     case 'moved': return `Moved · ${highlight.source}`;
+    case 'reported':
+      return `Reported cancelled · ${highlight.reportCount === 1 ? '1 person' : `${highlight.reportCount} people`}`;
     case 'test': return `${highlight.title} today`;
     case 'assignment': return `${highlight.title} due today`;
   }
@@ -339,6 +345,7 @@ export const DeadlineRules = {
     if (cancellation.verdict?.state === 'moved') {
       return { kind: 'moved', source: verdictSource(cancellation.verdict) };
     }
+    if (cancellation.isReported) return { kind: 'reported', reportCount: cancellation.reportCount };
     const today = DeadlineRules.dueAt(event, deadlines);
     const test = today.find((d) => isSatInClass(d.kind));
     if (test) return { kind: 'test', title: displayTitle(test) };

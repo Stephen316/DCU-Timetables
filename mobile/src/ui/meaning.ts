@@ -8,9 +8,11 @@ import { Palette } from './theme';
  */
 export function highlightTint(highlight: ClassHighlight, palette: Palette): string {
   switch (highlight.kind) {
+    // A settled cancellation is grey, not orange: nothing to act on, the class just isn't on.
+    case 'cancelled': return palette.inkTertiary;
     // Same orange for moved: turning up to the wrong room is as much "don't go where you
-    // were going" as a cancellation, and a third colour would only add a thing to learn.
-    case 'cancelled':
+    // were going" as a possible cancellation, and a third colour would only add a thing to learn.
+    case 'reported':
     case 'moved': return palette.tint.off;
     case 'test': return palette.tint.test;
     case 'assignment': return palette.tint.due;
@@ -19,7 +21,8 @@ export function highlightTint(highlight: ClassHighlight, palette: Palette): stri
 
 export function highlightIcon(highlight: ClassHighlight): IconName {
   switch (highlight.kind) {
-    case 'cancelled': return 'alert';
+    case 'cancelled': return 'cancelled';
+    case 'reported': return 'alert';
     case 'moved': return 'moved';
     case 'test': return 'test';
     case 'assignment': return 'assignment';
