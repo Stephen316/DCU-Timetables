@@ -103,8 +103,10 @@ function Themed({ children }: { children: ReactNode }) {
 function RootStack() {
   const { flow } = useRoot();
   const inShell = flow === 'shell';
+  // iOS 26 blurs a scroll view's content under the top edge by default, even with no native
+  // header there — on our own headers it smeared the top of every screen.
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, scrollEdgeEffects: { top: 'hidden' } }}>
       <Stack.Protected guard={inShell}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="class/[id]" options={{ headerShown: true, title: 'Class', headerBackTitle: 'Back' }} />
