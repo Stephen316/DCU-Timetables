@@ -10,7 +10,8 @@ import { listenForAlertTaps } from '../../data/notifications';
 import { PrefKey } from '../../data/storage';
 import { useAppEvent, useModel, useNow, usePrefBool } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
-import { ActionSheet, BarButton, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
+import { BarButton, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
+import { DropdownMenu } from '../../ui/DropdownMenu';
 import { Space, useTheme } from '../../ui/theme';
 import { AccountSheet } from '../account/AccountSheet';
 import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
@@ -209,8 +210,10 @@ export function TimetableScreen() {
         ) : null}
       </View>
 
-      <ActionSheet
+      {/* From the ⋯ at the top, where the student's finger already is. */}
+      <DropdownMenu
         visible={sheet === 'menu'}
+        anchor={more}
         onClose={() => {
           setSheet(null);
           tutorial?.signal('menuClosed');
