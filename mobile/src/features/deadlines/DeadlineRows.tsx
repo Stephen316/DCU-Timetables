@@ -51,11 +51,13 @@ export function DeadlineRow({
   const edited = deadline.editedAt ? ' · edited' : '';
   const dispute = standing.disputeSummary;
   const worth = gradeWeightLabel(deadline.gradeWeight);
+  const schedule = variant === 'schedule';
   return (
     <Row>
-      <View style={styles.rowBody}>
-        <AdaptiveStack gap={Space.m}>
-          <View style={styles.kindIcon} importantForAccessibility="no" accessibilityElementsHidden>
+      <View style={[styles.rowBody, schedule && styles.scheduleBody]}>
+        {/* Hung from the title's first line, so a title that wraps doesn't leave them floating. */}
+        <AdaptiveStack gap={Space.m} style={schedule && styles.top}>
+          <View style={[styles.kindIcon, schedule && styles.titleLine]} importantForAccessibility="no" accessibilityElementsHidden>
             <Icon name={deadlineKindIcon(deadline.kind)} color={iconColor} />
           </View>
           <View style={styles.text}>
@@ -71,8 +73,10 @@ export function DeadlineRow({
               <Txt type="caption" color={theme.inkSecondary}>{deadlineKindLabel(deadline.kind)}, due {formatAbbreviated(deadline.due)} · {worth}{edited}</Txt>
             )}
           </View>
-          <Txt type="caption" color={theme.inkSecondary} style={styles.medium}>{deadlineCountdown(deadline.due)}</Txt>
+          <Txt type="caption" color={theme.inkSecondary} style={[styles.medium, schedule && !large && styles.countdown]}>{deadlineCountdown(deadline.due)}</Txt>
         </AdaptiveStack>
+
+        {schedule ? <View style={[styles.divider, !large && styles.indent, { backgroundColor: theme.separator }]} /> : null}
 
         {/* One unverified person's date is worth less than three people's, and the row says which. */}
         <AdaptiveStack style={large ? undefined : styles.indent}>
@@ -382,6 +386,12 @@ function editFooter({ deadline, standing }: { deadline: Deadline; standing: Dead
 const styles = StyleSheet.create({
   // Room between what it is and how far it's trusted, so the two read as two lines of thought.
   rowBody: { gap: Space.s },
+  scheduleBody: { gap: Space.m },
+  top: { alignItems: 'flex-start' },
+  // The headline's line, so the icon sits level with the title's first line.
+  titleLine: { height: 22, justifyContent: 'center' },
+  countdown: { marginTop: 3 },
+  divider: { height: StyleSheet.hairlineWidth },
   kindIcon: { width: 22, alignItems: 'center' },
   text: { flex: 1, gap: Space.xxs },
   medium: { fontWeight: '500' },

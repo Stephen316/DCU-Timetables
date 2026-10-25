@@ -13,11 +13,14 @@ import { Observable } from '../../state/hooks';
  */
 export class DeadlinesModel extends Observable {
   sections: { section: DeadlineSection; deadlines: Deadline[] }[] = [];
+  /** The one module being shown, or null for every module. */
+  moduleFilter: string | null = null;
   standings = new Map<string, DeadlineStanding>();
   isLoading = false;
   errorText: string | null = null;
 
   private modules: string[] = [];
+  private all: Deadline[] = [];
   private readonly reporterID: string;
 
   constructor(private readonly services: Services) {
@@ -27,6 +30,25 @@ export class DeadlinesModel extends Observable {
 
   get isEmpty(): boolean {
     return this.sections.length === 0;
+  }
+
+  /** The modules that have something coming up — the choices for `moduleFilter`. */
+  get modulesWithDeadlines(): string[] {
+    return [...new Set(DeadlineRules.upcoming(this.all).map((d) => d.moduleKey))];
+  }
+
+  showModule(key: string | null): void {
+    this.moduleFilter = key;
+    this.regroup();
+    this.changed();
+  }
+
+  private regroup(): void {
+    // A module whose last deadline has passed or gone would leave an empty page with no way
+    // back but the menu, so the filter lets go of it.
+    if (this.moduleFilter && !this.modulesWithDeadlines.includes(this.moduleFilter)) this.moduleFilter = null;
+    const shown = this.moduleFilter ? this.all.filter((d) => d.moduleKey === this.moduleFilter) : this.all;
+    this.sections = DeadlineSchedule.grouped(shown);
   }
 
   get total(): number {
@@ -49,7 +71,8 @@ export class DeadlinesModel extends Observable {
   async load(modules: string[]): Promise<void> {
     this.modules = modules;
     if (modules.length === 0) {
-      this.sections = [];
+      this.all = [];
+      this.regroup();
       this.changed();
       return;
     }
@@ -57,7 +80,8 @@ export class DeadlinesModel extends Observable {
     this.changed();
     try {
       const all = await this.services.deadlines.deadlinesForModules(modules);
-      this.sections = DeadlineSchedule.grouped(all);
+      this.all = all;
+      this.regroup();
       this.standings = await this.services.deadlines.standings(all.map((d) => d.id));
       this.errorText = null;
     } catch (error) {

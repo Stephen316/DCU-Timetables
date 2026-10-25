@@ -33,6 +33,7 @@ const ICONS = {
   more: 'ellipsis-horizontal-circle-outline',
   back: 'chevron-back',
   forward: 'chevron-forward',
+  dropdown: 'chevron-down',
   place: 'location-outline',
   video: 'videocam-outline',
   undo: 'arrow-undo-outline',
@@ -689,6 +690,8 @@ export interface SheetAction {
   label: string;
   icon?: IconName;
   destructive?: boolean;
+  /** The choice in force, ticked — for a menu that picks one of several. */
+  selected?: boolean;
   onPress: () => void;
 }
 

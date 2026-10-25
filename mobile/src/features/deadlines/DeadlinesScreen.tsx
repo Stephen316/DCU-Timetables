@@ -1,12 +1,13 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { deadlineSectionTitle } from '../../core/deadline';
 import { useModel, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { EmptyState, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
-import { Space, useTheme } from '../../ui/theme';
+import { EmptyState, Icon, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
+import { DropdownMenu } from '../../ui/DropdownMenu';
+import { Radius, Space, useTheme } from '../../ui/theme';
 import { DeadlineRow } from './DeadlineRows';
 import { DeadlinesModel } from './DeadlinesModel';
 import { useTutorial } from '../tutorial/Tutorial';
@@ -36,9 +37,43 @@ export function DeadlinesScreen() {
   const tutorial = useTutorial();
   useFocusEffect(useCallback(() => tutorial?.signal('deadlinesShown'), [tutorial]));
 
+  const filterButton = useRef<View>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const moduleChoices = model.modulesWithDeadlines
+    .map((key) => ({ key, name: week.moduleName(key) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const filterTitle = model.moduleFilter ? week.moduleName(model.moduleFilter) : 'All modules';
+
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + Space.s, borderBottomColor: theme.separator }]}>
       <Txt type="headline" accessibilityRole="header">Deadlines</Txt>
+      {model.isEmpty ? null : (
+        <View ref={filterButton} collapsable={false} style={styles.filter}>
+          <Pressable
+            onPress={() => setFilterOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Showing ${filterTitle}`}
+            accessibilityHint="Choose a module"
+            hitSlop={10}
+            style={({ pressed }) => [styles.filterLabel, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Txt type="caption" color={theme.accent} numberOfLines={1} style={styles.shrink}>{filterTitle}</Txt>
+            <Icon name="dropdown" size={14} color={theme.accent} />
+          </Pressable>
+        </View>
+      )}
+      <DropdownMenu
+        visible={filterOpen}
+        anchor={filterButton}
+        align="center"
+        onClose={() => setFilterOpen(false)}
+        actions={[
+          { label: 'All modules', selected: model.moduleFilter === null, onPress: () => model.showModule(null) },
+          ...moduleChoices.map(({ key, name }) => ({
+            label: name, selected: model.moduleFilter === key, onPress: () => model.showModule(key),
+          })),
+        ]}
+      />
     </View>
   );
 
@@ -102,26 +137,30 @@ export function DeadlinesScreen() {
           </Section>
         ) : null}
         {model.sections.map((group) => (
-          <Section key={group.section} header={deadlineSectionTitle(group.section)}>
-            {group.deadlines.map((d) => (
-              <DeadlineRow
-                key={d.id}
-                deadline={d}
-                moduleName={week.moduleName(d.moduleKey)}
-                standing={model.standing(d)}
-                isMine={model.isMine(d)}
-                variant="schedule"
-                actions={{
-                  onConfirm: () => void model.toggleConfirmation(d),
-                  onDispute: () => void model.toggleDispute(d),
-                  onEdit: (fields) => void model.edit(d, fields),
-                  onRename: (label) => void model.rename(d, label),
-                  onDelete: () => void model.remove(d),
-                  onReport: (reason) => void model.report(d, reason),
-                  onHideAuthor: () => void model.hideAuthor(d),
-                }}
-              />
-            ))}
+          // A card each, rather than rows in one card: two deadlines split by a hairline read as one.
+          <Section key={group.section} header={deadlineSectionTitle(group.section)} bare>
+            <View style={styles.cards}>
+              {group.deadlines.map((d) => (
+                <View key={d.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+                  <DeadlineRow
+                    deadline={d}
+                    moduleName={week.moduleName(d.moduleKey)}
+                    standing={model.standing(d)}
+                    isMine={model.isMine(d)}
+                    variant="schedule"
+                    actions={{
+                      onConfirm: () => void model.toggleConfirmation(d),
+                      onDispute: () => void model.toggleDispute(d),
+                      onEdit: (fields) => void model.edit(d, fields),
+                      onRename: (label) => void model.rename(d, label),
+                      onDelete: () => void model.remove(d),
+                      onReport: (reason) => void model.report(d, reason),
+                      onHideAuthor: () => void model.hideAuthor(d),
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
           </Section>
         ))}
       </ListScroll>
@@ -132,5 +171,10 @@ export function DeadlinesScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
+  filter: { maxWidth: '80%' },
+  cards: { gap: Space.s },
+  card: { borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  filterLabel: { flexDirection: 'row', alignItems: 'center', gap: Space.xxs },
+  shrink: { flexShrink: 1 },
   summary: { flexDirection: 'row', justifyContent: 'center', gap: Space.l, paddingVertical: Space.s, borderTopWidth: StyleSheet.hairlineWidth },
 });
