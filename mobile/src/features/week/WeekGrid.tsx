@@ -8,7 +8,7 @@ import { compactTitleOf, isOnline, TimetableEvent, titleOf } from '../../core/ti
 import { DeadlineMark, Hatch, Icon, Txt } from '../../ui/components';
 import { MacShell } from '../../data/macShell';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
-import { moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
+import { concentric, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
 import { usePagerDrag } from './Pager';
 import { EditKind } from './editing';
@@ -310,7 +310,9 @@ const styles = StyleSheet.create({
   corner: { position: 'absolute', top: 1, right: 1 },
   faded: { opacity: 0.5 },
   // Bottom right, clear of the title: the end of the room is the least a block would lose.
-  editMark: { position: 'absolute', bottom: 1, right: 1, borderRadius: 7 },
+  // Round, but for the corner it shares with the block: that one curves round the block's own
+  // corner centre, a point in from its edge.
+  editMark: { position: 'absolute', bottom: 1, right: 1, borderRadius: 7, borderBottomRightRadius: concentric(Radius.block, 1) },
   now: { position: 'absolute', left: 0, right: 0, height: 0 },
   nowAcross: { position: 'absolute', top: -StyleSheet.hairlineWidth / 2, height: StyleSheet.hairlineWidth },
   nowToday: { position: 'absolute', top: -1, height: 2 },

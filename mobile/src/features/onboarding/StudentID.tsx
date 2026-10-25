@@ -350,22 +350,34 @@ function CardGhost({ guide }: { guide: Box }) {
   );
 }
 
+/** The frame's corner radius. The dim's cut-out and the brackets curve round the same centres. */
+const GUIDE_RADIUS = 14;
+/** Wide enough to reach every edge of the screen from the frame. */
+const DIM_REACH = 3000;
+
 /** The dimmed surround, and a bracket at each corner of where the card goes. */
 function GuideOverlay({ guide }: { guide: { x: number; y: number; w: number; h: number } }) {
   const dim = 'rgba(0,0,0,0.55)';
   const arm = 28;
+  // Each bracket is 4pt thick and centred on the frame's 1pt edge, so its outer curve is 2pt
+  // further out than the frame's, and its inner one 2pt further in: the same centre.
+  const bracket = GUIDE_RADIUS + 2;
   const corner = (pos: object, edges: object) => <View style={[styles.corner, { width: arm, height: arm }, pos, edges]} />;
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: guide.y, backgroundColor: dim }} />
-      <View style={{ position: 'absolute', left: 0, right: 0, top: guide.y + guide.h, bottom: 0, backgroundColor: dim }} />
-      <View style={{ position: 'absolute', left: 0, width: guide.x, top: guide.y, height: guide.h, backgroundColor: dim }} />
-      <View style={{ position: 'absolute', right: 0, width: guide.x, top: guide.y, height: guide.h, backgroundColor: dim }} />
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {/* The dim, as one wide border round the frame, so its cut-out has the frame's own rounded corners. */}
+      <View
+        style={{
+          position: 'absolute',
+          left: guide.x - DIM_REACH, top: guide.y - DIM_REACH, width: guide.w + DIM_REACH * 2, height: guide.h + DIM_REACH * 2,
+          borderWidth: DIM_REACH, borderColor: dim, borderRadius: DIM_REACH + GUIDE_RADIUS,
+        }}
+      />
       <View style={[styles.guideEdge, { left: guide.x, top: guide.y, width: guide.w, height: guide.h }]}>
-        {corner({ left: -2, top: -2 }, { borderLeftWidth: 4, borderTopWidth: 4, borderTopLeftRadius: 14 })}
-        {corner({ right: -2, top: -2 }, { borderRightWidth: 4, borderTopWidth: 4, borderTopRightRadius: 14 })}
-        {corner({ left: -2, bottom: -2 }, { borderLeftWidth: 4, borderBottomWidth: 4, borderBottomLeftRadius: 14 })}
-        {corner({ right: -2, bottom: -2 }, { borderRightWidth: 4, borderBottomWidth: 4, borderBottomRightRadius: 14 })}
+        {corner({ left: -2, top: -2 }, { borderLeftWidth: 4, borderTopWidth: 4, borderTopLeftRadius: bracket })}
+        {corner({ right: -2, top: -2 }, { borderRightWidth: 4, borderTopWidth: 4, borderTopRightRadius: bracket })}
+        {corner({ left: -2, bottom: -2 }, { borderLeftWidth: 4, borderBottomWidth: 4, borderBottomLeftRadius: bracket })}
+        {corner({ right: -2, bottom: -2 }, { borderRightWidth: 4, borderBottomWidth: 4, borderBottomRightRadius: bracket })}
       </View>
     </View>
   );
@@ -501,7 +513,9 @@ const styles = StyleSheet.create({
   shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   shutterFill: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#FFFFFF' },
   options: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.l },
-  guideEdge: { position: 'absolute', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
+  guideEdge: { position: 'absolute', borderRadius: GUIDE_RADIUS, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
+  // The dim's border reaches far past the screen; in a browser it would widen the page.
+  clip: { overflow: 'hidden' },
   // Low enough that the real card shows through it once it's lined up.
   ghost: { position: 'absolute', opacity: 0.22 },
   ghostPhoto: {

@@ -102,10 +102,50 @@ export const dark: Palette = {
 export const Space = { xxs: 2, xs: 4, s: 8, m: 12, l: 16, xl: 24, xxl: 32 } as const;
 
 /**
- * Two radii for two jobs: a block on the week grid has to stay a rectangle at 26pt tall,
- * and a button is a thing your thumb aims at.
+ * A block on the week grid has to stay a rectangle at 26pt tall, and a button is a thing
+ * your thumb aims at. The rest are built from those and the padding inside each container,
+ * so every corner curves round the same centre as the control in it (see `concentric`).
  */
-export const Radius = { block: 4, control: 8 } as const;
+const CONTROL = 8;
+
+/**
+ * How far a card's contents sit in from its edges: far enough that a line of text or a chip
+ * clears the corner's curve rather than running into it. On the 4-point scale.
+ */
+export const CardInset = { x: 20, y: 14 } as const;
+
+export const Radius = {
+  block: 4,
+  control: CONTROL,
+  /** A grouped card, its controls `CardInset.x` in from its edge. */
+  card: CONTROL + CardInset.x,
+  /** A dialog or a tray on a square screen, its buttons `Space.xl` in. */
+  dialog: CONTROL + Space.xl,
+  /** A sheet in a desktop window, its cards `Space.l` in. */
+  panel: CONTROL + CardInset.x + Space.l,
+} as const;
+
+/**
+ * Corner concentricity: a rounded shape inside another, `inset` in from its edge, curves
+ * around the same centre when its radius is the outer one's less the inset. Below zero the
+ * two can't share a centre — the gap is wider than the curve — and the inner shape keeps its
+ * own radius instead.
+ */
+export function concentric(outer: number, inset: number, fallback: number = Radius.control): number {
+  const r = outer - inset;
+  return r > 0 ? r : fallback;
+}
+
+/**
+ * The radius of the screen's own corners, for what sits in them: a Face ID iPhone's display
+ * is rounded, a desktop window's content and an older phone's aren't. Neither React Native
+ * nor the browser can ask the device, so a phone with a home-indicator inset gets the
+ * commonest figure — iPhone 12 to 15, 47pt; the Pro Max and 16 Pro run larger, which leaves
+ * an inner curve a touch flatter than its frame rather than crossing it.
+ */
+export function screenCorner(bottomInset: number): number {
+  return bottomInset >= 20 ? 47 : 0;
+}
 
 /** The minimum hit area. Visible chrome may be smaller; the tappable frame isn't. */
 export const MIN_TARGET = 44;

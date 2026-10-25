@@ -380,7 +380,8 @@ function editFooter({ deadline, standing }: { deadline: Deadline; standing: Dead
 }
 
 const styles = StyleSheet.create({
-  rowBody: { gap: Space.xs },
+  // Room between what it is and how far it's trusted, so the two read as two lines of thought.
+  rowBody: { gap: Space.s },
   kindIcon: { width: 22, alignItems: 'center' },
   text: { flex: 1, gap: Space.xxs },
   medium: { fontWeight: '500' },

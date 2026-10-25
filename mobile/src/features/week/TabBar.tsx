@@ -3,7 +3,7 @@ import { ComponentProps, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { Animated, Easing, LayoutChangeEvent, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { Txt } from '../../ui/components';
 import { useTutorialTarget } from '../tutorial/Tutorial';
-import { Desktop, MIN_TARGET, Radius, Space, useTheme } from '../../ui/theme';
+import { concentric, Desktop, MIN_TARGET, Radius, screenCorner, Space, useTheme } from '../../ui/theme';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -15,6 +15,7 @@ type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>
 export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) {
   const theme = useTheme();
   const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(0);
   const count = state.routes.length;
   const tabWidth = count > 0 ? width / count : 0;
   const [offset] = useState(() => new Animated.Value(0));
@@ -82,6 +83,11 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
 
   const deadlinesTab = useTutorialTarget('deadlinesTab');
   const selected = hovered ?? state.index;
+  // In the screen's rounded bottom corners, the outline curves round the same centre they
+  // do, `Space.l` in from the edge — as far as its height allows, which makes it a capsule.
+  // A square-cornered screen has nothing to follow.
+  const corner = screenCorner(insets.bottom);
+  const outlineRadius = corner > 0 ? Math.min(concentric(corner, Space.l), height / 2 || Radius.control) : Radius.control;
   // White reads on the dark canvas; on Solarized Light's cream it would vanish, so ink.
   const selectedInk = theme.scheme === 'dark' ? '#FFFFFF' : theme.ink;
 
@@ -89,14 +95,17 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
     <View style={[styles.bar, { backgroundColor: theme.canvas, paddingBottom: Math.max(insets.bottom, Space.s) }]}>
       <View
         style={styles.slider}
-        onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
+        onLayout={(e: LayoutChangeEvent) => {
+          setWidth(e.nativeEvent.layout.width);
+          setHeight(e.nativeEvent.layout.height);
+        }}
         accessibilityRole="tablist"
         {...responder.panHandlers}
       >
         {tabWidth > 0 ? (
           <Animated.View
             pointerEvents="none"
-            style={[styles.outline, { width: tabWidth, borderColor: theme.accent, transform: [{ translateX: offset }] }]}
+            style={[styles.outline, { width: tabWidth, borderRadius: outlineRadius, borderColor: theme.accent, transform: [{ translateX: offset }] }]}
           />
         ) : null}
         {state.routes.map((route, i) => {
@@ -128,7 +137,7 @@ const styles = StyleSheet.create({
   bar: { paddingHorizontal: Space.l, paddingTop: Space.xs },
   // Across a desktop window the two tabs would sit a screen apart; keep them together.
   slider: { flexDirection: 'row', width: '100%', maxWidth: Desktop.dialog, alignSelf: 'center' },
-  outline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1, borderRadius: Radius.control },
+  outline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1 },
   tab: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xs, gap: Space.xxs },
   semibold: { fontWeight: '600' },
 });

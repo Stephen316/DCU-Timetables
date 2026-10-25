@@ -1,11 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, isValidElement, ReactNode, useEffect, useRef, useState } from 'react';
+import { Children, createContext, isValidElement, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo, ActivityIndicator, Animated, ColorValue, Easing, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Desktop, MIN_TARGET, Radius, Space, Type, useTheme } from './theme';
+import { CardInset, concentric, Desktop, MIN_TARGET, Radius, screenCorner, Space, Type, useTheme } from './theme';
 
 // MARK: - Icons
 
@@ -284,10 +284,31 @@ export function ToggleRow({ value, onChange, children }: { value: boolean; onCha
  * The one action a screen is for: sign in, continue, report it. Full width, filled. The
  * fill is a parameter so reporting a class cancelled is filled with the cancellation orange.
  */
+/**
+ * The radius a big button takes where it sits. Normally `Radius.control`; along the foot of a
+ * popup on a rounded-screen phone, the buttons are in the screen's own corners, and
+ * `BottomCard` hands them the radius concentric with those.
+ */
+const ButtonCorner = createContext<number>(Radius.control);
+
+/**
+ * A tray's top corners. On a rounded-screen phone, the screen's own radius, as the system's
+ * sheets have it; on a square screen, a dialog's, drawn round the controls inside.
+ */
+function trayRadius(bottomInset: number): number {
+  return screenCorner(bottomInset) || Radius.dialog;
+}
+
+/** What sits `Space.xl` inside a tray — its buttons and lists — curving round the tray's corners. */
+function trayInner(bottomInset: number): number {
+  return concentric(trayRadius(bottomInset), Space.xl);
+}
+
 export function PrimaryButton({
   title, onPress, disabled, busy, fill, foreground,
 }: { title: string; onPress: () => void; disabled?: boolean; busy?: boolean; fill?: string; foreground?: string }) {
   const theme = useTheme();
+  const corner = useContext(ButtonCorner);
   const fg = foreground ?? (fill ? '#FFFFFF' : theme.onAccent);
   return (
     <Pressable
@@ -299,7 +320,7 @@ export function PrimaryButton({
       // Disabled drops the whole control, text and fill together.
       style={({ pressed }) => [
         styles.bigButton,
-        { backgroundColor: fill ?? theme.accent, opacity: disabled ? 0.4 : pressed ? 0.8 : 1 },
+        { borderRadius: corner, backgroundColor: fill ?? theme.accent, opacity: disabled ? 0.4 : pressed ? 0.8 : 1 },
       ]}
     >
       {busy ? <ActivityIndicator size="small" color={fg} /> : null}
@@ -311,13 +332,14 @@ export function PrimaryButton({
 /** The alternative to a primary action — "Not now". Same shape, quieter fill. */
 export function SecondaryButton({ title, onPress, disabled }: { title: string; onPress: () => void; disabled?: boolean }) {
   const theme = useTheme();
+  const corner = useContext(ButtonCorner);
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={title}
-      style={({ pressed }) => [styles.bigButton, { backgroundColor: theme.raised, opacity: disabled ? 0.4 : pressed ? 0.8 : 1 }]}
+      style={({ pressed }) => [styles.bigButton, { borderRadius: corner, backgroundColor: theme.raised, opacity: disabled ? 0.4 : pressed ? 0.8 : 1 }]}
     >
       <Txt color={theme.ink} style={styles.centerText}>{title}</Txt>
     </Pressable>
@@ -611,12 +633,18 @@ export function BottomCard({
         <View
           style={[
             styles.bottomCard,
-            { backgroundColor: theme.surface, paddingBottom: Space.xl + (wide ? 0 : insets.bottom) },
+            {
+              backgroundColor: theme.surface, paddingBottom: Space.xl + (wide ? 0 : insets.bottom),
+              borderTopLeftRadius: trayRadius(insets.bottom), borderTopRightRadius: trayRadius(insets.bottom),
+            },
             wide && styles.dialog,
           ]}
         >
           {wide ? <View style={styles.dialogTop} /> : <View style={[styles.grabber, { backgroundColor: theme.rail }]} />}
-          <ScrollView bounces={false} contentContainerStyle={styles.bottomCardContent}>{children}</ScrollView>
+          {/* A dialog's corners are drawn round its buttons'; a tray's buttons round the screen's. */}
+          <ButtonCorner.Provider value={wide ? Radius.control : trayInner(insets.bottom)}>
+            <ScrollView bounces={false} contentContainerStyle={styles.bottomCardContent}>{children}</ScrollView>
+          </ButtonCorner.Provider>
         </View>
       </View>
     </Modal>
@@ -669,6 +697,10 @@ export function ActionSheet({
   visible, title, message, actions, onClose,
 }: { visible: boolean; title?: string; message?: string; actions: SheetAction[]; onClose: () => void }) {
   const theme = useTheme();
+  // The list sits in the card's top corners, the same inset as the buttons below, so it takes
+  // their radius and curves round the same corner centres.
+  const wide = useWide();
+  const insets = useSafeAreaInsets();
   // iOS ignores a modal presented while another is still animating away, and an action here
   // often opens one (a sheet, or the next question). So on iOS the action waits for this
   // card to finish dismissing, with a fallback in case that callback never comes.
@@ -696,7 +728,7 @@ export function ActionSheet({
           {message ? <Txt type="footnote" color={theme.inkSecondary} style={styles.centerText}>{message}</Txt> : null}
         </View>
       ) : null}
-      <View style={[styles.card, { backgroundColor: theme.raised }]}>
+      <View style={[styles.card, { backgroundColor: theme.raised, borderRadius: wide ? Radius.control : trayInner(insets.bottom) }]}>
         {actions.map((action, i) => (
           <View key={action.label}>
             {i > 0 ? <View style={[styles.hairline, { backgroundColor: theme.separator }]} /> : null}
@@ -730,18 +762,20 @@ export const styles = StyleSheet.create({
   stackColumn: { flexDirection: 'column', alignItems: 'flex-start' },
   listContent: { paddingTop: Space.s },
   readable: { width: '100%', maxWidth: Desktop.readable, alignSelf: 'center' },
-  section: { marginHorizontal: Space.l, marginTop: Space.l },
-  sectionHeader: { marginBottom: Space.xs + 2, marginHorizontal: Space.l },
-  sectionFooter: { marginTop: Space.xs + 2, marginHorizontal: Space.l },
-  card: { borderRadius: 10, overflow: 'hidden' },
-  hairline: { height: StyleSheet.hairlineWidth, marginLeft: Space.l },
-  row: { minHeight: MIN_TARGET, paddingHorizontal: Space.l, paddingVertical: Space.m - 1, justifyContent: 'center' },
+  // A card's worth of air between groups, so each heading reads as starting the next one.
+  section: { marginHorizontal: Space.l, marginTop: Space.xl },
+  // In line with the text in the card below: `CardInset.x` from its edge.
+  sectionHeader: { marginBottom: Space.xs + 2, marginHorizontal: CardInset.x },
+  sectionFooter: { marginTop: Space.xs + 2, marginHorizontal: CardInset.x },
+  card: { borderRadius: Radius.card, overflow: 'hidden' },
+  hairline: { height: StyleSheet.hairlineWidth, marginLeft: CardInset.x },
+  row: { minHeight: MIN_TARGET, paddingHorizontal: CardInset.x, paddingVertical: CardInset.y, justifyContent: 'center' },
   rowLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
   labeled: { flexDirection: 'row', justifyContent: 'space-between', gap: Space.m, flexWrap: 'wrap' },
   labeledValue: { flexShrink: 1, textAlign: 'right' },
   disabled: { opacity: 0.4 },
   bigButton: {
-    minHeight: MIN_TARGET, borderRadius: Radius.control, paddingHorizontal: Space.l, paddingVertical: Space.m,
+    minHeight: MIN_TARGET, paddingHorizontal: Space.l, paddingVertical: Space.m,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.s, alignSelf: 'stretch',
   },
   centerText: { textAlign: 'center' },
@@ -766,12 +800,13 @@ export const styles = StyleSheet.create({
   sheetBarRight: { justifyContent: 'flex-end' },
   sheetTitle: { flex: 2, textAlign: 'center' },
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  bottomCard: { borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: Space.xl, maxHeight: '85%' },
+  bottomCard: { paddingHorizontal: Space.xl, maxHeight: '85%' },
   centred: { justifyContent: 'center', alignItems: 'center', padding: Space.xl },
-  dialog: { width: '100%', maxWidth: Desktop.dialog, borderRadius: 16 },
+  // Concentric with the buttons and lists in its corners, `Space.xl` in from its edge.
+  dialog: { width: '100%', maxWidth: Desktop.dialog, borderRadius: Radius.dialog },
   dialogTop: { height: Space.xl },
   panel: {
-    width: '100%', maxWidth: Desktop.panel, height: '100%', maxHeight: 760, borderRadius: 12,
+    width: '100%', maxWidth: Desktop.panel, height: '100%', maxHeight: 760, borderRadius: Radius.panel,
     borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
   },
   bottomCardContent: { gap: Space.l },
@@ -779,5 +814,5 @@ export const styles = StyleSheet.create({
   confirmBody: { alignItems: 'center', gap: Space.m, paddingTop: Space.s },
   buttonStack: { gap: Space.s },
   actionHeader: { gap: Space.xs, alignItems: 'center' },
-  actionRow: { minHeight: 52, justifyContent: 'center', paddingHorizontal: Space.l },
+  actionRow: { minHeight: 52, justifyContent: 'center', paddingHorizontal: CardInset.x },
 });
