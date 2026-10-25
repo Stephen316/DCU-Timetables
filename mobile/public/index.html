@@ -59,5 +59,14 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
+    <!--
+      iOS 26 draws a Liquid Glass blur over the top of a Home Screen web app, and no meta tag or
+      CSS turns it off. It stands down where a fixed box with a solid background covers the top
+      edge: WebKit reads one plain colour there instead of the content under it. Our headers
+      scroll with their screens, so this strip is that box: a point tall, in the canvas colour
+      the headers are painted in, so it can't be seen. Under the app's popups (z-index 1), whose
+      dim covers it. The app keeps its colour in step with the theme.
+    -->
+    <div id="top-edge" aria-hidden="true" style="position: fixed; top: 0; left: 0; right: 0; height: 1px; z-index: 1; pointer-events: none; background-color: #212129"></div>
   </body>
 </html>
