@@ -69,9 +69,9 @@ function Themed({ children }: { children: ReactNode }) {
     document.body.style.backgroundColor = palette.canvas;
     document.documentElement.style.colorScheme = scheme;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', palette.canvas);
-    // The strip that keeps iOS 26's blur off the top of the Home Screen app (public/index.html).
-    const edge = document.getElementById('top-edge');
-    if (edge) edge.style.backgroundColor = palette.canvas;
+    // The root is what keeps iOS 26's blur off the top of the Home Screen app (public/index.html).
+    const root = document.getElementById('root');
+    if (root) root.style.backgroundColor = palette.canvas;
   }, [scheme, palette]);
 
   const navigationTheme = useMemo(() => {

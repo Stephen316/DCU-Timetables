@@ -38,11 +38,24 @@
       body {
         overflow: hidden;
       }
-      /* These styles make the root element full-height */
+      /*
+        The root element fills the screen, pinned there. iOS 26 draws a Liquid Glass blur over
+        the top of a Home Screen web app, and no meta tag or CSS turns it off; WebKit leaves it
+        off only where a fixed box, full width, more than 10pt tall and with a solid background,
+        covers the top edge. Our headers scroll with their screens, so the app itself is that
+        box, painted the canvas colour its headers are, which costs no space at the top.
+        The app keeps the colour in step with its theme.
+      */
       #root {
         display: flex;
-        height: 100%;
-        flex: 1;
+        position: fixed;
+        inset: 0;
+        background-color: #eee8d5;
+      }
+      @media (prefers-color-scheme: dark) {
+        #root {
+          background-color: #212129;
+        }
       }
       /* The browser's focus ring on text fields; the caret already shows which one is active. */
       input:focus,
@@ -59,14 +72,5 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-    <!--
-      iOS 26 draws a Liquid Glass blur over the top of a Home Screen web app, and no meta tag or
-      CSS turns it off. It stands down where a fixed box with a solid background covers the top
-      edge: WebKit reads one plain colour there instead of the content under it. Our headers
-      scroll with their screens, so this strip is that box: a point tall, in the canvas colour
-      the headers are painted in, so it can't be seen. Under the app's popups (z-index 1), whose
-      dim covers it. The app keeps its colour in step with the theme.
-    -->
-    <div id="top-edge" aria-hidden="true" style="position: fixed; top: 0; left: 0; right: 0; height: 1px; z-index: 1; pointer-events: none; background-color: #212129"></div>
   </body>
 </html>
