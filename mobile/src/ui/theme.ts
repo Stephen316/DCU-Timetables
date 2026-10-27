@@ -155,7 +155,7 @@ export const MIN_TARGET = 44;
  * drawn for. Past `wide`, sheets and short choices float as panels; lists and forms keep to
  * `readable`, the width at which a row's label and its value still read as one line.
  */
-export const Desktop = { wide: 760, readable: 680, panel: 620, dialog: 440 } as const;
+export const Desktop = { wide: 760, week: 1120, readable: 680, panel: 620, dialog: 440 } as const;
 
 export const Type = {
   /** The weekday heading the day view. The one loud piece of type in the app. */

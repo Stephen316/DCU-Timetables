@@ -9,7 +9,7 @@ import { Safari } from '../../data/safari';
 import { PrefKey } from '../../data/storage';
 import { usePrefBool, useServices } from '../../state/hooks';
 import { useRoot } from '../../state/root';
-import { Icon, Txt, useReduceMotion } from '../../ui/components';
+import { Icon, Txt, useReduceMotion, useWide } from '../../ui/components';
 import { Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { TutorialVideo } from './TutorialVideo';
 
@@ -86,6 +86,7 @@ const PAD = 6;
 export function TutorialProvider({ children }: { children: ReactNode }) {
   const services = useServices();
   const { flow, model } = useRoot();
+  const wide = useWide();
   const [due, setDue] = usePrefBool(PrefKey.tutorialDue);
   const [ready, setReady] = useState(false);
   const [run, setRun] = useState<{ steps: TutorialStep[]; index: number } | null>(null);
@@ -106,13 +107,13 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!due || !ready || run || flow !== 'shell') return;
     const timer = setTimeout(() => {
-      const onMac = MacShell.isPresent();
-      if (!onMac) services.prefs.setBool(PrefKey.weekShowsCalendar, false);
+      const onDesktop = wide || MacShell.isPresent();
+      if (!onDesktop) services.prefs.setBool(PrefKey.weekShowsCalendar, false);
       model?.resetToDefaultDay(new Date(), false);
-      setRun({ steps: Tutorial.steps(onMac, Safari.current()), index: 0 });
+      setRun({ steps: Tutorial.steps(onDesktop, Safari.current()), index: 0 });
     }, 600);
     return () => clearTimeout(timer);
-  }, [due, ready, run, flow, model, services]);
+  }, [due, ready, run, flow, model, services, wide]);
 
   // Signed out mid-tour: nothing left to point at, and nothing to pick up again later.
   if (flow !== 'shell' && run) setRun(null);
@@ -302,7 +303,7 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
   // Padded, but kept on screen: a full-width row would otherwise lose its outline's sides.
   // An area — the day's list, the week grid — runs to the foot of the screen; its top part
   // says "here" just as well, and leaves the card room beneath it.
-  const isArea = step.target === 'dayList' || step.target === 'weekGrid';
+  const isArea = step.target === 'dayList';
   const hole = rect
     ? inside({
         x: rect.x - PAD, y: rect.y - PAD, width: rect.width + PAD * 2,

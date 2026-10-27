@@ -5,10 +5,10 @@ import { locationDisplay, parsedLocations } from '../../core/roomLocation';
 import { WeekGrid as Placement, PlacedEvent } from '../../core/schedule';
 import { addDays, formatTime, formatWeekdayDayMonth, isSameDay, isWeekend, startOfDay, startOfWeek, weekdayShort } from '../../core/time';
 import { compactTitleOf, isOnline, TimetableEvent, titleOf } from '../../core/timetableEvent';
-import { DeadlineMark, Hatch, Icon, Txt } from '../../ui/components';
+import { DeadlineMark, Hatch, Icon, Txt, useWide } from '../../ui/components';
 import { MacShell } from '../../data/macShell';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
-import { concentric, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
+import { concentric, Desktop, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
 import { usePagerDrag } from './Pager';
 import { EditKind } from './editing';
@@ -20,7 +20,7 @@ const NOW_DOT = 7;
 /** One line of `caption2` text in a block, and the block's padding and border above and below it. */
 const LINE_HEIGHT = 13.5;
 const BLOCK_INSET = 8;
-/** The Mac app's margin down each side of the grid: a window is wider than the week needs. */
+/** A desktop window's margin down each side of the grid: a window is wider than the week needs. */
 const MAC_SIDE = Space.xl;
 
 /**
@@ -45,13 +45,15 @@ export function WeekGridView({
 }) {
   const theme = useTheme();
   const pagerDrag = usePagerDrag();
-  const [onMac] = React.useState(() => MacShell.isPresent());
+  const [inMacApp] = React.useState(() => MacShell.isPresent());
+  const wide = useWide();
+  const onDesktop = inMacApp || wide;
   const shownDays = editing ? [...eventsByDay, ...ghostsByDay] : eventsByDay;
   const all = shownDays.flatMap((d) => d.events);
   const ghostIDs = new Set(editing ? ghostsByDay.flatMap((d) => d.events.map((e) => e.id)) : []);
-  // The tutorial has the student open the week's first class from here; the Mac's also
+  // The tutorial has the student open the week's first class from here; a desktop window's also
   // points at the grid itself, which is all its timetable is.
-  const gridTarget = useTutorialTarget('weekGrid', onMac);
+  const gridTarget = useTutorialTarget('weekGrid', onDesktop);
   const firstID = eventsByDay.flatMap((d) => d.events).reduce<TimetableEvent | null>((a, e) => (!a || e.start < a.start ? e : a), null)?.id ?? null;
 
   // Mon–Fri, plus a weekend day only when something is scheduled on it.
@@ -72,7 +74,7 @@ export function WeekGridView({
   const offsetY = (date: Date) => ((date.getHours() - hours[0]) * 60 + date.getMinutes()) / 60 * HOUR_HEIGHT;
 
   return (
-    <View ref={gridTarget} collapsable={false} style={[styles.fill, { backgroundColor: theme.canvas }, onMac && styles.macSides]}>
+    <View ref={gridTarget} collapsable={false} style={[styles.fill, { backgroundColor: theme.canvas }, onDesktop && styles.desktopGrid]}>
       <GridBody
         days={days}
         hours={hours}
@@ -294,7 +296,7 @@ function hourLabel(hour: number): string {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  macSides: { paddingHorizontal: MAC_SIDE },
+  desktopGrid: { width: '100%', maxWidth: Desktop.week, alignSelf: 'center', paddingHorizontal: MAC_SIDE },
   header: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
   dayHead: { alignItems: 'center', gap: 1 },
   bold: { fontWeight: '700' },

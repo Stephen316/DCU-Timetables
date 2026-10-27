@@ -10,7 +10,7 @@ import { listenForAlertTaps } from '../../data/notifications';
 import { PrefKey } from '../../data/storage';
 import { useAppEvent, useModel, useNow, usePrefBool } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
-import { BarButton, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
+import { BarButton, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt, useWide } from '../../ui/components';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { Space, useTheme } from '../../ui/theme';
 import { AccountSheet } from '../account/AccountSheet';
@@ -30,9 +30,11 @@ export function TimetableScreen() {
   const model = useModel(useWeekModel());
   const now = useNow();
   const [prefersCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
-  // The Mac app is the week and the deadlines: the day list is a phone's view.
-  const [onMac] = useState(() => MacShell.isPresent());
-  const showsCalendar = onMac || prefersCalendar;
+  // A desktop window (the Mac app or a wide browser) is the week and the deadlines: the day list is a phone's view.
+  const [inMacApp] = useState(() => MacShell.isPresent());
+  const wide = useWide();
+  const onDesktop = inMacApp || wide;
+  const showsCalendar = onDesktop || prefersCalendar;
   const weekPager = useRef<PagerControl>(null);
   const [sheet, setSheet] = useState<'menu' | 'account' | 'alerts' | 'export' | null>(null);
   /** Edit timetable: the course's other classes show as ghosts, and a tap adds or removes. */
@@ -167,7 +169,7 @@ export function TimetableScreen() {
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       <View style={[styles.bar, { paddingTop: insets.top, borderBottomColor: theme.separator, backgroundColor: theme.canvas }]}>
-        {onMac ? (
+        {onDesktop ? (
           <View style={styles.side}>
             <IconButton icon="back" label="Previous week" onPress={() => weekPager.current?.turn(-1)} />
             <IconButton icon="forward" label="Next week" onPress={() => weekPager.current?.turn(1)} />
@@ -192,8 +194,8 @@ export function TimetableScreen() {
           </View>
         </View>
         {editing ? (
-          <View style={[styles.done, onMac && styles.side, onMac && styles.sideRight]}><BarButton title="Done" bold onPress={() => setEditing(false)} /></View>
-        ) : onMac ? (
+          <View style={[styles.done, onDesktop && styles.side, onDesktop && styles.sideRight]}><BarButton title="Done" bold onPress={() => setEditing(false)} /></View>
+        ) : onDesktop ? (
           <View style={[styles.side, styles.sideRight]}>
             <BarButton title="Today" onPress={() => model.showCurrentWeek()} />
             <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={openMenu} /></View>
