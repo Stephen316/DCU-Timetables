@@ -160,8 +160,15 @@ export function AccountSheet({ visible, onClose }: { visible: boolean; onClose: 
           ) : null}
         </Section>
 
-        <Section footer="Removes your account and everything on this device.">
-          <ActionRow title="Delete account" destructive busy={deleting} onPress={() => setConfirmingDelete(true)} />
+        <Section footer="Delete account removes your account and everything on this device.">
+          <ActionRow
+            title="Sign out"
+            onPress={() => {
+              onClose();
+              events.emit('signOutRequested');
+            }}
+          />
+          <ActionRow title="Delete account"destructive busy={deleting} onPress={() => setConfirmingDelete(true)} />
         </Section>
         {deleteError ? (
           <Section>
