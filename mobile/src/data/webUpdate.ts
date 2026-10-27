@@ -40,15 +40,23 @@ export function startWebUpdateChecks(): () => void {
   const running = WebUpdate.entryScript(document.documentElement.innerHTML);
   if (running === null) return () => undefined;
 
+  const typing = () => document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
   const check = async () => {
-    const typing = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
-    if (typing) return;
+    if (typing()) return;
     try {
       const root = webAppRoot();
       const response = await fetch(root, { cache: 'no-store' });
       if (!response.ok) return;
       const live = WebUpdate.entryScript(await response.text());
       if (!WebUpdate.shouldReload(running, live, sessionStorage.getItem(TRIED_KEY))) return;
+      // Its code downloaded first, while this build carries on, so the reload starts it from
+      // the offline copy (public/sw.js keeps what it fetches) instead of a blank screen
+      // waiting on the download. A failed download leaves this build running for next time.
+      const code = await fetch(new URL(live!, root).href);
+      if (!code.ok) return;
+      await code.blob();
+      // They may have started typing while it downloaded.
+      if (typing()) return;
       sessionStorage.setItem(TRIED_KEY, live!);
       // The root, not a reload: Pages has only the one page, and a reload at /app/class/…
       // would get its 404. The app opens on today, as it does coming back anyway.

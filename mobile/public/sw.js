@@ -3,7 +3,10 @@
 // page, the code and the assets it names, so the app opens — and the timetable it saved, in
 // localStorage, shows — with no connection.
 //
-// The page always comes from the network when there is one, so a deploy is never held back.
+// The page comes from the network when it answers quickly, so a deploy is never held back,
+// and from the copy when it doesn't: a weak signal on campus can take most of a minute to
+// fail, and the app shouldn't sit blank all that time. A slow answer is still saved for next
+// time, and the update check (src/data/webUpdate.ts) moves onto it.
 // The code and assets are named after their contents (entry-<hash>.js), so a saved copy of
 // one never goes stale and is only replaced when a build names a different file.
 //
@@ -22,13 +25,22 @@ async function filesFor(pageText, cache) {
   const entry = /_expo\/static\/js\/web\/entry-[0-9a-f]+\.js/.exec(pageText)?.[0];
   if (!entry) return null;
   const url = new URL(entry, ROOT).href;
-  const code = (await cache.match(url)) ?? (await fetch(url));
+  const code = (await cache.match(url)) ?? (await fetchBuilt(url));
   if (!code.ok) return null;
   const codeText = await code.clone().text();
   // The code names its other files by full path: the lazily loaded chunks and every asset.
   const named = new RegExp(`"${ROOT.pathname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}((?:_expo/static/js/web/|assets/)[^"]+)"`, 'g');
   const paths = new Set([...codeText.matchAll(named)].map((m) => m[1]));
   return { entry, code, paths: [...paths] };
+}
+
+/**
+ * A file named after its contents, from the browser's own cache when the page has just
+ * loaded it — on a first visit, the code and the icon font it fetched moments ago — rather
+ * than downloading it a second time.
+ */
+function fetchBuilt(url) {
+  return fetch(url, { cache: 'force-cache' });
 }
 
 /**
@@ -44,7 +56,7 @@ async function save(pageResponse) {
   for (const path of [...files.paths, 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'favicon.ico']) {
     const url = new URL(path, ROOT).href;
     if (await cache.match(url)) continue;
-    const response = await fetch(url).catch(() => null);
+    const response = await (BUILT.test(path) ? fetchBuilt(url) : fetch(url)).catch(() => null);
     if (response?.ok) await cache.put(url, response);
   }
   await cache.put(PAGE, pageResponse);
@@ -85,22 +97,28 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+/** How long a launch waits for the network's page before opening the saved one. */
+const NETWORK_WAIT_MS = 2000;
+
 /**
- * The network's page when it answers, saved for next time; the saved one when it doesn't.
- * Pages has only the one page, so a 404 for a page under the app (/app/class/…) gets it too.
+ * The network's page when it answers within NETWORK_WAIT_MS, saved for next time; the saved
+ * one when it's slower, or doesn't answer at all. Pages has only the one page, so a 404 for a
+ * page under the app (/app/class/…) gets it too.
  */
 async function openPage(event) {
-  try {
-    const response = await fetch(event.request);
-    if (response.ok && new URL(event.request.url).href === PAGE) {
-      event.waitUntil(save(response.clone()).catch(() => undefined));
-      return response;
-    }
-    if (response.status !== 404) return response;
-  } catch {
-    // Offline: the saved page below.
-  }
-  return (await caches.match(PAGE)) ?? Response.error();
+  const isPage = new URL(event.request.url).href === PAGE;
+  const network = fetch(event.request);
+  // Saved whenever it arrives, even once the saved copy has been shown instead. Cloned here,
+  // before the page reads the body.
+  event.waitUntil(network.then((response) => (response.ok && isPage ? save(response.clone()) : undefined)).catch(() => undefined));
+
+  const saved = await caches.match(PAGE);
+  const answered = network.catch(() => null);
+  const response = saved
+    ? await Promise.race([answered, new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_WAIT_MS))])
+    : await answered;
+  if (response && response.status !== 404) return response;
+  return saved ?? Response.error();
 }
 
 /** A file named after its contents never changes, so a saved copy is as good as a fresh one. */
