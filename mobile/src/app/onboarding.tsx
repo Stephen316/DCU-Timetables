@@ -26,7 +26,7 @@ export default function OnboardingRoute() {
     case 'studentID':
       return <StudentID onSaved={onSaved} onSignOut={signOut} />;
     case 'programmePicker':
-      return <ProgrammePicker onSelect={onSelect} />;
+      return <ProgrammePicker onSelect={onSelect} onSignOut={signOut} />;
     case 'shell':
       return null;
   }

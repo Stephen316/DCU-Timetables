@@ -3,7 +3,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import { categoryCode, categoryDescriptiveName, TimetableCategory } from '../../core/timetableEvent';
 import { errorMessage } from '../../data/rest';
 import { useServices } from '../../state/hooks';
-import { EmptyState, Icon, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
+import { ActionRow, EmptyState, Icon, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
 import { Radius, Space, useTheme } from '../../ui/theme';
 import { ScreenTitle } from './ScreenTitle';
 
@@ -11,7 +11,7 @@ import { ScreenTitle } from './ScreenTitle';
  * Search DCU programmes of study and pick one. An account that picked one before — signed
  * out, or on another phone — gets it back without being asked, as the student number is.
  */
-export function ProgrammePicker({ onSelect }: { onSelect: (category: TimetableCategory) => void }) {
+export function ProgrammePicker({ onSelect, onSignOut }: { onSelect: (category: TimetableCategory) => void; onSignOut: () => void }) {
   const theme = useTheme();
   const services = useServices();
   const source = services.sourceOverride ?? services.dcu;
@@ -116,6 +116,10 @@ export function ProgrammePicker({ onSelect }: { onSelect: (category: TimetableCa
           message={query.trim().length === 0 ? 'Search for your course, e.g. "Computer" or a code like "CASE".' : 'Try a different search.'}
         />
       ) : null}
+      {/* The way back to sign-in — the wrong account, or a test one — before there's a ⋯ to find it in. */}
+      <Section>
+        <ActionRow title="Sign out" icon="signOut" destructive onPress={onSignOut} />
+      </Section>
     </ListScroll>
   );
 }
