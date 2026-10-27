@@ -5,11 +5,13 @@ import {
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Tutorial, TutorialSignal, TutorialStep, TutorialTarget, TutorialText } from '../../core/tutorial';
 import { MacShell } from '../../data/macShell';
+import { Safari } from '../../data/safari';
 import { PrefKey } from '../../data/storage';
 import { usePrefBool, useServices } from '../../state/hooks';
 import { useRoot } from '../../state/root';
 import { Icon, Txt, useReduceMotion } from '../../ui/components';
 import { Radius, Space, useTheme, withAlpha } from '../../ui/theme';
+import { TutorialVideo } from './TutorialVideo';
 
 /**
  * The first-run tutorial: the screen dimmed but for one control at a time, an arrow and a
@@ -107,7 +109,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       const onMac = MacShell.isPresent();
       if (!onMac) services.prefs.setBool(PrefKey.weekShowsCalendar, false);
       model?.resetToDefaultDay(new Date(), false);
-      setRun({ steps: Tutorial.steps(onMac), index: 0 });
+      setRun({ steps: Tutorial.steps(onMac, Safari.current()), index: 0 });
     }, 600);
     return () => clearTimeout(timer);
   }, [due, ready, run, flow, model, services]);
@@ -412,6 +414,8 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
         <Txt type="caption" color={theme.inkTertiary}>{TutorialText.count(position.n, position.total)}</Txt>
         <Txt type="headline" accessibilityRole="header">{title}</Txt>
         {body ? <Txt type="subheadline" color={theme.inkSecondary}>{body}</Txt> : null}
+        {/* As tall as the screen allows once the words and buttons have their room. */}
+        {step.media ? <TutorialVideo media={step.media} height={Math.max(220, Math.min(window.height - 300, 520))} /> : null}
         <View style={styles.buttons}>
           {step.skip ? (
             <Pressable onPress={onSkip} accessibilityRole="button" hitSlop={8} style={({ pressed }) => [styles.skip, pressed && styles.pressed]}>
@@ -565,7 +569,8 @@ function same(a: Rect | null, b: Rect | null): boolean {
 
 const styles = StyleSheet.create({
   card: {
-    position: 'absolute', padding: Space.l, gap: Space.xs, borderRadius: Radius.control, borderWidth: StyleSheet.hairlineWidth,
+    // A card's radius: its button and recording, `Space.l` in, curve round its corner centres.
+    position: 'absolute', padding: Space.l, gap: Space.xs, borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth,
   },
   buttons: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Space.s },
   skip: { paddingVertical: Space.s },

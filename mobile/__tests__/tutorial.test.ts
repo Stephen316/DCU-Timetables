@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Tutorial, TutorialText } from '../src/core/tutorial';
+import { Safari } from '../src/data/safari';
 import { createServices } from '../src/data/services';
 import { MemoryKV } from '../src/data/storage';
 import { LectureModel } from '../src/features/lecture/LectureModel';
@@ -8,6 +9,7 @@ import { at, event } from './helpers';
 
 const phone = Tutorial.steps(false);
 const mac = Tutorial.steps(true);
+const safari = Tutorial.steps(false, true);
 
 describe('Tutorial steps', () => {
   test('the phone tour runs forward: day, week, a class and back, Deadlines, More, then the end', () => {
@@ -63,6 +65,36 @@ describe('Tutorial steps', () => {
     expect(phone[Tutorial.next(phone, index('report'), false)].id).toBe('back');
     expect(phone[Tutorial.next(phone, index('swipe'), false)].id).toBe('week');
   });
+
+  test('in Safari on an iPhone, the tour shows adding it to the Home Screen just before the end', () => {
+    expect(safari.map((s) => s.id)).toEqual([...phone.slice(0, -1).map((s) => s.id), 'homeScreen', 'thanks']);
+    expect(Tutorial.position(safari, safari.length - 2)).toEqual({ n: 8, total: 9 });
+    expect(safari.filter((s) => s.media).map((s) => s.id)).toEqual(['homeScreen']);
+    // Nowhere else: the Mac app and the native app are already apps.
+    expect([...phone, ...mac].some((s) => s.media)).toBe(false);
+    expect(Tutorial.steps(true, true)).toBe(mac);
+  });
+});
+
+describe('Safari on an iPhone', () => {
+  const ua = (rest: string) => `Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) ${rest}`;
+
+  test('is Safari itself', () => {
+    expect(Safari.isIPhoneSafari(ua('Version/26.0 Mobile/15E148 Safari/604.1'))).toBe(true);
+  });
+
+  test("is not another browser, whose Share is elsewhere, nor an app's own browser, which can't add to the Home Screen", () => {
+    expect(Safari.isIPhoneSafari(ua('CriOS/141.0.7390.41 Mobile/15E148 Safari/604.1'))).toBe(false);
+    expect(Safari.isIPhoneSafari(ua('FxiOS/143.0 Mobile/15E148 Safari/605.1.15'))).toBe(false);
+    expect(Safari.isIPhoneSafari(ua('Version/26.0 EdgiOS/140.3485.94 Mobile/15E148 Safari/605.1.15'))).toBe(false);
+    expect(Safari.isIPhoneSafari(ua('Mobile/15E148 Instagram 401.0.0.32.75 (iPhone17,1; iOS 26_0)'))).toBe(false);
+    expect(Safari.isIPhoneSafari(ua('Mobile/15E148 [FBAN/FBIOS;FBAV/530.0.0.47.109]'))).toBe(false);
+  });
+
+  test('is not an iPad or a Mac, where Share is at the top', () => {
+    expect(Safari.isIPhoneSafari('Mozilla/5.0 (iPad; CPU OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1')).toBe(false);
+    expect(Safari.isIPhoneSafari('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15')).toBe(false);
+  });
 });
 
 describe('The tutorial text file', () => {
@@ -70,7 +102,7 @@ describe('The tutorial text file', () => {
   const file = readFileSync(join(__dirname, '../../docs/TUTORIAL_TEXT.txt'), 'utf8');
   const lines = new Set(file.split('\n').map((l) => l.replace(/\s+\(drafted by Claude.*\)\s*$/, '').trim()));
 
-  test.each([...phone, ...mac].map((s) => [s.id, s] as const))('%s matches the file', (_, s) => {
+  test.each([...safari, ...mac].map((s) => [s.id, s] as const))('%s matches the file', (_, s) => {
     expect(lines).toContain(`TITLE: ${s.title}`);
     if (s.body) expect(lines).toContain(`BODY: ${s.body}`);
     if (s.arrived) {

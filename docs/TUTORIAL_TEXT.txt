@@ -112,7 +112,18 @@ BODY: Edit your timetable, set class alerts, export it to your calendar, and man
 ACTION: Tap ⋯; the menu opens, and the tour waits for it to close
 
 
-Step 8 — Thank you!
+Step 8 — Add to Home Screen (only in Safari on an iPhone; TEMPORARY)
+(Not in the native app, Chrome, an app's own browser, or once it's on the Home Screen.
+A recording of Safari's own screens plays on the card: the tour can't point at Safari's ⋯,
+which is outside the page.)
+POINTS AT: nothing (a card in the middle of the screen, with the recording)
+--------------------------------------------------------
+TITLE: Add it to your Home Screen   (drafted by Claude — edit freely)
+BODY: Tap ⋯, then Share, then Add to Home Screen. It opens like an app, still signed in.   (drafted by Claude — edit freely)
+BUTTONS: Next
+
+
+Step 8 — Thank you!   (step 9 in Safari on an iPhone)
 (Back on the timetable, in the week grid the student switched to)
 POINTS AT: nothing (a card in the middle of the screen)
 --------------------------------------------------------

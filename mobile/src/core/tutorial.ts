@@ -26,6 +26,9 @@ export type TutorialTarget =
  */
 export type TutorialAction = 'swipeLeft' | 'tap' | 'scrollDown';
 
+/** A recording played on the card, for something the tour can't point at itself. */
+export type TutorialMedia = 'addToHomeScreen';
+
 /** What the app tells the tutorial when the student does something a step waits for. */
 export type TutorialSignal =
   | 'daySwiped'
@@ -64,13 +67,14 @@ export interface TutorialStep {
   toTimetable: boolean;
   /** Reports made on this step are a practice: shown on this phone, sent nowhere. */
   practice: boolean;
+  media: TutorialMedia | null;
 }
 
 function step(fields: Partial<TutorialStep> & Pick<TutorialStep, 'id' | 'title'>): TutorialStep {
   return {
     body: null, target: null, action: null, advancesOn: null, arrived: null,
     primary: TutorialText.next, skip: TutorialText.skip, continues: false, hidden: false,
-    toTimetable: false, practice: false,
+    toTimetable: false, practice: false, media: null,
     ...fields,
   };
 }
@@ -130,6 +134,15 @@ const more: TutorialStep[] = [
   step({ id: 'menu', advancesOn: 'menuClosed', continues: true, hidden: true, primary: null, title: 'More' }),
 ];
 
+// TEMPORARY — a recording of Safari's own Add to Home Screen, standing in until the tour can
+// dim the page and point at Safari's ⋯ itself. Safari's buttons are outside the page, so the
+// cut-out can't go round them. Remove this step, `TutorialMedia`, `TutorialVideo` and
+// public/add-to-home-screen.* together.
+const homeScreen = step({
+  id: 'homeScreen', media: 'addToHomeScreen', title: 'Add it to your Home Screen',
+  body: 'Tap ⋯, then Share, then Add to Home Screen. It opens like an app, still signed in.',
+});
+
 const thanks = step({
   id: 'thanks', toTimetable: true, title: 'Thank you!', body: "You're all set. Replay this tour any time from Account.",
   primary: 'Done', skip: null,
@@ -162,9 +175,13 @@ const MAC: TutorialStep[] = [
 ];
 
 export const Tutorial = {
-  /** The Mac app has no day view, so its tour starts on the week. */
-  steps(onMac: boolean): TutorialStep[] {
-    return onMac ? MAC : PHONE;
+  /**
+   * The Mac app has no day view, so its tour starts on the week. In Safari on an iPhone, the
+   * tour shows how to add the app to the Home Screen before it ends.
+   */
+  steps(onMac: boolean, inIPhoneSafari = false): TutorialStep[] {
+    if (onMac) return MAC;
+    return inIPhoneSafari ? [...PHONE.slice(0, -1), homeScreen, thanks] : PHONE;
   },
 
   /** "n of total" for a step, counting a continuing step as part of the one before it. */
