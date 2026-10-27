@@ -3,7 +3,7 @@ import { AuthSession } from './session';
 
 /**
  * Supabase verifies an emailed link on its own servers and then sends the browser on to
- * the project's Site URL — the public site — carrying the result in the URL *fragment*:
+ * the public site (`EMAIL_LINK_DESTINATION` in auth.ts), carrying the result in the URL *fragment*:
  * `#access_token=…&refresh_token=…&expires_at=…&type=signup`, or `#error=access_denied&
  * error_code=otp_expired` when the link has already been used or has aged out. The site's
  * index page forwards that fragment to the app, which is what this reads.
@@ -58,7 +58,7 @@ let taken: { link: AuthLink | null } | null = null;
  * Reads the address once per page load and answers the same thing every call after, since
  * a second read would find the URL already cleared and report an ordinary visit.
  *
- * Web only: the Site URL sends every email link to the website, so a phone with the app
+ * Web only: every email link is sent to the website, so a phone with the app
  * installed confirms in its browser and comes back to the app to sign in.
  */
 export function takeAuthLink(now: number = Date.now()): AuthLink | null {

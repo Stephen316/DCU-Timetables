@@ -324,6 +324,17 @@ describe('Auth requests', () => {
     expect(await service.signUp(email, 'Password1')).toEqual({ kind: 'needsEmailConfirmation' });
   });
 
+  test('every request that emails a link names the public site as where it lands', async () => {
+    // Left to the dashboard's Site URL, a reset link once opened the GitHub repo instead.
+    const { calls, fn } = fakeFetch(() => ({ body: { id: 'u1', email: 'x' } }));
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await service.signUp(email, 'Password1');
+    await service.resendConfirmation(email);
+    await service.sendPasswordReset(email);
+    expect(calls.map((call) => new URL(call.url).pathname)).toEqual(['/auth/v1/signup', '/auth/v1/resend', '/auth/v1/recover']);
+    for (const call of calls) expect(query(call.url)).toEqual({ redirect_to: 'https://stephen316.github.io/DCU-Timetables/' });
+  });
+
   const tokens = { accessToken: 'link-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 };
 
   test('an email link is finished by reading back the account it signed in', async () => {

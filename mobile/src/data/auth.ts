@@ -38,6 +38,17 @@ export class AuthError extends Error {
   }
 }
 
+/**
+ * Where every emailed link sends the browser once Supabase has checked it: the public site,
+ * whose index page hands the session in the fragment on to the web app. Named on each request
+ * because without it Supabase falls back to the dashboard's Site URL, and when that pointed at
+ * the GitHub repo a reset link landed there and the new-password screen never opened. Supabase
+ * ignores it unless it is on the project's redirect allow-list (`supabase/templates/README.md`).
+ */
+export const EMAIL_LINK_DESTINATION = 'https://stephen316.github.io/DCU-Timetables/';
+
+const emailLinkQuery = `redirect_to=${encodeURIComponent(EMAIL_LINK_DESTINATION)}`;
+
 export type SignUpOutcome =
   /** Supabase sent a confirmation email; the address must be confirmed before sign-in. */
   | { kind: 'needsEmailConfirmation' }
@@ -70,7 +81,7 @@ export class SupabaseAuthService implements AuthService {
   ) {}
 
   async signUp(email: DCUEmail, password: string): Promise<SignUpOutcome> {
-    const json = await this.post('/auth/v1/signup', { email: email.address, password });
+    const json = await this.post(`/auth/v1/signup?${emailLinkQuery}`, { email: email.address, password });
     // A session only comes back when email confirmation is disabled.
     const session = parseAuthSession(json);
     if (session) {
@@ -103,11 +114,11 @@ export class SupabaseAuthService implements AuthService {
   }
 
   async resendConfirmation(email: DCUEmail): Promise<void> {
-    await this.post('/auth/v1/resend', { email: email.address, type: 'signup' });
+    await this.post(`/auth/v1/resend?${emailLinkQuery}`, { email: email.address, type: 'signup' });
   }
 
   async sendPasswordReset(email: DCUEmail): Promise<void> {
-    await this.post('/auth/v1/recover', { email: email.address });
+    await this.post(`/auth/v1/recover?${emailLinkQuery}`, { email: email.address });
   }
 
   /**

@@ -17,12 +17,17 @@ flow in the app triggers them.
 
 ## URLs the links depend on
 
-The app signs up through `/auth/v1/signup` with no `emailRedirectTo` (`mobile/src/data/auth.ts`),
-so every link lands on the project's **Site URL**. That is the public site on GitHub Pages,
-not the admin console on Vercel:
+Sign-up, resending the confirmation and password reset each send `redirect_to` the public
+site on GitHub Pages (`EMAIL_LINK_DESTINATION` in `mobile/src/data/auth.ts`), not the admin
+console on Vercel. Supabase honours it only if it is on the allow-list, and otherwise falls
+back to the **Site URL**, so both should name the same place:
 
 - Site URL: `https://stephen316.github.io/DCU-Timetables/`
 - Redirect allow-list: that URL with `**`, which covers the web app under `/app/` as well.
+
+Left to the Site URL alone, links once went to `https://github.com/Stephen316/DCU-Timetables`,
+the repo page: a reset link was accepted and then stranded there, with nothing to read its
+session, and the student got no new-password screen.
 
 Supabase verifies the token itself and then redirects to that address carrying the session
 in the URL *fragment* — `#access_token=...&refresh_token=...&type=signup` (or `type=recovery`).
@@ -34,8 +39,8 @@ What the student sees: the link signs them in and sign-up carries on where it le
 reset link opens the new-password screen first. A link that has expired or been used lands
 on sign-in with a line saying so.
 
-A student who signed up inside the native app also lands on the website, since the app
-sends no `emailRedirectTo` of its own. The address is confirmed either way, so they can
+A student who signed up inside the native app also lands on the website, since that is
+where every link is sent. The address is confirmed either way, so they can
 return to the app and sign in.
 
 ## Sending
@@ -48,6 +53,6 @@ can carry SPF/DKIM records, so a provider that demands a verified sending domain
 
 ## Changing the Site URL later
 
-Three places have to agree, or links go nowhere: the Site URL in the dashboard, the
-forwarding script in `site/index.html`, and the Pages workflow that decides the app sits
-under `app/`.
+Four places have to agree, or links go nowhere: the Site URL and redirect allow-list in the
+dashboard, `EMAIL_LINK_DESTINATION` in `mobile/src/data/auth.ts`, the forwarding script in
+`site/index.html`, and the Pages workflow that decides the app sits under `app/`.
