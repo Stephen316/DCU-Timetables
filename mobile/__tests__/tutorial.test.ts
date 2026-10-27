@@ -66,9 +66,9 @@ describe('Tutorial steps', () => {
     expect(phone[Tutorial.next(phone, index('swipe'), false)].id).toBe('week');
   });
 
-  test('in Safari on an iPhone, the tour shows adding it to the Home Screen just before the end', () => {
-    expect(safari.map((s) => s.id)).toEqual([...phone.slice(0, -1).map((s) => s.id), 'homeScreen', 'thanks']);
-    expect(Tutorial.position(safari, safari.length - 2)).toEqual({ n: 8, total: 9 });
+  test('in Safari on an iPhone, the tour starts by showing how to add it to the Home Screen', () => {
+    expect(safari.map((s) => s.id)).toEqual(['homeScreen', ...phone.map((s) => s.id)]);
+    expect(Tutorial.position(safari, 0)).toEqual({ n: 1, total: 9 });
     expect(safari.filter((s) => s.media).map((s) => s.id)).toEqual(['homeScreen']);
     // Nowhere else: the Mac app and the native app are already apps.
     expect([...phone, ...mac].some((s) => s.media)).toBe(false);

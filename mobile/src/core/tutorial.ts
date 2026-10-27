@@ -177,11 +177,11 @@ const MAC: TutorialStep[] = [
 export const Tutorial = {
   /**
    * The Mac app has no day view, so its tour starts on the week. In Safari on an iPhone, the
-   * tour shows how to add the app to the Home Screen before it ends.
+   * tour starts by showing how to add the app to the Home Screen.
    */
   steps(onMac: boolean, inIPhoneSafari = false): TutorialStep[] {
     if (onMac) return MAC;
-    return inIPhoneSafari ? [...PHONE.slice(0, -1), homeScreen, thanks] : PHONE;
+    return inIPhoneSafari ? [homeScreen, ...PHONE] : PHONE;
   },
 
   /** "n of total" for a step, counting a continuing step as part of the one before it. */
