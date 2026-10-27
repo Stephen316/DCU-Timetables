@@ -414,8 +414,10 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
         <Txt type="caption" color={theme.inkTertiary}>{TutorialText.count(position.n, position.total)}</Txt>
         <Txt type="headline" accessibilityRole="header">{title}</Txt>
         {body ? <Txt type="subheadline" color={theme.inkSecondary}>{body}</Txt> : null}
-        {/* As tall as the screen allows once the words and buttons have their room. */}
-        {step.media ? <TutorialVideo media={step.media} height={Math.max(220, Math.min(window.height - 300, 520))} /> : null}
+        {/* As large as the card and the screen allow once the words and buttons have their room. */}
+        {step.media ? (
+          <TutorialVideo media={step.media} maxWidth={cardWidth - Space.l * 2} maxHeight={Math.max(200, window.height - 320)} />
+        ) : null}
         <View style={styles.buttons}>
           {step.skip ? (
             <Pressable onPress={onSkip} accessibilityRole="button" hitSlop={8} style={({ pressed }) => [styles.skip, pressed && styles.pressed]}>

@@ -137,10 +137,10 @@ const more: TutorialStep[] = [
 // TEMPORARY — a recording of Safari's own Add to Home Screen, standing in until the tour can
 // dim the page and point at Safari's ⋯ itself. Safari's buttons are outside the page, so the
 // cut-out can't go round them. Remove this step, `TutorialMedia`, `TutorialVideo` and
-// public/add-to-home-screen.* together.
+// public/add-to-home-screen-* together.
 const homeScreen = step({
   id: 'homeScreen', media: 'addToHomeScreen', title: 'Add it to your Home Screen',
-  body: 'Tap ⋯, then Share, then Add to Home Screen. It opens like an app, still signed in.',
+  body: 'Tap ⋯, then Share, View More and Add to Home Screen. It opens like an app, still signed in.',
 });
 
 const thanks = step({

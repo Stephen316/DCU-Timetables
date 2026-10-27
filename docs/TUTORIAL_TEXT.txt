@@ -23,12 +23,13 @@ PHONE AND WEB
 Before step 1 — Add to Home Screen (only in Safari on an iPhone; TEMPORARY)
 (The tour's first card there, so every step after it counts one higher: "1 of 9".)
 (Not in the native app, Chrome, an app's own browser, or in the Home Screen copy itself.
-A recording of Safari's own screens plays on the card: the tour can't point at Safari's ⋯,
-which is outside the page.)
+A recording of Safari's own screens plays on the card, light or dark to match the phone: the
+tour can't point at Safari's ⋯, which is outside the page. In iOS 26, Add to Home Screen is
+behind View More in the Share sheet.)
 POINTS AT: nothing (a card in the middle of the screen, with the recording)
 --------------------------------------------------------
 TITLE: Add it to your Home Screen   (drafted by Claude — edit freely)
-BODY: Tap ⋯, then Share, then Add to Home Screen. It opens like an app, still signed in.   (drafted by Claude — edit freely)
+BODY: Tap ⋯, then Share, View More and Add to Home Screen. It opens like an app, still signed in.   (drafted by Claude — edit freely)
 BUTTONS: Next
 
 
