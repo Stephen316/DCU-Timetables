@@ -10,6 +10,7 @@ const links = [
   { href: "/timetable", label: "Timetable" },
   { href: "/courses", label: "Courses" },
   { href: "/people", label: "People" },
+  { href: "/test-accounts", label: "Test accounts" },
   { href: "/security", label: "Security" },
   { href: "/audit", label: "Audit" },
 ];
