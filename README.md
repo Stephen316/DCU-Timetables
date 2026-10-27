@@ -1,13 +1,16 @@
 # DCU-Timetables
 
-Your DCU timetable, groups, labs and deadlines, on your phone and your Mac. Free, for anyone
-with a DCU email.
+Hi, I'm Stephen, and I have built a completely pre-customised timetable app for DCU courses.
+See your specific modules, unique class rotations and module assignments all in one place.
+All you need to do is sign in, and your timetable is ready to go.
+
+Included are course/module community features, such as flagging classes as cancelled, uploading assignments and deadlines, and flagging classes as moved.
 
 ## Get the app
 
 ### On your phone (iPhone or Android)
 
-**[Open DCU Timetable →](https://stephen316.github.io/DCU-Timetables/app/)** then add it to
+**[Open DCU Timetable](https://stephen316.github.io/DCU-Timetables/app/)**  → then add it to
 your Home Screen, so it opens like any other app. There's no app store listing to search for.
 
 - **iPhone, in Safari:** tap Share (the square with an arrow; in newer Safari it's under the
