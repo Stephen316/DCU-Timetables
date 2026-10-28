@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import { Platform } from 'react-native';
 
 /**
  * The app's design tokens: colour, space, shape and type, defined once.
@@ -149,6 +150,19 @@ export function concentric(outer: number, inset: number, fallback: number = Radi
  */
 export function screenCorner(bottomInset: number): number {
   return bottomInset >= 20 ? 47 : 0;
+}
+
+/**
+ * The same figure for the web build on a Home Screen, which `screenCorner` never sees: without
+ * `viewport-fit=cover` the page reports no bottom inset, though the phone is just as round.
+ * A Face ID iPhone is the one at least 812pt tall; Safari's own toolbar sits between the page
+ * and the corner, so it gets nothing.
+ */
+export function homeScreenCorner(): number {
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined') return 0;
+  const homeScreen = (navigator as { standalone?: boolean }).standalone === true;
+  const faceID = /\biPhone\b/.test(navigator.userAgent) && Math.max(screen.width, screen.height) >= 812;
+  return homeScreen && faceID ? 47 : 0;
 }
 
 /** The minimum hit area. Visible chrome may be smaller; the tappable frame isn't. */

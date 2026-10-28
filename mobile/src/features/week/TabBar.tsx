@@ -3,12 +3,12 @@ import { ComponentProps, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { Animated, Easing, LayoutChangeEvent, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { Txt } from '../../ui/components';
 import { useTutorialTarget } from '../tutorial/Tutorial';
-import { concentric, Desktop, MIN_TARGET, Radius, screenCorner, Space, useTheme } from '../../ui/theme';
+import { concentric, Desktop, homeScreenCorner, MIN_TARGET, Radius, screenCorner, Space, useTheme } from '../../ui/theme';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 /**
- * The tabs as a slider: an accent outline sits around the selected tab and slides to the
+ * The tabs as a slider: an accent fill sits behind the selected tab and slides to the
  * other when it's tapped — or follows the finger when the slider is dragged, landing on
  * whichever tab it's released nearer.
  */
@@ -86,10 +86,10 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
   // In the screen's rounded bottom corners, the outline curves round the same centre they
   // do, `Space.l` in from the edge — as far as its height allows, which makes it a capsule.
   // A square-cornered screen has nothing to follow.
-  const corner = screenCorner(insets.bottom);
+  const corner = screenCorner(insets.bottom) || homeScreenCorner();
   const outlineRadius = corner > 0 ? Math.min(concentric(corner, Space.l), height / 2 || Radius.control) : Radius.control;
-  // White reads on the dark canvas; on Solarized Light's cream it would vanish, so ink.
-  const selectedInk = theme.scheme === 'dark' ? '#FFFFFF' : theme.ink;
+  // Filled like the app's other selected chips, so the tab under it takes their text colour.
+  const selectedInk = theme.onAccent;
 
   return (
     <View style={[styles.bar, { backgroundColor: theme.canvas, paddingBottom: Math.max(insets.bottom, Space.s) }]}>
@@ -105,7 +105,7 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
         {tabWidth > 0 ? (
           <Animated.View
             pointerEvents="none"
-            style={[styles.outline, { width: tabWidth, borderRadius: outlineRadius, borderColor: theme.accent, transform: [{ translateX: offset }] }]}
+            style={[styles.outline, { width: tabWidth, borderRadius: outlineRadius, backgroundColor: theme.accent, transform: [{ translateX: offset }] }]}
           />
         ) : null}
         {state.routes.map((route, i) => {
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   bar: { paddingHorizontal: Space.l, paddingTop: Space.xs },
   // Across a desktop window the two tabs would sit a screen apart; keep them together.
   slider: { flexDirection: 'row', width: '100%', maxWidth: Desktop.dialog, alignSelf: 'center' },
-  outline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1 },
+  outline: { position: 'absolute', top: 0, bottom: 0, left: 0 },
   tab: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xs, gap: Space.xxs },
   semibold: { fontWeight: '600' },
 });
