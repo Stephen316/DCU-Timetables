@@ -172,6 +172,7 @@ export function Section({
   header, footer, children, bare,
 }: { header?: string; footer?: ReactNode; children?: ReactNode; bare?: boolean }) {
   const theme = useTheme();
+  const outerCorner = useContext(ButtonCorner);
   const rows = Children.toArray(children);
   if (rows.length === 0 && !header && !footer) return null;
   return (
@@ -182,14 +183,17 @@ export function Section({
         </Txt>
       ) : null}
       {rows.length > 0 ? (
-        <View style={bare ? undefined : [styles.card, { backgroundColor: theme.surface }]}>
-          {rows.map((row, i) => (
-            <View key={isValidElement(row) && row.key != null ? row.key : i}>
-              {i > 0 && !bare ? <View style={[styles.hairline, { backgroundColor: theme.separator }]} /> : null}
-              {row}
-            </View>
-          ))}
-        </View>
+        // A bare section's buttons stand where a card would, so they curve as the cards round them do.
+        <ButtonCorner.Provider value={bare ? Radius.card : outerCorner}>
+          <View style={bare ? undefined : [styles.card, { backgroundColor: theme.surface }]}>
+            {rows.map((row, i) => (
+              <View key={isValidElement(row) && row.key != null ? row.key : i}>
+                {i > 0 && !bare ? <View style={[styles.hairline, { backgroundColor: theme.separator }]} /> : null}
+                {row}
+              </View>
+            ))}
+          </View>
+        </ButtonCorner.Provider>
       ) : null}
       {footer ? (
         typeof footer === 'string' ? (
@@ -407,6 +411,7 @@ export function Segmented<T extends string>({
   options, value, onChange, label,
 }: { options: { value: T; label: string }[]; value: T; onChange: (value: T) => void; label: string }) {
   const theme = useTheme();
+  const corner = useContext(ButtonCorner);
   const [width, setWidth] = useState(0);
   const segmentWidth = options.length > 0 ? width / options.length : 0;
   const index = Math.max(options.findIndex((option) => option.value === value), 0);
@@ -437,7 +442,7 @@ export function Segmented<T extends string>({
       {segmentWidth > 0 ? (
         <Animated.View
           pointerEvents="none"
-          style={[styles.segmentOutline, { width: segmentWidth, borderColor: theme.accent, transform: [{ translateX: offset }] }]}
+          style={[styles.segmentOutline, { width: segmentWidth, borderRadius: corner, borderColor: theme.accent, transform: [{ translateX: offset }] }]}
         />
       ) : null}
       {options.map((option) => {
@@ -792,7 +797,7 @@ export const styles = StyleSheet.create({
   iconButton: { minWidth: MIN_TARGET, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center' },
   segmented: { flexDirection: 'row' },
   segment: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.s },
-  segmentOutline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1, borderRadius: Radius.control },
+  segmentOutline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1 },
   spinner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.s, padding: Space.xl },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.s, padding: Space.xxl },
   emptyAction: { marginTop: Space.m },
