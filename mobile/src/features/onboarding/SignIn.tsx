@@ -194,7 +194,8 @@ export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: Authenticate
                 accessibilityLabel="Email"
               />
               {addressLooksWrong ? (
-                <Txt type="caption" color={theme.inkSecondary}>{address.trim()} is not a valid email address</Txt>
+                // Said as what to use, not "invalid": a Gmail address is a real one, just not a DCU one.
+                <Txt type="caption" color={theme.inkSecondary}>Use your DCU email address, ending @mail.dcu.ie or @dcu.ie</Txt>
               ) : null}
             </Row>
             <Row>
