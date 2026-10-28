@@ -21,11 +21,14 @@ describe('Corner concentricity', () => {
 
 describe('The radius scale', () => {
   test('each container is its controls\' radius plus the padding they sit in', () => {
-    expect(Radius.card).toBe(Radius.control + CardInset.x);
     expect(Radius.dialog).toBe(Radius.control + Space.xl);
     expect(Radius.panel).toBe(Radius.card + Space.l);
     // So the controls come out concentric.
-    expect(concentric(Radius.card, CardInset.x)).toBe(Radius.control);
     expect(concentric(Radius.panel, Space.l)).toBe(Radius.card);
+  });
+
+  test("a card is tighter than its padding allows, so what's inside keeps the control radius", () => {
+    expect(Radius.card).toBeLessThan(Radius.control + CardInset.x);
+    expect(concentric(Radius.card, CardInset.x)).toBe(Radius.control);
   });
 });

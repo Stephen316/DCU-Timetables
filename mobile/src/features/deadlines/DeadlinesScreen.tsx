@@ -196,7 +196,6 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   filter: { maxWidth: '80%' },
   card: { marginHorizontal: Space.l, marginTop: Space.l, borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  // `CardInset` in, so a deadline's corners curve round the card's (see `concentric`).
   sectionBox: { paddingHorizontal: CardInset.x, paddingVertical: CardInset.y, gap: Space.s },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
   sectionTitle: { flexDirection: 'row', alignItems: 'baseline', gap: Space.xs, flexShrink: 1 },

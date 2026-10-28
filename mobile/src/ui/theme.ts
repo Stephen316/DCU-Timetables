@@ -103,10 +103,11 @@ export const Space = { xxs: 2, xs: 4, s: 8, m: 12, l: 16, xl: 24, xxl: 32 } as c
 
 /**
  * A block on the week grid has to stay a rectangle at 26pt tall, and a button is a thing
- * your thumb aims at. The rest are built from those and the padding inside each container,
- * so every corner curves round the same centre as the control in it (see `concentric`).
+ * your thumb aims at. Dialogs and panels are built from those and the padding inside them,
+ * so their corners curve round the same centre as what's in them (see `concentric`).
  */
 const CONTROL = 8;
+const CARD = 12;
 
 /**
  * How far a card's contents sit in from its edges: far enough that a line of text or a chip
@@ -117,12 +118,15 @@ export const CardInset = { x: 20, y: 14 } as const;
 export const Radius = {
   block: 4,
   control: CONTROL,
-  /** A grouped card, its controls `CardInset.x` in from its edge. */
-  card: CONTROL + CardInset.x,
+  /**
+   * A grouped card. Kept tighter than its controls plus `CardInset.x` would make it — that
+   * curve read as too round — so what's inside keeps its own radius rather than following it.
+   */
+  card: CARD,
   /** A dialog or a tray on a square screen, its buttons `Space.xl` in. */
   dialog: CONTROL + Space.xl,
   /** A sheet in a desktop window, its cards `Space.l` in. */
-  panel: CONTROL + CardInset.x + Space.l,
+  panel: CARD + Space.l,
 } as const;
 
 /**
