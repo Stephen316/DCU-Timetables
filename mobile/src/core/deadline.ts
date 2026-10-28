@@ -405,14 +405,15 @@ export function reportReasonLabel(reason: DeadlineReportReason): string {
 
 // MARK: - The deadlines tab
 
-export type DeadlineSection = 'today' | 'thisWeek' | 'nextWeek' | 'later';
-export const DEADLINE_SECTIONS: DeadlineSection[] = ['today', 'thisWeek', 'nextWeek', 'later'];
+export type DeadlineSection = 'today' | 'tomorrow' | 'thisWeek' | 'nextWeek' | 'later';
+export const DEADLINE_SECTIONS: DeadlineSection[] = ['today', 'tomorrow', 'thisWeek', 'nextWeek', 'later'];
 
 export function deadlineSectionTitle(section: DeadlineSection): string {
   switch (section) {
     case 'today': return 'Today';
-    case 'thisWeek': return 'This week';
-    case 'nextWeek': return 'Next week';
+    case 'tomorrow': return 'Tomorrow';
+    case 'thisWeek': return 'This Week';
+    case 'nextWeek': return 'Next Week';
     case 'later': return 'Later';
   }
 }
@@ -426,6 +427,7 @@ export const DeadlineSchedule = {
     const today = startOfDay(now);
     const day = startOfDay(due);
     if (day.getTime() <= today.getTime()) return 'today'; // today, and anything the day filter left
+    if (day.getTime() === addDays(today, 1).getTime()) return 'tomorrow'; // even when that's next Monday
     const thisWeekEnd = addDays(startOfWeek(today), 7);
     const nextWeekEnd = addDays(thisWeekEnd, 7);
     if (day.getTime() < thisWeekEnd.getTime()) return 'thisWeek';

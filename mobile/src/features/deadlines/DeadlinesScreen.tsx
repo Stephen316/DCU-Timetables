@@ -3,11 +3,12 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { deadlineSectionTitle } from '../../core/deadline';
-import { useModel, useServices } from '../../state/hooks';
+import { startOfWeek } from '../../core/time';
+import { useModel, useNow, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
 import { EmptyState, Icon, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
 import { DropdownMenu } from '../../ui/DropdownMenu';
-import { Radius, Space, useTheme } from '../../ui/theme';
+import { CardInset, Radius, Space, useTheme } from '../../ui/theme';
 import { DeadlineRow } from './DeadlineRows';
 import { DeadlinesModel } from './DeadlinesModel';
 import { useTutorial } from '../tutorial/Tutorial';
@@ -43,6 +44,9 @@ export function DeadlinesScreen() {
     .map((key) => ({ key, name: week.moduleName(key) }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const filterTitle = model.moduleFilter ? week.moduleName(model.moduleFilter) : 'All modules';
+  // The timetable's week may have been moved on; its label is only this week's when it hasn't.
+  const now = useNow();
+  const showsThisWeek = !!week.weekLabel && week.weekStart?.getTime() === startOfWeek(now).getTime();
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + Space.s, borderBottomColor: theme.separator }]}>
@@ -136,33 +140,52 @@ export function DeadlinesScreen() {
             <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.inkSecondary} /></Row>
           </Section>
         ) : null}
-        {model.sections.map((group) => (
-          // A card each, rather than rows in one card: two deadlines split by a hairline read as one.
-          <Section key={group.section} header={deadlineSectionTitle(group.section)} bare>
-            <View style={styles.cards}>
-              {group.deadlines.map((d) => (
-                <View key={d.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
-                  <DeadlineRow
-                    deadline={d}
-                    moduleName={week.moduleName(d.moduleKey)}
-                    standing={model.standing(d)}
-                    isMine={model.isMine(d)}
-                    variant="schedule"
-                    actions={{
-                      onConfirm: () => void model.toggleConfirmation(d),
-                      onDispute: () => void model.toggleDispute(d),
-                      onEdit: (fields) => void model.edit(d, fields),
-                      onRename: (label) => void model.rename(d, label),
-                      onDelete: () => void model.remove(d),
-                      onReport: (reason) => void model.report(d, reason),
-                      onHideAuthor: () => void model.hideAuthor(d),
-                    }}
-                  />
+        {/* One card, a section each, split by hairlines — the same panel as the desktop rail's. */}
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+          {model.sections.map((group, i) => (
+            <View
+              key={group.section}
+              style={[styles.sectionBox, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator }]}
+            >
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitle}>
+                  <Txt type="headline" accessibilityRole="header">{deadlineSectionTitle(group.section)}</Txt>
+                  {group.section === 'thisWeek' && showsThisWeek ? (
+                    <Txt type="footnote" color={theme.inkSecondary}>({week.weekLabel})</Txt>
+                  ) : null}
                 </View>
+                <Txt
+                  type="subheadline"
+                  color={group.section === 'today' ? theme.tint.due : theme.accent}
+                  style={styles.count}
+                  accessibilityLabel={`${group.deadlines.length} due`}
+                >
+                  {group.deadlines.length}
+                </Txt>
+              </View>
+              {group.deadlines.map((d) => (
+                <DeadlineRow
+                  key={d.id}
+                  deadline={d}
+                  moduleName={week.moduleName(d.moduleKey)}
+                  standing={model.standing(d)}
+                  isMine={model.isMine(d)}
+                  variant="schedule"
+                  showDate={group.section !== 'today' && group.section !== 'tomorrow'}
+                  actions={{
+                    onConfirm: () => void model.toggleConfirmation(d),
+                    onDispute: () => void model.toggleDispute(d),
+                    onEdit: (fields) => void model.edit(d, fields),
+                    onRename: (label) => void model.rename(d, label),
+                    onDelete: () => void model.remove(d),
+                    onReport: (reason) => void model.report(d, reason),
+                    onHideAuthor: () => void model.hideAuthor(d),
+                  }}
+                />
               ))}
             </View>
-          </Section>
-        ))}
+          ))}
+        </View>
       </ListScroll>
     </View>
   );
@@ -172,8 +195,12 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   filter: { maxWidth: '80%' },
-  cards: { gap: Space.s },
-  card: { borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  card: { marginHorizontal: Space.l, marginTop: Space.l, borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  // `CardInset` in, so a deadline's corners curve round the card's (see `concentric`).
+  sectionBox: { paddingHorizontal: CardInset.x, paddingVertical: CardInset.y, gap: Space.s },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
+  sectionTitle: { flexDirection: 'row', alignItems: 'baseline', gap: Space.xs, flexShrink: 1 },
+  count: { fontWeight: '600', fontVariant: ['tabular-nums'] },
   filterLabel: { flexDirection: 'row', alignItems: 'center', gap: Space.xxs },
   shrink: { flexShrink: 1 },
   summary: { flexDirection: 'row', justifyContent: 'center', gap: Space.l, paddingVertical: Space.s, borderTopWidth: StyleSheet.hairlineWidth },

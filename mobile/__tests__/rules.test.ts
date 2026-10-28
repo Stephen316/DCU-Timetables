@@ -533,12 +533,19 @@ describe('Deadline schedule', () => {
   test('buckets by how soon it is', () => {
     expect(section(16)).toBe('today');
     expect(section(16, 9, 9)).toBe('today');
+    expect(section(17)).toBe('tomorrow');
     expect(section(18)).toBe('thisWeek');
     expect(section(20)).toBe('thisWeek');
     expect(section(21)).toBe('nextWeek');
     expect(section(27)).toBe('nextWeek');
     expect(section(28)).toBe('later');
     expect(section(14, 12)).toBe('later');
+  });
+
+  test('tomorrow wins over next week on a Sunday', () => {
+    const sunday = at(2026, 9, 20, 10);
+    expect(DeadlineSchedule.section(at(2026, 9, 21, 12), sunday)).toBe('tomorrow');
+    expect(DeadlineSchedule.section(at(2026, 9, 22, 12), sunday)).toBe('nextWeek');
   });
 
   test('groups in order and drops empty sections', () => {

@@ -5,14 +5,14 @@ import {
   DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, displayTitle, LABEL_LIMIT, reportReasonLabel,
   gradeWeightLabel, TITLE_LIMIT,
 } from '../../core/deadline';
-import { addDays, formatAbbreviated, formatWeekdayDayMonthTime } from '../../core/time';
+import { addDays, formatAbbreviated, formatTime, formatWeekdayDayMonthTime } from '../../core/time';
 import {
   ActionRow, ActionSheet, AdaptiveStack, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
   useLargeText,
 } from '../../ui/components';
 import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
 import { useNow } from '../../state/hooks';
-import { Space, useTheme } from '../../ui/theme';
+import { Radius, Space, useTheme } from '../../ui/theme';
 import { DuePicker } from './DuePicker';
 
 export interface DeadlineActions {
@@ -29,11 +29,12 @@ export interface DeadlineActions {
 }
 
 /**
- * One shared date. `schedule` is the Deadlines tab's version, which names the module —
- * outside its own class page, that is the first thing you need to know.
+ * One shared date. `schedule` is the Deadlines tab's version: a compact card with its kind's
+ * colour down the edge, naming the module — outside its own class page, that is the first
+ * thing you need to know.
  */
 export function DeadlineRow({
-  deadline, moduleName, standing, isMine, variant, actions,
+  deadline, moduleName, standing, isMine, variant, showDate = true, actions,
 }: {
   deadline: Deadline;
   /** What to call its module on the `schedule` row: the name, or the code when there isn't one. */
@@ -41,105 +42,143 @@ export function DeadlineRow({
   standing: DeadlineStanding;
   isMine: boolean;
   variant: 'module' | 'schedule';
+  /** On the `schedule` row, the weekday and date under the module. Today and Tomorrow need only the time. */
+  showDate?: boolean;
   actions: DeadlineActions;
 }) {
   const theme = useTheme();
   const large = useLargeText();
   const [sheet, setSheet] = useState<'edit' | 'rename' | null>(null);
-  const iconColor = variant === 'schedule' ? deadlineTint(deadline.kind, theme) : theme.inkSecondary;
-  const trust = deadlineTrust(deadline, standing);
   const edited = deadline.editedAt ? ' · edited' : '';
-  const dispute = standing.disputeSummary;
   const worth = gradeWeightLabel(deadline.gradeWeight);
-  const schedule = variant === 'schedule';
+
+  const sheets = isMine ? (
+    <DeadlineForm
+      visible={sheet === 'edit'}
+      editing={{ deadline, standing }}
+      onClose={() => setSheet(null)}
+      onSubmit={actions.onEdit}
+    />
+  ) : (
+    <RenameSheet
+      visible={sheet === 'rename'}
+      deadline={deadline}
+      onClose={() => setSheet(null)}
+      onSave={actions.onRename}
+    />
+  );
+  const standingLine = (
+    <StandingLine
+      deadline={deadline}
+      standing={standing}
+      isMine={isMine}
+      actions={actions}
+      onEdit={() => setSheet('edit')}
+      onRename={() => setSheet('rename')}
+    />
+  );
+
+  if (variant === 'schedule') {
+    const graded = deadline.gradeWeight > 0 ? ` · ${deadline.gradeWeight}%` : '';
+    return (
+      <View style={[styles.item, { backgroundColor: theme.canvas, borderColor: theme.separator }]}>
+        <View style={[styles.accentBar, { backgroundColor: deadlineTint(deadline.kind, theme) }]} />
+        <View style={styles.itemBody}>
+          <View style={styles.itemTop}>
+            <Txt type="subheadline" style={[styles.semibold, styles.text]}>{displayTitle(deadline)}</Txt>
+            <Txt type="footnote" color={theme.inkSecondary} style={styles.tabular}>{formatTime(deadline.due)}</Txt>
+          </View>
+          {/* Your own name for it would otherwise hide what classmates are talking about. */}
+          {deadline.myLabel ? <Txt type="caption" color={theme.inkTertiary}>Shared as “{deadline.title}”</Txt> : null}
+          <Txt type="footnote" color={theme.inkSecondary}>
+            {moduleName ?? deadline.moduleKey} · {deadlineKindLabel(deadline.kind)}{graded}{showDate ? '' : edited}
+          </Txt>
+          {showDate ? <Txt type="footnote" color={theme.inkSecondary}>{formatWeekdayDayMonthTime(deadline.due)}{edited}</Txt> : null}
+          <View style={[styles.divider, styles.itemDivider, { backgroundColor: theme.separator }]} />
+          {standingLine}
+        </View>
+        {sheets}
+      </View>
+    );
+  }
+
   return (
     <Row>
-      <View style={[styles.rowBody, schedule && styles.scheduleBody]}>
-        {/* Hung from the title's first line, so a title that wraps doesn't leave them floating. */}
-        <AdaptiveStack gap={Space.m} style={schedule && styles.top}>
-          <View style={[styles.kindIcon, schedule && styles.titleLine]} importantForAccessibility="no" accessibilityElementsHidden>
-            <Icon name={deadlineKindIcon(deadline.kind)} color={iconColor} />
+      <View style={styles.rowBody}>
+        <AdaptiveStack gap={Space.m}>
+          <View style={styles.kindIcon} importantForAccessibility="no" accessibilityElementsHidden>
+            <Icon name={deadlineKindIcon(deadline.kind)} color={theme.inkSecondary} />
           </View>
           <View style={styles.text}>
-            <Txt type={variant === 'schedule' ? 'headline' : 'body'}>{displayTitle(deadline)}</Txt>
-            {/* Your own name for it would otherwise hide what classmates are talking about. */}
+            <Txt type="body">{displayTitle(deadline)}</Txt>
             {deadline.myLabel ? <Txt type="caption" color={theme.inkTertiary}>Shared as “{deadline.title}”</Txt> : null}
-            {variant === 'schedule' ? (
-              <>
-                <Txt type="caption" color={theme.inkSecondary}>{moduleName ?? deadline.moduleKey} {deadlineKindLabel(deadline.kind).toLowerCase()} · {worth}</Txt>
-                <Txt type="caption" color={theme.inkSecondary}>{formatWeekdayDayMonthTime(deadline.due)}{edited}</Txt>
-              </>
-            ) : (
-              <Txt type="caption" color={theme.inkSecondary}>{deadlineKindLabel(deadline.kind)}, due {formatAbbreviated(deadline.due)} · {worth}{edited}</Txt>
-            )}
+            <Txt type="caption" color={theme.inkSecondary}>{deadlineKindLabel(deadline.kind)}, due {formatAbbreviated(deadline.due)} · {worth}{edited}</Txt>
           </View>
-          <Txt type="caption" color={theme.inkSecondary} style={[styles.medium, schedule && !large && styles.countdown]}>{deadlineCountdown(deadline.due)}</Txt>
+          <Txt type="caption" color={theme.inkSecondary} style={styles.medium}>{deadlineCountdown(deadline.due)}</Txt>
         </AdaptiveStack>
-
-        {schedule ? <View style={[styles.divider, !large && styles.indent, { backgroundColor: theme.separator }]} /> : null}
-
-        {/* One unverified person's date is worth less than three people's, and the row says which. */}
-        <AdaptiveStack style={large ? undefined : styles.indent}>
-          <View style={styles.text}>
-            {trust === 'verified' ? (
-              <Label icon="confirmed" text="Confirmed by a moderator" type="caption2" color={theme.tint.confirmed} />
-            ) : (
-              <Label
-                icon={trust === 'confirmed' ? 'confirmed' : 'unconfirmed'}
-                text={standing.summary}
-                type="caption2"
-                color={trust === 'confirmed' ? theme.tint.confirmed : theme.inkSecondary}
-              />
-            )}
-            {dispute ? (
-              <Label icon="warning" text={dispute} type="caption2" color={trust === 'disputed' ? theme.tint.off : theme.inkSecondary} />
-            ) : null}
-          </View>
-          {isMine ? (
-            // Swipe-to-delete on iOS; a visible button here, so it can be found without knowing to swipe.
-            <View style={styles.actions}>
-              <InlineAction title="Edit" onPress={() => setSheet('edit')} />
-              <InlineAction title="Delete" tint={theme.destructive} onPress={actions.onDelete} />
-            </View>
-          ) : (
-            <View style={styles.actions}>
-              {standing.disputedByMe ? (
-                // Tapping takes it back, the way "Confirmed" does.
-                <InlineAction title="You said it's wrong" tint={theme.tint.off} onPress={actions.onDispute} />
-              ) : (
-                <InlineAction
-                  title={standing.confirmedByMe ? 'Confirmed' : 'This is right'}
-                  tint={standing.confirmedByMe ? theme.tint.confirmed : theme.accent}
-                  onPress={actions.onConfirm}
-                />
-              )}
-              <MoreMenu
-                deadline={deadline}
-                standing={standing}
-                actions={actions}
-                onRename={() => setSheet('rename')}
-              />
-            </View>
-          )}
-        </AdaptiveStack>
+        <View style={large ? undefined : styles.indent}>{standingLine}</View>
       </View>
-
-      {isMine ? (
-        <DeadlineForm
-          visible={sheet === 'edit'}
-          editing={{ deadline, standing }}
-          onClose={() => setSheet(null)}
-          onSubmit={actions.onEdit}
-        />
-      ) : (
-        <RenameSheet
-          visible={sheet === 'rename'}
-          deadline={deadline}
-          onClose={() => setSheet(null)}
-          onSave={actions.onRename}
-        />
-      )}
+      {sheets}
     </Row>
+  );
+}
+
+/**
+ * How far it's trusted, and what this student can do about it. One unverified person's date
+ * is worth less than three people's, and the row says which.
+ */
+function StandingLine({
+  deadline, standing, isMine, actions, onEdit, onRename,
+}: {
+  deadline: Deadline;
+  standing: DeadlineStanding;
+  isMine: boolean;
+  actions: DeadlineActions;
+  onEdit: () => void;
+  onRename: () => void;
+}) {
+  const theme = useTheme();
+  const trust = deadlineTrust(deadline, standing);
+  const dispute = standing.disputeSummary;
+  return (
+    <AdaptiveStack>
+      <View style={styles.text}>
+        {trust === 'verified' ? (
+          <Label icon="confirmed" text="Confirmed by a moderator" type="caption2" color={theme.tint.confirmed} />
+        ) : (
+          <Label
+            icon={trust === 'confirmed' ? 'confirmed' : 'unconfirmed'}
+            text={standing.summary}
+            type="caption2"
+            color={trust === 'confirmed' ? theme.tint.confirmed : theme.inkSecondary}
+          />
+        )}
+        {dispute ? (
+          <Label icon="warning" text={dispute} type="caption2" color={trust === 'disputed' ? theme.tint.off : theme.inkSecondary} />
+        ) : null}
+      </View>
+      {isMine ? (
+        // Swipe-to-delete on iOS; a visible button here, so it can be found without knowing to swipe.
+        <View style={styles.actions}>
+          <InlineAction title="Edit" onPress={onEdit} />
+          <InlineAction title="Delete" tint={theme.destructive} onPress={actions.onDelete} />
+        </View>
+      ) : (
+        <View style={styles.actions}>
+          {standing.disputedByMe ? (
+            // Tapping takes it back, the way "Confirmed" does.
+            <InlineAction title="You said it's wrong" tint={theme.tint.off} onPress={actions.onDispute} />
+          ) : (
+            <InlineAction
+              title={standing.confirmedByMe ? 'Confirmed' : 'This is right'}
+              tint={standing.confirmedByMe ? theme.tint.confirmed : theme.accent}
+              onPress={actions.onConfirm}
+            />
+          )}
+          <MoreMenu deadline={deadline} standing={standing} actions={actions} onRename={onRename} />
+        </View>
+      )}
+    </AdaptiveStack>
   );
 }
 
@@ -386,11 +425,13 @@ function editFooter({ deadline, standing }: { deadline: Deadline; standing: Dead
 const styles = StyleSheet.create({
   // Room between what it is and how far it's trusted, so the two read as two lines of thought.
   rowBody: { gap: Space.s },
-  scheduleBody: { gap: Space.m },
-  top: { alignItems: 'flex-start' },
-  // The headline's line, so the icon sits level with the title's first line.
-  titleLine: { height: 22, justifyContent: 'center' },
-  countdown: { marginTop: 3 },
+  item: { flexDirection: 'row', borderRadius: Radius.control, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  accentBar: { width: 3 },
+  itemBody: { flex: 1, paddingHorizontal: Space.m, paddingTop: Space.s, gap: Space.xxs },
+  itemTop: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.s },
+  itemDivider: { marginTop: Space.xs },
+  semibold: { fontWeight: '600' },
+  tabular: { fontVariant: ['tabular-nums'], marginTop: 1 },
   divider: { height: StyleSheet.hairlineWidth },
   kindIcon: { width: 22, alignItems: 'center' },
   text: { flex: 1, gap: Space.xxs },
