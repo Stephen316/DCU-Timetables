@@ -10,8 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StudentNumber } from '../../core/identity';
 import { errorMessage, isNotSignedIn } from '../../data/rest';
 import { useServices } from '../../state/hooks';
-import { ActionRow, BarButton, ListScroll, PrimaryButton, Row, SecondaryButton, Section, Sheet, Txt, useReduceMotion } from '../../ui/components';
+import { ActionRow, BarButton, ListScroll, PrimaryButton, Row, SecondaryButton, Section, Sheet, Txt, useReduceMotion, useWide } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
+import { ScreenTitle } from './ScreenTitle';
 
 /** The guide frame's width as a share of the screen's. */
 const GUIDE_WIDTH_FRACTION = 0.88;
@@ -53,6 +54,7 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) => void; onSignOut: () => void }) {
   const { profiles } = useServices();
   const { width, height } = useWindowDimensions();
+  const wide = useWide();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const reduceMotion = useReduceMotion();
@@ -101,8 +103,8 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
   }, [profiles, onSaved, onSignOut]);
 
   useEffect(() => {
-    if (!checking && permission && !permission.granted && permission.canAskAgain) void requestPermission();
-  }, [checking, permission, requestPermission]);
+    if (!wide && !checking && permission && !permission.granted && permission.canAskAgain) void requestPermission();
+  }, [wide, checking, permission, requestPermission]);
 
   useEffect(() => () => {
     if (shutterTimer.current) clearTimeout(shutterTimer.current);
@@ -113,7 +115,7 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
       : permission && !permission.granted && !permission.canAskAgain ? 'denied'
         : cameraReady ? 'running'
           : 'starting';
-  const scanning = !checking && permission?.granted === true && !mountFailed && confirmation === null && !showingOptions;
+  const scanning = !wide && !checking && permission?.granted === true && !mountFailed && confirmation === null && !showingOptions;
   /** The card outline, while there's a camera to line a card up in and nothing read yet. */
   const showsGhost = !checking && permission !== null && confirmation === null && (status === 'starting' || status === 'running');
 
@@ -197,6 +199,18 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
     typed.current = null;
     if (number) void save(number);
   };
+
+  if (wide) {
+    return (
+      <ManualStudentID
+        checking={checking}
+        saving={confirmation !== null}
+        saveError={saveError}
+        onSave={(number) => void save(number)}
+        onSignOut={onSignOut}
+      />
+    );
+  }
 
   // The guide's place on the full screen, a little above the middle to leave room for the shutter.
   const guideW = width * GUIDE_WIDTH_FRACTION;
@@ -284,6 +298,76 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
         onDismissed={runTyped}
       />
     </View>
+  );
+}
+
+/**
+ * On a laptop or desktop window there is no rear camera to scan a barcode with, so the
+ * student number is entered directly on the page using the same form as `OtherOptions`.
+ */
+function ManualStudentID({
+  checking, saving, saveError, onSave, onSignOut,
+}: {
+  checking: boolean;
+  saving: boolean;
+  saveError: string | null;
+  onSave: (number: string) => void;
+  onSignOut: () => void;
+}) {
+  const theme = useTheme();
+  const [entry, setEntry] = useState('');
+  const number = StudentNumber.fromTyped(entry);
+  const caption =
+    entry.trim().length === 0
+      ? 'It\'s on your student card, after "Student Number": a letter and eight digits. Once it\'s saved, only an admin can change it.'
+      : number === null
+        ? 'A student number is a letter and eight digits, like A00000000.'
+        : `Saves as ${number}. Once it's saved, only an admin can change it.`;
+
+  if (checking) {
+    return (
+      <ListScroll>
+        <ScreenTitle title="Your student number" />
+        <Section>
+          <Row><ActivityIndicator color={theme.inkSecondary} /></Row>
+        </Section>
+      </ListScroll>
+    );
+  }
+
+  return (
+    <ListScroll>
+      <ScreenTitle title="Your student number" />
+      <Section header="Enter your student number">
+        <Row>
+          <TextInput
+            value={entry}
+            onChangeText={setEntry}
+            placeholder="A00000000"
+            placeholderTextColor={theme.inkTertiary}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            editable={!saving}
+            returnKeyType="done"
+            onSubmitEditing={() => !saving && number && onSave(number)}
+            style={[styles.input, styles.mono, { color: theme.ink }]}
+            accessibilityLabel="Student number"
+          />
+          <Txt type="caption" color={theme.inkSecondary}>{caption}</Txt>
+        </Row>
+      </Section>
+      {saveError ? (
+        <Section>
+          <Row><Txt type="callout" color={theme.destructive}>{saveError}</Txt></Row>
+        </Section>
+      ) : null}
+      <Section bare>
+        <PrimaryButton title="Save" busy={saving} disabled={number === null || saving} onPress={() => number && onSave(number)} />
+      </Section>
+      <Section>
+        <ActionRow title="Sign out" icon="signOut" destructive disabled={saving} onPress={onSignOut} />
+      </Section>
+    </ListScroll>
   );
 }
 

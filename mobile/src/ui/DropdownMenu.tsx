@@ -1,5 +1,5 @@
 import { RefObject, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Icon, Label, SheetAction, Txt } from './components';
 import { CardInset, Radius, Space, useTheme } from './theme';
 
@@ -64,30 +64,38 @@ export function DropdownMenu({ visible, anchor, actions, onClose, align = 'right
         accessibilityViewIsModal
         style={[
           styles.menu,
-          { width, backgroundColor: theme.raised, borderColor: theme.separator, opacity: place ? 1 : 0 },
+          {
+            width,
+            maxHeight: Math.min(420, window.height - 96),
+            backgroundColor: theme.raised,
+            borderColor: theme.separator,
+            opacity: place ? 1 : 0,
+          },
           place ?? { top: 0, left: Space.s },
         ]}
       >
-        {actions.map((action, i) => (
-          <View key={action.label}>
-            {i > 0 ? <View style={[styles.hairline, { backgroundColor: theme.separator }]} /> : null}
-            <Pressable
-              accessibilityRole="menuitem"
-              accessibilityState={{ selected: !!action.selected }}
-              onPress={() => choose(action)}
-              style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.surface }]}
-            >
-              <View style={styles.choice}>
-                {action.icon ? (
-                  <Label icon={action.icon} text={action.label} color={action.destructive ? theme.destructive : theme.ink} />
-                ) : (
-                  <Txt numberOfLines={1} style={styles.flex} color={action.destructive ? theme.destructive : theme.ink}>{action.label}</Txt>
-                )}
-                {action.selected ? <Icon name="check" color={theme.accent} /> : null}
-              </View>
-            </Pressable>
-          </View>
-        ))}
+        <ScrollView bounces={false}>
+          {actions.map((action, i) => (
+            <View key={action.label}>
+              {i > 0 ? <View style={[styles.hairline, { backgroundColor: theme.separator }]} /> : null}
+              <Pressable
+                accessibilityRole="menuitem"
+                accessibilityState={{ selected: !!action.selected }}
+                onPress={() => choose(action)}
+                style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.surface }]}
+              >
+                <View style={styles.choice}>
+                  {action.icon ? (
+                    <Label icon={action.icon} text={action.label} color={action.destructive ? theme.destructive : theme.ink} />
+                  ) : (
+                    <Txt numberOfLines={1} style={styles.flex} color={action.destructive ? theme.destructive : theme.ink}>{action.label}</Txt>
+                  )}
+                  {action.selected ? <Icon name="check" color={theme.accent} /> : null}
+                </View>
+              </Pressable>
+            </View>
+          ))}
+        </ScrollView>
       </View>
     </Modal>
   );

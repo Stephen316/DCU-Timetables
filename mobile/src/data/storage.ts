@@ -134,4 +134,5 @@ export const PrefKey = {
   localReports: 'local:cancellationReports',
   localDeadlines: 'local:deadlines',
   localConfirmations: 'local:deadlineConfirmations',
+  journalEntries: 'journalEntries',
 } as const;

@@ -44,7 +44,8 @@ export const PreviewData = {
    */
   get today(): TimetableEvent[] {
     const next = new Date();
-    next.setHours(next.getHours() + 1, 0, 0, 0);
+    const clampedHour = Math.min(Math.max(next.getHours() + 1, 11), 17);
+    next.setHours(clampedHour, 0, 0, 0);
     const e = PreviewData.event;
     return [
       e('t1', 'Computer Systems', 'CA106[1]OC/L1/01', new Date(next.getTime() - 3 * HOUR), 1, 'GLA.C114', ['Byrne, Ciara']),

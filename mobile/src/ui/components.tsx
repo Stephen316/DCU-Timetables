@@ -63,6 +63,9 @@ const ICONS = {
   arrowUp: 'arrow-up',
   arrowDown: 'arrow-down',
   arrowLeft: 'arrow-back',
+  journal: 'journal-outline',
+  clock: 'time-outline',
+  export: 'share-outline',
 } as const;
 
 export type IconName = keyof typeof ICONS;
