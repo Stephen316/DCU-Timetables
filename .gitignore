@@ -13,3 +13,4 @@ local-data/
 
 # Local secrets and settings (Supabase keys for the app go in mobile/.env.local)
 .env.local
+graphify-out/
