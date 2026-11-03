@@ -33,13 +33,13 @@ do $$ begin
   end if;
 end $$;
 
--- Empty rather than null, so "no details" has one spelling. 100 matches DETAILS_LIMIT in the app.
+-- Empty rather than null, so "no details" has one spelling. 2000 matches DETAILS_LIMIT in the app.
 alter table module_deadlines add column if not exists details text not null default '';
 alter table module_deadlines add column if not exists details_edited_at timestamptz;
 alter table module_deadlines add column if not exists details_edited_by uuid references auth.users (id) on delete set null;
 alter table module_deadlines drop constraint if exists module_deadlines_details_length;
 alter table module_deadlines add constraint module_deadlines_details_length
-  check (char_length(details) <= 100);
+  check (char_length(details) <= 2000);
 
 -- ---------------------------------------------------------------------------
 -- 1. The versions a save replaced
@@ -84,7 +84,7 @@ declare
   new_details text := btrim(coalesce(p_details, ''));
 begin
   if auth.uid() is null or public.is_banned() then raise exception 'not allowed'; end if;
-  if char_length(new_details) > 100 then raise exception 'details can be at most 100 characters'; end if;
+  if char_length(new_details) > 2000 then raise exception 'details can be at most 2000 characters'; end if;
 
   select * into d from public.module_deadlines where id = p_deadline for update;
   if not found then raise exception 'no such deadline'; end if;
