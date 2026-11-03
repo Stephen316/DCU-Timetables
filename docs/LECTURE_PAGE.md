@@ -197,7 +197,7 @@ reports.
   on the row, the class banner, the timetable outline and the widget — with the shared title
   underneath. It's stored per account (`deadline_labels`), so it follows them to a new phone.
 - **Anyone edits the Details box** on any deadline, not only its poster: what to hand in,
-  where, what the brief doesn't say, up to 2000 characters. It's the one field that's
+  where, what the brief doesn't say, up to 100 characters. It's the one field that's
   everyone's — title, type, date and weight stay the poster's — so it goes through its own
   function (`set_deadline_details`, phase 32) that can change nothing else. The row shows
   "Edited 2h ago", never who. Every save keeps the version it replaced, and who wrote that,

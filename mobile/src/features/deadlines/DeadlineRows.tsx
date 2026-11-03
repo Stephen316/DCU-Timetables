@@ -353,7 +353,7 @@ function DetailsSheet({ visible, deadline, onClose, onSave, onReport }: {
             />
             {problem ? (
               <Txt type="caption" color={theme.tint.off}>{problem}</Txt>
-            ) : left < 200 ? (
+            ) : left < 20 ? (
               <Txt type="caption" color={theme.inkSecondary}>{left === 1 ? '1 character left' : `${left} characters left`}</Txt>
             ) : null}
           </Row>

@@ -38,7 +38,7 @@ export type DeadlineStatus = 'pending' | 'verified';
 /** The database's limits, so a form can't offer what the server will refuse. */
 export const TITLE_LIMIT = 120;
 export const LABEL_LIMIT = 80;
-export const DETAILS_LIMIT = 2000;
+export const DETAILS_LIMIT = 100;
 
 /** What a poster fills in, on the way in and when they edit it. */
 export interface DeadlineFields {

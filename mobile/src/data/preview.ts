@@ -92,7 +92,7 @@ export const PreviewData = {
       makeDeadline({ id: 'dl-quiz', moduleKey: 'CA106', title: 'Quiz 2: memory hierarchy', due: addDays(now, 1), kind: 'quiz', submitterID: 'someone', isMine: false }),
       makeDeadline({
         id: 'dl-sched', moduleKey: 'CA216', title: 'Scheduler assignment', due: addDays(now, 4), kind: 'assignment', submitterID: 'someone', isMine: false, status: 'verified',
-        details: 'Submit the zip on Loop, not by email. Round robin and priority scheduling both need a short write-up.',
+        details: 'Submit the zip on Loop, not by email. Both schedulers need a short write-up.',
         detailsEditedAt: new Date(now.getTime() - 2.5 * HOUR),
       }),
       makeDeadline({ id: 'dl-sheet', moduleKey: 'MS121', title: 'Problem sheet 3', due: addDays(now, 9), kind: 'assignment', submitterID: 'preview-me', isMine: true }),
