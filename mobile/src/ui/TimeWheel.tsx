@@ -24,12 +24,22 @@ export function TimeWheel({ hours, minutes, onChange }: {
   onChange: (hours: number, minutes: number) => void;
 }) {
   const theme = useTheme();
+  // Both wheels can come to rest in the same moment, before either change has come back as
+  // props; each builds on the other's latest, so neither undoes the other.
+  const latest = useRef({ hours, minutes });
+  useEffect(() => {
+    latest.current = { hours, minutes };
+  }, [hours, minutes]);
+  const change = (next: Partial<{ hours: number; minutes: number }>) => {
+    latest.current = { ...latest.current, ...next };
+    onChange(latest.current.hours, latest.current.minutes);
+  };
   return (
     <View style={styles.wheels}>
       <View pointerEvents="none" style={[styles.band, { backgroundColor: theme.raised }]} />
-      <Wheel count={24} value={hours} label="Hour" onChange={(h) => onChange(h, minutes)} />
+      <Wheel count={24} value={hours} label="Hour" onChange={(h) => change({ hours: h })} />
       <Txt type="title3" color={theme.inkSecondary} style={styles.colon} importantForAccessibility="no" accessibilityElementsHidden>:</Txt>
-      <Wheel count={60} value={minutes} label="Minutes" onChange={(m) => onChange(hours, m)} />
+      <Wheel count={60} value={minutes} label="Minutes" onChange={(m) => change({ minutes: m })} />
     </View>
   );
 }
