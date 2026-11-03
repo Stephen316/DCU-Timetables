@@ -1,0 +1,22 @@
+-- ---------------------------------------------------------------------------
+-- Phase 34 — screen_new_deadline_details is a trigger, not an RPC
+-- ---------------------------------------------------------------------------
+--
+-- RUN ORDER: phase32_deadline_details.sql → THIS FILE.
+--
+-- Supabase's linter (0028 and 0029) found it callable by anon and authenticated at
+-- /rest/v1/rpc/screen_new_deadline_details. Phase 32 created it and never took back the
+-- EXECUTE that Postgres hands PUBLIC on every new function; phase 25 did take it back from
+-- its own trigger functions, and this is the line phase 32 was missing. Called directly it
+-- only errors — a trigger function needs a trigger to run in — so nothing leaked.
+--
+-- EXECUTE on a trigger function is checked when the trigger is created, not when it fires
+-- (phase 8), so the trigger on module_deadlines keeps working.
+--
+-- Every other function the linter lists under 0029 is the API: the app and console call
+-- them signed in, and each checks its caller first (is_admin(), auth.uid() or is_trusted()).
+-- Re-audited 3 Nov 2026 against phases 22–33. Those warnings are expected; see phase 21.
+--
+-- Safe to re-run. Run it in the Supabase SQL editor.
+
+revoke all on function public.screen_new_deadline_details() from public, anon, authenticated;
