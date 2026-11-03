@@ -2,15 +2,13 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Deadline, deadlineSectionTitle, DeadlineRules } from '../../core/deadline';
+import { deadlineSectionTitle, DeadlineRules } from '../../core/deadline';
 import { startOfWeek } from '../../core/time';
-import { PrefKey } from '../../data/storage';
-import { useModel, useNow, usePrefBool, useServices } from '../../state/hooks';
+import { useModel, useNow, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
 import { EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { CardInset, Radius, Space, useTheme } from '../../ui/theme';
-import { DeadlineCalendar } from './DeadlineCalendar';
 import { DeadlineForm, DeadlineRow } from './DeadlineRows';
 import { DeadlinesModel } from './DeadlinesModel';
 import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
@@ -45,9 +43,6 @@ export function DeadlinesScreen() {
   const moduleOptions = DeadlineRules.moduleChoices([...week.eventsByWeekNumber.values()].flat(), (key) => week.moduleName(key));
   const [adding, setAdding] = useState(false);
   const addButton = useTutorialTarget('addDeadline');
-  // The same switch, in the same corner, as the timetable's between its list and its week.
-  const [showsCalendar, setShowsCalendar] = usePrefBool(PrefKey.deadlinesShowCalendar);
-  const calendarButton = useTutorialTarget('deadlinesCalendar');
 
   const filterButton = useRef<View>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -77,13 +72,6 @@ export function DeadlinesScreen() {
           </Pressable>
         </View>
       )}
-      <View ref={calendarButton} collapsable={false} style={styles.toggle}>
-        <IconButton
-          icon={showsCalendar ? 'list' : 'calendar'}
-          label={showsCalendar ? 'Show list' : 'Show weekly calendar'}
-          onPress={() => setShowsCalendar(!showsCalendar)}
-        />
-      </View>
       <View ref={addButton} collapsable={false} style={styles.add}>
         <IconButton icon="add" label="Add a deadline" disabled={moduleOptions.length === 0} onPress={() => setAdding(true)} />
       </View>
@@ -109,27 +97,6 @@ export function DeadlinesScreen() {
         ]}
       />
     </View>
-  );
-
-  const row = (d: Deadline, showDate: boolean) => (
-    <DeadlineRow
-      key={d.id}
-      deadline={d}
-      moduleName={week.moduleName(d.moduleKey)}
-      standing={model.standing(d)}
-      isMine={model.isMine(d)}
-      variant="schedule"
-      showDate={showDate}
-      actions={{
-        onConfirm: () => void model.toggleConfirmation(d),
-        onDispute: () => void model.toggleDispute(d),
-        onEdit: (fields) => void model.edit(d, fields),
-        onRename: (label) => void model.rename(d, label),
-        onDelete: () => void model.remove(d),
-        onReport: (reason) => void model.report(d, reason),
-        onHideAuthor: () => void model.hideAuthor(d),
-      }}
-    />
   );
 
   if (model.isEmpty && model.isLoading) {
@@ -167,20 +134,6 @@ export function DeadlinesScreen() {
               ? 'Once your timetable loads, deadlines your classmates share will appear here.'
               : 'Nobody has shared an assignment, quiz or exam for your modules yet. Tap + to add the first one.'
           }
-        />
-      </View>
-    );
-  }
-
-  if (showsCalendar) {
-    return (
-      <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
-        {header}
-        <DeadlineCalendar
-          deadlines={model.sections.flatMap((s) => s.deadlines)}
-          moduleName={(key) => week.moduleName(key)}
-          now={now}
-          renderDeadline={(d) => row(d, true)}
         />
       </View>
     );
@@ -228,7 +181,26 @@ export function DeadlinesScreen() {
                   {group.deadlines.length}
                 </Txt>
               </View>
-              {group.deadlines.map((d) => row(d, group.section !== 'today' && group.section !== 'tomorrow'))}
+              {group.deadlines.map((d) => (
+                <DeadlineRow
+                  key={d.id}
+                  deadline={d}
+                  moduleName={week.moduleName(d.moduleKey)}
+                  standing={model.standing(d)}
+                  isMine={model.isMine(d)}
+                  variant="schedule"
+                  showDate={group.section !== 'today' && group.section !== 'tomorrow'}
+                  actions={{
+                    onConfirm: () => void model.toggleConfirmation(d),
+                    onDispute: () => void model.toggleDispute(d),
+                    onEdit: (fields) => void model.edit(d, fields),
+                    onRename: (label) => void model.rename(d, label),
+                    onDelete: () => void model.remove(d),
+                    onReport: (reason) => void model.report(d, reason),
+                    onHideAuthor: () => void model.hideAuthor(d),
+                  }}
+                />
+              ))}
             </View>
           ))}
         </View>
@@ -243,7 +215,6 @@ const styles = StyleSheet.create({
   filter: { maxWidth: '80%' },
   // Level with the title, as ⋯ is on the timetable.
   add: { position: 'absolute', right: Space.s, bottom: 0 },
-  toggle: { position: 'absolute', left: Space.s, bottom: 0 },
   card: { marginHorizontal: Space.l, marginTop: Space.l, borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   sectionBox: { paddingHorizontal: CardInset.x, paddingVertical: CardInset.y, gap: Space.s },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
