@@ -19,7 +19,8 @@ export type TutorialTarget =
   | 'backButton' // Back, in a class page's header
   | 'more' // ⋯, top right
   | 'deadlinesTab' // the Deadlines tab
-  | 'addDeadline'; // +, top right of the Deadlines page
+  | 'addDeadline' // +, top right of the Deadlines page
+  | 'deadlinesCalendar'; // the list / week button, top left of the Deadlines page
 
 /**
  * A movement the student makes to go on — shown by a moving hand, and passed through the
@@ -125,6 +126,10 @@ const deadlines: TutorialStep[] = [
   step({
     id: 'deadlinesPage', target: 'addDeadline', continues: true, title: 'Deadlines',
     body: 'Assignments and tests shared by your classmates. Tap + to add one, and everyone on the module sees it.',
+  }),
+  step({
+    id: 'deadlinesCalendar', target: 'deadlinesCalendar', continues: true, title: 'See them by week',
+    body: 'Tap here to switch to a week calendar of what’s due, Monday to Sunday.',
   }),
 ];
 

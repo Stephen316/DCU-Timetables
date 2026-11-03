@@ -116,6 +116,14 @@ BODY: Assignments and tests shared by your classmates. Tap + to add one, and eve
 BUTTONS: Next
 
 
+Step 6c — The week calendar (counts as part of step 6)
+POINTS AT: the list / week button, top left of the Deadlines page (pointed at, not pressed)
+--------------------------------------------------------
+TITLE: See them by week   (drafted by Claude — edit freely)
+BODY: Tap here to switch to a week calendar of what’s due, Monday to Sunday.   (drafted by Claude — edit freely)
+BUTTONS: Next
+
+
 Step 7 — More
 (The tour brings the student back to the timetable first: ⋯ is only there.)
 POINTS AT: the ⋯ button, top right

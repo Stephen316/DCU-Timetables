@@ -221,8 +221,8 @@ export function deadlineTrust(deadline: Deadline, standing: DeadlineStanding): D
 }
 
 /**
- * Why a class is outlined in the timetable. Ordered by how much it matters: a cancelled
- * class outranks a quiz, which outranks something to hand in.
+ * Why a class is outlined in the timetable: news about whether it's on, ordered by how much
+ * it matters. Something due at a class is marked with a "!" instead, never a border.
  *
  * `cancelled` is settled — the crowd cleared the bar, or an organiser said so — and the
  * class is greyed out. `reported` is short of the bar: a warning, not a fact.
@@ -230,9 +230,7 @@ export function deadlineTrust(deadline: Deadline, standing: DeadlineStanding): D
 export type ClassHighlight =
   | { kind: 'cancelled'; reportCount: number; decidedBy: string | null }
   | { kind: 'moved'; source: string }
-  | { kind: 'reported'; reportCount: number }
-  | { kind: 'test'; title: string }
-  | { kind: 'assignment'; title: string };
+  | { kind: 'reported'; reportCount: number };
 
 export function highlightReason(highlight: ClassHighlight): string {
   switch (highlight.kind) {
@@ -244,8 +242,6 @@ export function highlightReason(highlight: ClassHighlight): string {
     case 'moved': return `Moved · ${highlight.source}`;
     case 'reported':
       return `Reported cancelled · ${highlight.reportCount === 1 ? '1 person' : `${highlight.reportCount} people`}`;
-    case 'test': return `${highlight.title} today`;
-    case 'assignment': return `${highlight.title} due today`;
   }
 }
 
@@ -285,8 +281,8 @@ export const DeadlineRules = {
 
   /**
    * Soonest first, and anything before *today* dropped. Not before this instant: a class is
-   * coloured for the whole day a deadline falls on, so dropping an 11am hand-in at 11:01
-   * would leave the timetable outlined for something no longer listed.
+   * marked for the whole day a deadline falls on, so dropping an 11am hand-in at 11:01
+   * would leave the timetable marked for something no longer listed.
    */
   upcoming(deadlines: Deadline[], now: Date = new Date()): Deadline[] {
     const floor = DeadlineRules.horizon(now).getTime();
@@ -363,7 +359,7 @@ export const DeadlineRules = {
   },
 
   /** What (if anything) to outline this class with. */
-  highlight(event: TimetableEvent, deadlines: Deadline[], cancellation: CancellationStatus): ClassHighlight | null {
+  highlight(cancellation: CancellationStatus): ClassHighlight | null {
     if (cancellation.isFlagged) {
       return {
         kind: 'cancelled',
@@ -377,10 +373,6 @@ export const DeadlineRules = {
       return { kind: 'moved', source: verdictSource(cancellation.verdict) };
     }
     if (cancellation.isReported) return { kind: 'reported', reportCount: cancellation.reportCount };
-    const today = DeadlineRules.dueAt(event, deadlines);
-    const test = today.find((d) => isSatInClass(d.kind));
-    if (test) return { kind: 'test', title: displayTitle(test) };
-    if (today.length > 0) return { kind: 'assignment', title: displayTitle(today[0]) };
     return null;
   },
 
