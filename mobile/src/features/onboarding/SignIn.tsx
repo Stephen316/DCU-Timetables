@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Linking, StyleSheet, TextInput, View } from 'react-native';
-import { DCUEmail, parseDCUEmail, PasswordValidation } from '../../core/identity';
+import { DCUEmail, parseDCUEmail, parseSignInEmail, PasswordValidation } from '../../core/identity';
 import { AuthError, AuthService } from '../../data/auth';
 import { errorMessage } from '../../data/rest';
 import { AuthenticatedUser } from '../../data/session';
@@ -37,8 +37,10 @@ export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: Authenticate
   /** Set once the confirmation email has been sent — the form then shows only that step. */
   const [awaiting, setAwaiting] = useState<DCUEmail | null>(null);
 
-  const email = parseDCUEmail(address);
-  const addressLooksWrong = address.length > 0 && email === null;
+  // Sign in also takes the few non-DCU accounts the server allows; the hint still asks a
+  // student for their DCU address, since that is what nearly everyone should be typing.
+  const email = mode === 'signIn' ? parseSignInEmail(address) : parseDCUEmail(address);
+  const addressLooksWrong = address.length > 0 && parseDCUEmail(address) === null;
   const problem = PasswordValidation.problem(password, confirmPassword);
   const canSubmit =
     email !== null && password.length > 0 && !busy &&

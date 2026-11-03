@@ -1,7 +1,7 @@
 import { LecturerDirectory, lecturerDisplayName, lecturerInitials, makeLecturer, PagerDragState, PagerIndex, WeekdayIndex } from '../src/core/misc';
 import { parseActivityCode } from '../src/core/activityCode';
 import {
-  AccountRules, makeAccountProfile, parseDCUEmail, parseRole, PasswordValidation, PublicIdentifier, StudentNumber,
+  AccountRules, makeAccountProfile, parseDCUEmail, parseRole, parseSignInEmail, PasswordValidation, PublicIdentifier, StudentNumber,
 } from '../src/core/identity';
 import { locationDisplay, parseRoom, roomDisplayText } from '../src/core/roomLocation';
 import { ClashDetector, DaySchedule, DaySlot, DefaultDay, NextClassWindow, WeekGrid, gapLabel } from '../src/core/schedule';
@@ -171,6 +171,14 @@ describe('DCU email', () => {
 
   test('strips only trailing digits', () => {
     expect(parseDCUEmail('s3an.murphy12@dcu.ie')?.nameParts).toEqual(['s3an', 'murphy']);
+  });
+
+  test('sign-in also takes the non-DCU addresses the server lets through', () => {
+    expect(parseSignInEmail(' CE1@example.ie ')?.address).toBe('ce1@example.ie');
+    expect(parseSignInEmail('stephen.harcourt2@mail.dcu.ie')?.displayName).toBe('Stephen Harcourt');
+    for (const raw of ['nodomain', '@example.ie', 'ce1@example', 'a@b@example.ie', 'ce 1@example.ie']) {
+      expect(parseSignInEmail(raw)).toBeNull();
+    }
   });
 });
 

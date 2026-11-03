@@ -125,7 +125,25 @@ export function parseDCUEmail(raw: string): DCUEmail | null {
   if (pieces.length !== 2) return null;
   const [local, domain] = pieces;
   if (local.length === 0 || !ALLOWED_DOMAINS.includes(domain)) return null;
+  return fromLocalPart(trimmed, local);
+}
 
+/**
+ * What Sign in accepts: a DCU address, or any other well-formed one, because the server
+ * lets a few non-DCU accounts in (`auth_domain_exceptions` — the console's test accounts,
+ * an App Review demo). The client can't read that list, and needn't: an address with no
+ * account gets the same "don't match" answer as a wrong password. Creating an account stays
+ * on {@link parseDCUEmail}.
+ */
+export function parseSignInEmail(raw: string): DCUEmail | null {
+  const dcu = parseDCUEmail(raw);
+  if (dcu) return dcu;
+  const trimmed = raw.trim().toLowerCase();
+  const match = /^([^@\s]+)@[^@\s]+\.[^@\s]+$/.exec(trimmed);
+  return match ? fromLocalPart(trimmed, match[1]) : null;
+}
+
+function fromLocalPart(address: string, local: string): DCUEmail | null {
   // Dots separate names; a trailing number disambiguates duplicates and isn't part of the
   // name. Anything left without letters is not a name part.
   const parts = local
@@ -141,7 +159,7 @@ export function parseDCUEmail(raw: string): DCUEmail | null {
   if (parts.length === 0) return null;
 
   return {
-    address: trimmed,
+    address,
     nameParts: parts,
     givenName: titleCased(parts[0]),
     familyName: parts.length > 1 ? titleCased(parts[parts.length - 1]) : '',
