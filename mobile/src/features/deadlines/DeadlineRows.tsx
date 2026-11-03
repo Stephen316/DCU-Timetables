@@ -2,8 +2,8 @@ import { ReactNode, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
   ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DeadlineFields, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
-  DeadlinePlacement, DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, displayTitle, LABEL_LIMIT,
-  ModuleChoice, reportReasonLabel, gradeWeightLabel, TITLE_LIMIT,
+  DeadlinePlacement, DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, DETAILS_LIMIT, detailsEditedLabel,
+  displayTitle, LABEL_LIMIT, ModuleChoice, reportReasonLabel, gradeWeightLabel, TITLE_LIMIT,
 } from '../../core/deadline';
 import { addDays, formatAbbreviated, formatTime, formatWeekdayDayMonthTime } from '../../core/time';
 import {
@@ -27,6 +27,9 @@ export interface DeadlineActions {
   onDelete: () => void;
   onReport: (reason: DeadlineReportReason) => void;
   onHideAuthor: () => void;
+  /** The shared Details box: anyone's to change, on anyone's deadline. */
+  onSaveDetails: (text: string) => void;
+  onReportDetails: () => void;
 }
 
 /**
@@ -35,7 +38,7 @@ export interface DeadlineActions {
  * thing you need to know.
  */
 export function DeadlineRow({
-  deadline, moduleName, standing, isMine, variant, showDate = true, actions,
+  deadline, moduleName, standing, isMine, variant, showDate = true, actions, detailsProblem = null, detailsReported = false,
 }: {
   deadline: Deadline;
   /** What to call its module on the `schedule` row: the name, or the code when there isn't one. */
@@ -46,27 +49,44 @@ export function DeadlineRow({
   /** On the `schedule` row, the weekday and date under the module. Today and Tomorrow need only the time. */
   showDate?: boolean;
   actions: DeadlineActions;
+  /** Why the last save of the details didn't stick, said under them. */
+  detailsProblem?: string | null;
+  detailsReported?: boolean;
 }) {
   const theme = useTheme();
   const large = useLargeText();
-  const [sheet, setSheet] = useState<'edit' | 'rename' | null>(null);
+  const [sheet, setSheet] = useState<'edit' | 'rename' | 'details' | null>(null);
   const edited = deadline.editedAt ? ' · edited' : '';
   const worth = gradeWeightLabel(deadline.gradeWeight);
 
-  const sheets = isMine ? (
-    <DeadlineForm
-      visible={sheet === 'edit'}
-      editing={{ deadline, standing }}
-      onClose={() => setSheet(null)}
-      onSubmit={actions.onEdit}
-    />
-  ) : (
-    <RenameSheet
-      visible={sheet === 'rename'}
-      deadline={deadline}
-      onClose={() => setSheet(null)}
-      onSave={actions.onRename}
-    />
+  const sheets = (
+    <>
+      {isMine ? (
+        <DeadlineForm
+          visible={sheet === 'edit'}
+          editing={{ deadline, standing }}
+          onClose={() => setSheet(null)}
+          onSubmit={actions.onEdit}
+        />
+      ) : (
+        <RenameSheet
+          visible={sheet === 'rename'}
+          deadline={deadline}
+          onClose={() => setSheet(null)}
+          onSave={actions.onRename}
+        />
+      )}
+      <DetailsSheet
+        visible={sheet === 'details'}
+        deadline={deadline}
+        onClose={() => setSheet(null)}
+        onSave={actions.onSaveDetails}
+        onReport={actions.onReportDetails}
+      />
+    </>
+  );
+  const detailsBlock = (
+    <DetailsBlock deadline={deadline} problem={detailsProblem} reported={detailsReported} onEdit={() => setSheet('details')} />
   );
   const standingLine = (
     <StandingLine
@@ -95,6 +115,7 @@ export function DeadlineRow({
             {moduleName ?? deadline.moduleKey} · {deadlineKindLabel(deadline.kind)}{graded}{showDate ? '' : edited}
           </Txt>
           {showDate ? <Txt type="footnote" color={theme.inkSecondary}>{formatWeekdayDayMonthTime(deadline.due)}{edited}</Txt> : null}
+          {detailsBlock}
           <View style={[styles.divider, styles.itemDivider, { backgroundColor: theme.separator }]} />
           {standingLine}
         </View>
@@ -117,6 +138,7 @@ export function DeadlineRow({
           </View>
           <Txt type="caption" color={theme.inkSecondary} style={styles.medium}>{deadlineCountdown(deadline.due)}</Txt>
         </AdaptiveStack>
+        <View style={large ? undefined : styles.indent}>{detailsBlock}</View>
         <View style={large ? undefined : styles.indent}>{standingLine}</View>
       </View>
       {sheets}
@@ -230,6 +252,126 @@ function MoreMenu({
         actions={[{ label: 'Hide their posts', destructive: true, onPress: actions.onHideAuthor }]}
       />
     </>
+  );
+}
+
+/**
+ * The shared Details box on a row: the text and how long ago it changed, or a quiet way to
+ * start it. Tapping either opens the editor, which is everyone's, not only the poster's.
+ */
+function DetailsBlock({ deadline, problem, reported, onEdit }: {
+  deadline: Deadline;
+  problem: string | null;
+  reported: boolean;
+  onEdit: () => void;
+}) {
+  const theme = useTheme();
+  const now = useNow();
+  return (
+    <View style={styles.details}>
+      {deadline.details ? (
+        <>
+          <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Details: ${deadline.details}`} accessibilityHint="Edits the details">
+            <Txt type="footnote" numberOfLines={4}>{deadline.details}</Txt>
+          </Pressable>
+          <View style={styles.detailsLine}>
+            {deadline.detailsEditedAt ? (
+              <Txt type="caption2" color={theme.inkSecondary} style={styles.text}>{detailsEditedLabel(deadline.detailsEditedAt, now)}</Txt>
+            ) : <View style={styles.text} />}
+            <InlineAction title="Edit details" onPress={onEdit} />
+          </View>
+        </>
+      ) : (
+        <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel="Add details" hitSlop={{ top: 6, bottom: 6 }} style={({ pressed }) => [styles.addDetails, pressed && { opacity: 0.6 }]}>
+          <Label icon="edit" text="Add details" type="footnote" color={theme.inkSecondary} />
+        </Pressable>
+      )}
+      {problem ? (
+        <Txt type="caption" color={theme.tint.off}>{problem}</Txt>
+      ) : reported ? (
+        <Txt type="caption" color={theme.inkSecondary}>Reported. A moderator will look at the details.</Txt>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Editing the details. Saved as soon as Save is pressed — the row shows the new text at
+ * once, and the old text back with the reason if the server says no.
+ */
+function DetailsSheet({ visible, deadline, onClose, onSave, onReport }: {
+  visible: boolean;
+  deadline: Deadline;
+  onClose: () => void;
+  onSave: (text: string) => void;
+  onReport: () => void;
+}) {
+  const theme = useTheme();
+  const [text, setText] = useState(deadline.details);
+  // Refilled each time it opens, so it starts from what's saved now, someone else's edit included.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setText(deadline.details);
+  }
+  const problem = DeadlineRules.detailsProblem(text);
+  const left = DETAILS_LIMIT - text.trim().length;
+  const unchanged = text.trim() === deadline.details;
+
+  return (
+    <Sheet
+      visible={visible}
+      title="Details"
+      onClose={onClose}
+      left={<BarButton title="Cancel" onPress={onClose} />}
+      right={
+        <BarButton
+          title="Save"
+          bold
+          disabled={problem !== null || unchanged}
+          onPress={() => {
+            onSave(text);
+            onClose();
+          }}
+        />
+      }
+    >
+      <ListScroll>
+        <Section footer="Anyone taking this module can edit these, on anyone's deadline. Earlier versions are kept, so a moderator can put back anything spoiled.">
+          <Row>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              multiline
+              maxLength={DETAILS_LIMIT}
+              placeholder="What to hand in, where, and anything the brief doesn't say"
+              placeholderTextColor={theme.inkTertiary}
+              style={[styles.input, styles.detailsInput, { color: theme.ink }]}
+              accessibilityLabel="Details"
+              textAlignVertical="top"
+              autoFocus
+            />
+            {problem ? (
+              <Txt type="caption" color={theme.tint.off}>{problem}</Txt>
+            ) : left < 200 ? (
+              <Txt type="caption" color={theme.inkSecondary}>{left === 1 ? '1 character left' : `${left} characters left`}</Txt>
+            ) : null}
+          </Row>
+        </Section>
+        {deadline.details ? (
+          <Section>
+            <ActionRow
+              title="Report these details"
+              icon="flag"
+              onPress={() => {
+                onReport();
+                onClose();
+              }}
+            />
+          </Section>
+        ) : null}
+      </ListScroll>
+    </Sheet>
   );
 }
 
@@ -539,4 +681,8 @@ const styles = StyleSheet.create({
   weight: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   weightInput: { width: 64, borderRadius: 8, paddingHorizontal: Space.m, textAlign: 'right' },
   weightReadout: { flex: 1, marginLeft: Space.s },
+  details: { gap: Space.xxs, marginTop: Space.xs },
+  detailsLine: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
+  addDetails: { alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' },
+  detailsInput: { minHeight: 160 },
 });

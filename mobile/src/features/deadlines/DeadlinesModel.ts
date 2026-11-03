@@ -5,6 +5,7 @@ import {
 import { errorMessage } from '../../data/rest';
 import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
+import { DetailsEdits } from './DetailsEdits';
 
 /**
  * Posting a new deadline, from a class page or this tab. Submitting is itself a vouch —
@@ -32,9 +33,18 @@ export class DeadlinesModel extends Observable {
   private all: Deadline[] = [];
   private readonly reporterID: string;
 
+  readonly details: DetailsEdits;
+
   constructor(private readonly services: Services) {
     super();
     this.reporterID = services.reporter.current;
+    this.details = new DetailsEdits(services, {
+      replace: (deadline) => {
+        this.all = this.all.map((d) => (d.id === deadline.id ? deadline : d));
+        this.regroup();
+      },
+      changed: () => this.changed(),
+    });
   }
 
   get isEmpty(): boolean {

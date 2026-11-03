@@ -133,6 +133,11 @@ export interface DeadlineStore {
   edit(id: string, fields: DeadlineFields): Promise<void>;
   /** This student's own name for a deadline; null goes back to the shared title. */
   setLabel(id: string, label: string | null): Promise<void>;
+  /**
+   * The shared Details box, which anyone can change on anyone's deadline. The server keeps
+   * the version it replaces, and who wrote it, for moderators. Blank clears it.
+   */
+  setDetails(id: string, details: string): Promise<void>;
   /** Only the submitter can remove one — enforced by RLS, not just by hiding the button. */
   withdraw(id: string, submitterID: string): Promise<void>;
   /** How many vouched for each deadline, and whether this person did — never who. */
@@ -176,7 +181,7 @@ export class SupabaseDeadlineStore implements DeadlineStore {
   private async fetch(moduleFilter: string): Promise<Deadline[]> {
     const json = await this.rest.json('GET', '/rest/v1/module_deadlines_public', SupabaseDeadlineStore.describe, {
       query: [
-        ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label,grade_weight'],
+        ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label,grade_weight,details,details_edited_at'],
         ['module_key', moduleFilter],
         ['due_at', `gte.${isoSeconds(DeadlineRules.horizon())}`],
         ['order', 'due_at.asc'],
@@ -199,6 +204,8 @@ export class SupabaseDeadlineStore implements DeadlineStore {
         editedAt: typeof r.edited_at === 'string' ? parseISO(r.edited_at) : null,
         myLabel: typeof r.my_label === 'string' && r.my_label.length > 0 ? r.my_label : null,
         gradeWeight: typeof r.grade_weight === 'number' ? r.grade_weight : 0,
+        details: typeof r.details === 'string' ? r.details : '',
+        detailsEditedAt: typeof r.details_edited_at === 'string' ? parseISO(r.details_edited_at) : null,
       }];
     });
   }
@@ -226,6 +233,10 @@ export class SupabaseDeadlineStore implements DeadlineStore {
 
   async setLabel(id: string, label: string | null): Promise<void> {
     await this.rpc('set_deadline_label', { p_deadline: id, p_label: label ?? '' });
+  }
+
+  async setDetails(id: string, details: string): Promise<void> {
+    await this.rpc('set_deadline_details', { p_deadline: id, p_details: details });
   }
 
   async withdraw(id: string, submitterID: string): Promise<void> {
@@ -297,9 +308,12 @@ export class LocalDeadlineStore implements DeadlineStore {
   constructor(private readonly prefs: Prefs) {}
 
   private load(): Deadline[] {
-    // Rows saved before status, edits and names existed have none of the three.
-    type Stored = Omit<Deadline, 'due' | 'submittedAt' | 'editedAt' | 'status' | 'myLabel' | 'gradeWeight'>
-      & { due: number; submittedAt: number; editedAt?: number | null; status?: Deadline['status']; myLabel?: string | null; gradeWeight?: number };
+    // Rows saved before status, edits, names and details existed have none of them.
+    type Stored = Omit<Deadline, 'due' | 'submittedAt' | 'editedAt' | 'status' | 'myLabel' | 'gradeWeight' | 'details' | 'detailsEditedAt'>
+      & {
+        due: number; submittedAt: number; editedAt?: number | null; status?: Deadline['status']; myLabel?: string | null;
+        gradeWeight?: number; details?: string; detailsEditedAt?: number | null;
+      };
     return this.prefs
       .getJSON<Stored[]>(PrefKey.localDeadlines, [])
       .map((d) => ({
@@ -311,13 +325,18 @@ export class LocalDeadlineStore implements DeadlineStore {
         editedAt: typeof d.editedAt === 'number' ? new Date(d.editedAt) : null,
         myLabel: d.myLabel ?? null,
         gradeWeight: d.gradeWeight ?? 0,
+        details: d.details ?? '',
+        detailsEditedAt: typeof d.detailsEditedAt === 'number' ? new Date(d.detailsEditedAt) : null,
       }));
   }
 
   private save(list: Deadline[]): void {
     this.prefs.setJSON(
       PrefKey.localDeadlines,
-      list.map((d) => ({ ...d, due: d.due.getTime(), submittedAt: d.submittedAt.getTime(), editedAt: d.editedAt?.getTime() ?? null })),
+      list.map((d) => ({
+        ...d, due: d.due.getTime(), submittedAt: d.submittedAt.getTime(), editedAt: d.editedAt?.getTime() ?? null,
+        detailsEditedAt: d.detailsEditedAt?.getTime() ?? null,
+      })),
     );
   }
 
@@ -344,6 +363,12 @@ export class LocalDeadlineStore implements DeadlineStore {
 
   async setLabel(id: string, label: string | null): Promise<void> {
     this.save(this.load().map((d) => (d.id === id ? { ...d, myLabel: label } : d)));
+  }
+
+  /** On this device there's only one editor, so no history is kept. */
+  async setDetails(id: string, details: string): Promise<void> {
+    const text = details.trim();
+    this.save(this.load().map((d) => (d.id === id && d.details !== text ? { ...d, details: text, detailsEditedAt: new Date() } : d)));
   }
 
   async withdraw(id: string, submitterID: string): Promise<void> {

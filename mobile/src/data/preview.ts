@@ -90,7 +90,11 @@ export const PreviewData = {
     return [
       makeDeadline({ id: 'dl-demo', moduleKey: 'CA107', title: 'Prototype demo', due: practical.start, kind: 'presentation', submitterID: 'someone', isMine: false, gradeWeight: 15 }),
       makeDeadline({ id: 'dl-quiz', moduleKey: 'CA106', title: 'Quiz 2: memory hierarchy', due: addDays(now, 1), kind: 'quiz', submitterID: 'someone', isMine: false }),
-      makeDeadline({ id: 'dl-sched', moduleKey: 'CA216', title: 'Scheduler assignment', due: addDays(now, 4), kind: 'assignment', submitterID: 'someone', isMine: false, status: 'verified' }),
+      makeDeadline({
+        id: 'dl-sched', moduleKey: 'CA216', title: 'Scheduler assignment', due: addDays(now, 4), kind: 'assignment', submitterID: 'someone', isMine: false, status: 'verified',
+        details: 'Submit the zip on Loop, not by email. Round robin and priority scheduling both need a short write-up.',
+        detailsEditedAt: new Date(now.getTime() - 2.5 * HOUR),
+      }),
       makeDeadline({ id: 'dl-sheet', moduleKey: 'MS121', title: 'Problem sheet 3', due: addDays(now, 9), kind: 'assignment', submitterID: 'preview-me', isMine: true }),
     ];
   },
@@ -140,16 +144,25 @@ class PreviewCancellationStore implements CancellationStore {
   async withdraw(): Promise<void> {}
 }
 
-/** The fixture's deadlines, plus any added this session, so an added one stays in the list. */
+/**
+ * The fixture's deadlines, plus any added this session, so an added one stays in the list,
+ * and any details written this session, which the fixture's rows are rebuilt with each read.
+ */
 class PreviewDeadlineStore implements DeadlineStore {
   private added: Deadline[] = [];
-  private all() { return [...PreviewData.deadlines(), ...this.added]; }
+  private details = new Map<string, { details: string; detailsEditedAt: Date }>();
+  private all() {
+    return [...PreviewData.deadlines(), ...this.added].map((d) => ({ ...d, ...this.details.get(d.id) }));
+  }
   async deadlinesForModule(moduleKey: string) { return this.all().filter((d) => d.moduleKey === moduleKey); }
   async deadlinesForModules() { return this.all(); }
   async submit(deadline: Deadline) { this.added.push({ ...deadline, isMine: true }); }
   async edit() {}
   async setLabel(id: string, label: string | null) {
     this.added = this.added.map((d) => (d.id === id ? { ...d, myLabel: label } : d));
+  }
+  async setDetails(id: string, details: string) {
+    this.details.set(id, { details: details.trim(), detailsEditedAt: new Date() });
   }
   async withdraw() {}
   async standings(ids: string[]) {

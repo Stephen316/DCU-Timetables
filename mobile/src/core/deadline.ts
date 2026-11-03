@@ -1,6 +1,6 @@
 import { CancellationStatus, verdictSource } from './cancellation';
 import { groupKeyOf, groupLabelOf, shortTitleOf, TimetableEvent } from './timetableEvent';
-import { addDays, daysBetween, isSameDay, startOfDay, startOfWeek } from './time';
+import { addDays, daysBetween, formatDayMonth, isSameDay, startOfDay, startOfWeek } from './time';
 import { uuid } from './uuid';
 
 export type DeadlineKind = 'assignment' | 'labReport' | 'quiz' | 'exam' | 'presentation' | 'other';
@@ -38,6 +38,7 @@ export type DeadlineStatus = 'pending' | 'verified';
 /** The database's limits, so a form can't offer what the server will refuse. */
 export const TITLE_LIMIT = 120;
 export const LABEL_LIMIT = 80;
+export const DETAILS_LIMIT = 2000;
 
 /** What a poster fills in, on the way in and when they edit it. */
 export interface DeadlineFields {
@@ -115,6 +116,13 @@ export interface Deadline {
   myLabel: string | null;
   /** Whole percent of the module's grade; 0 means not graded. */
   gradeWeight: number;
+  /**
+   * What to hand in, where, what the brief doesn't say — the one part anyone taking the
+   * module can edit, not only the poster. Empty when nobody has written any.
+   */
+  details: string;
+  /** When the details last changed. Who changed them is the console's to know, not the class's. */
+  detailsEditedAt: Date | null;
 }
 
 export function makeDeadline(fields: {
@@ -131,6 +139,8 @@ export function makeDeadline(fields: {
   editedAt?: Date | null;
   myLabel?: string | null;
   gradeWeight?: number;
+  details?: string;
+  detailsEditedAt?: Date | null;
 }): Deadline {
   return {
     id: fields.id ?? uuid(),
@@ -146,7 +156,25 @@ export function makeDeadline(fields: {
     editedAt: fields.editedAt ?? null,
     myLabel: fields.myLabel ?? null,
     gradeWeight: fields.gradeWeight ?? 0,
+    details: fields.details ?? '',
+    detailsEditedAt: fields.detailsEditedAt ?? null,
   };
+}
+
+/**
+ * "Edited 2h ago": when the details last changed, roughly, since an open box is only as
+ * good as how recently someone looked at it.
+ */
+export function detailsEditedLabel(at: Date, now: Date = new Date()): string {
+  const minutes = Math.floor((now.getTime() - at.getTime()) / 60_000);
+  if (minutes < 1) return 'Edited just now';
+  if (minutes < 60) return `Edited ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Edited ${hours}h ago`;
+  const days = daysBetween(at, now);
+  if (days <= 1) return 'Edited yesterday';
+  if (days < 7) return `Edited ${days} days ago`;
+  return `Edited ${formatDayMonth(at)}`;
 }
 
 /** What this student sees it called: their own name for it if they gave one. */
@@ -446,14 +474,23 @@ export const DeadlineRules = {
       classes: [...classes].map(([groupKey, label]) => ({ groupKey, label })).sort((a, b) => a.label.localeCompare(b.label)),
     })).sort((a, b) => a.name.localeCompare(b.name));
   },
+
+  /** Why details can't be saved as typed, or null when they can. Blank is fine: it clears them. */
+  detailsProblem(text: string): string | null {
+    return text.trim().length > DETAILS_LIMIT ? `Keep it to ${DETAILS_LIMIT} characters.` : null;
+  },
 };
 
 /**
  * Why a student is reporting someone else's deadline. The values are the database's
  * `deadline_reports.reason` check, so they must stay in step with it.
  */
-export type DeadlineReportReason = 'offensive' | 'spam' | 'wrong' | 'other';
-export const DEADLINE_REPORT_REASONS: DeadlineReportReason[] = ['offensive', 'spam', 'wrong', 'other'];
+/**
+ * `details` is about the shared Details box, not the deadline: it flags it for a moderator
+ * without hiding anything, and anyone may raise it, the poster included.
+ */
+export type DeadlineReportReason = 'offensive' | 'spam' | 'wrong' | 'other' | 'details';
+export const DEADLINE_REPORT_REASONS: DeadlineReportReason[] = ['offensive', 'spam', 'wrong', 'other', 'details'];
 /**
  * What the Report sheet offers. `wrong` is a dispute with its own button: it's counted in
  * the open and doesn't hide the row, since a wrong date is still one the class should see.
@@ -466,6 +503,7 @@ export function reportReasonLabel(reason: DeadlineReportReason): string {
     case 'spam': return 'Spam or nonsense';
     case 'wrong': return 'The date or details are wrong';
     case 'other': return 'Something else';
+    case 'details': return 'The details are abusive or vandalised';
   }
 }
 

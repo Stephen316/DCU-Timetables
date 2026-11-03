@@ -197,7 +197,7 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
 
         <Section
           header={`All ${model.moduleKey} dates`}
-          footer={`Shared with everyone taking this module. Confirm the ones you know are right — a deadline is flagged as confirmed once ${CONFIRM_THRESHOLD} people have vouched for it and more say it's right than wrong. You can only edit or remove your own, but you can give any of them a name only you see.`}
+          footer={`Shared with everyone taking this module. Confirm the ones you know are right — a deadline is flagged as confirmed once ${CONFIRM_THRESHOLD} people have vouched for it and more say it's right than wrong. You can only edit or remove your own, but anyone can add to the details, and you can give any of them a name only you see.`}
         >
           {model.isLoading && model.deadlines.length === 0 ? (
             <Row><ActivityIndicator color={theme.inkSecondary} /></Row>
@@ -219,7 +219,11 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
                   onDelete: () => void model.removeDeadline(d),
                   onReport: (reason) => void model.reportDeadline(d, reason),
                   onHideAuthor: () => void model.hideAuthor(d),
+                  onSaveDetails: (text) => void model.details.save(d, text),
+                  onReportDetails: () => void model.details.report(d),
                 }}
+                detailsProblem={model.details.problem(d)}
+                detailsReported={model.details.reported.has(d.id)}
               />
             ))
           )}

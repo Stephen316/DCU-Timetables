@@ -10,6 +10,7 @@ import { errorMessage } from '../../data/rest';
 import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
 import { shareDeadline } from '../deadlines/DeadlinesModel';
+import { DetailsEdits } from '../deadlines/DetailsEdits';
 
 /** Everything known about one class: the crowd, any verdict, and the module's deadlines. */
 export class LectureModel extends Observable {
@@ -39,9 +40,17 @@ export class LectureModel extends Observable {
   /** What the page showed before a practice report, put back when it's undone. */
   private beforePractice: CancellationStatus | null = null;
 
+  readonly details: DetailsEdits;
+
   constructor(private readonly services: Services, readonly event: TimetableEvent, known: Deadline[] = []) {
     super();
     this.reporterID = services.reporter.current;
+    this.details = new DetailsEdits(services, {
+      replace: (deadline) => {
+        this.deadlines = this.deadlines.map((d) => (d.id === deadline.id ? deadline : d));
+      },
+      changed: () => this.changed(),
+    });
     this.canDecide = Roles.canDecide(services.role.current);
     this.lecturers = lecturerDirectory.lecturersFor(event);
     // Seeded from the timetable's own copy so the page opens with its banner already drawn.

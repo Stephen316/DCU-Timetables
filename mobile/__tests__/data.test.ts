@@ -693,6 +693,17 @@ describe('Device storage', () => {
     expect(back).toMatchObject({ title: 'T2', kind: 'exam', due: later, myLabel: 'mine', status: 'pending', gradeWeight: 25 });
     expect(back.editedAt).toBeInstanceOf(Date);
   });
+
+  test('the local deadline store keeps details across a reload, and a deadline saved before them has none', async () => {
+    const prefs = newPrefs();
+    const d = makeDeadline({ moduleKey: 'M', title: 'T', due: new Date(Date.now() + 86_400_000), submitterID: 'me' });
+    await new LocalDeadlineStore(prefs).submit(d);
+    expect((await new LocalDeadlineStore(prefs).deadlinesForModule('M'))[0]).toMatchObject({ details: '', detailsEditedAt: null });
+    await new LocalDeadlineStore(prefs).setDetails(d.id, '  Upload to Loop  ');
+    const [back] = await new LocalDeadlineStore(prefs).deadlinesForModule('M');
+    expect(back.details).toBe('Upload to Loop');
+    expect(back.detailsEditedAt).toBeInstanceOf(Date);
+  });
 });
 
 describe('Widget snapshot', () => {

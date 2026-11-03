@@ -196,6 +196,14 @@ reports.
 - **Anyone gives any deadline their own name** ("Give it my own name…"). Only they see it —
   on the row, the class banner, the timetable outline and the widget — with the shared title
   underneath. It's stored per account (`deadline_labels`), so it follows them to a new phone.
+- **Anyone edits the Details box** on any deadline, not only its poster: what to hand in,
+  where, what the brief doesn't say, up to 2000 characters. It's the one field that's
+  everyone's — title, type, date and weight stay the poster's — so it goes through its own
+  function (`set_deadline_details`, phase 32) that can change nothing else. The row shows
+  "Edited 2h ago", never who. Every save keeps the version it replaced, and who wrote that,
+  in `deadline_details_history` for the console; and "Report these details" flags it for a
+  moderator without hiding the deadline, since the date underneath is still right. The
+  poster can report it too.
 - **The console** can edit, confirm, block, unblock or remove any deadline from its Deadlines
   page. Blocking keeps the row, and a new deadline with the same title on the same day in the
   same module arrives already blocked.

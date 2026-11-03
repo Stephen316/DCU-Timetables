@@ -198,7 +198,11 @@ export function DeadlinesScreen() {
                     onDelete: () => void model.remove(d),
                     onReport: (reason) => void model.report(d, reason),
                     onHideAuthor: () => void model.hideAuthor(d),
+                    onSaveDetails: (text) => void model.details.save(d, text),
+                    onReportDetails: () => void model.details.report(d),
                   }}
+                  detailsProblem={model.details.problem(d)}
+                  detailsReported={model.details.reported.has(d.id)}
                 />
               ))}
             </View>
