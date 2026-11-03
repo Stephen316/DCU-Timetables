@@ -28,13 +28,15 @@ const MAC_SIDE = Space.xl;
  * Overlapping classes share the column width.
  */
 export function WeekGridView({
-  eventsByDay, ghostsByDay, editing, weekStart, clashingIDs, highlight, dueAt, onSelect, onEdit, now,
+  eventsByDay, ghostsByDay, editing, isLoaded, weekStart, clashingIDs, highlight, dueAt, onSelect, onEdit, now,
 }: {
   eventsByDay: DayEvents[];
   /** The course's classes that aren't the student's, shown while editing. */
   ghostsByDay: DayEvents[];
   /** Edit timetable is on: a tap adds a ghost or removes a class instead of opening it. */
   editing: boolean;
+  /** The week's classes have arrived, so an empty grid is a free week and says so. */
+  isLoaded: boolean;
   weekStart: Date | null;
   clashingIDs: Set<string>;
   highlight: (event: TimetableEvent) => ClassHighlight | null;
@@ -103,6 +105,17 @@ export function WeekGridView({
           });
         }}
       />
+      {/* Out of term DCU timetables nothing, and a bare grid reads as the app having broken. */}
+      {isLoaded && all.length === 0 ? (
+        <View pointerEvents="none" style={styles.emptyWeek}>
+          <View style={[styles.emptyCard, { backgroundColor: theme.canvas }]}>
+            <Txt type="title3" style={styles.centred}>No classes this week</Txt>
+            <Txt type="subheadline" color={theme.inkSecondary} style={styles.centred}>
+              {editing ? 'Your course has nothing on this week.' : onMac ? 'Use the arrows for other weeks.' : 'Swipe left or right for other weeks.'}
+            </Txt>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -298,6 +311,10 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
   dayHead: { alignItems: 'center', gap: 1 },
   bold: { fontWeight: '700' },
+  centred: { textAlign: 'center' },
+  // Over the hours, clear of the day headings, with the canvas behind it so the hour lines don't run through the text.
+  emptyWeek: { position: 'absolute', left: 0, right: 0, bottom: 0, top: 48, alignItems: 'center', justifyContent: 'center', padding: Space.xl },
+  emptyCard: { alignItems: 'center', gap: Space.xs, paddingHorizontal: Space.l, paddingVertical: Space.m, borderRadius: Radius.block },
   gridScroll: { paddingTop: Space.s, paddingBottom: 64 },
   gridRow: { flexDirection: 'row' },
   // Placed like the hour lines, centred on its own line, so nothing accumulates down the column.

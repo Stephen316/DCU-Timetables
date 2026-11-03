@@ -115,6 +115,7 @@ export function TimetableScreen() {
             eventsByDay={model.eventsByDayForWeekIndex(i)}
             ghostsByDay={editing ? model.ghostsByDayForWeekIndex(i) : []}
             editing={editing}
+            isLoaded={model.isLoadedWeekIndex(i)}
             weekStart={model.weeks[i]?.firstDay ?? null}
             clashingIDs={model.clashingIDs}
             highlight={(e) => model.highlight(e)}

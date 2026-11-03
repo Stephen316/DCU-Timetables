@@ -227,6 +227,12 @@ export class WeekModel extends Observable {
     return grouped(this.eventsByWeekNumber.get(this.weeks[resolved].number) ?? []);
   }
 
+  /** Whether a week's classes have arrived: until they have, an empty week is still loading, not free. */
+  isLoadedWeekIndex(index: number): boolean {
+    const resolved = PagerIndex.resolve(index, this.weeks.length);
+    return resolved !== null && this.rawByWeekNumber.has(this.weeks[resolved].number);
+  }
+
   /** Any week's ghosts grouped by day, for Edit timetable. */
   ghostsByDayForWeekIndex(index: number): DayEvents[] {
     const resolved = PagerIndex.resolve(index, this.weeks.length);
