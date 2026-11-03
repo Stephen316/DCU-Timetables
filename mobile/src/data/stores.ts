@@ -509,6 +509,8 @@ export interface ProfileStore {
   /** The programme this account last picked, so signing back in doesn't ask again. */
   savedProgramme(): Promise<TimetableCategory | null>;
   saveProgramme(programme: TimetableCategory): Promise<void>;
+  /** Records that the app was opened today. The server keeps the day, nothing finer. */
+  touchLastSeen(): Promise<void>;
   /** Deletes the account for good. Contributions survive with the link broken. */
   deleteAccount(): Promise<void>;
 }
@@ -578,6 +580,11 @@ export class SupabaseProfileStore implements ProfileStore {
     });
   }
 
+  async touchLastSeen(): Promise<void> {
+    if (!this.rest.session.userID) throw notSignedIn();
+    await this.rest.json('POST', '/rest/v1/rpc/touch_last_seen', SupabaseProfileStore.describe, { body: {} });
+  }
+
   async deleteAccount(): Promise<void> {
     // An anon key can't delete from auth.users, so this goes through the `security
     // definer` RPC, which deletes only `auth.uid()`'s own row.
@@ -600,5 +607,6 @@ export class LocalProfileStore implements ProfileStore {
     return null;
   }
   async saveProgramme(): Promise<void> {}
+  async touchLastSeen(): Promise<void> {}
   async deleteAccount(): Promise<void> {}
 }

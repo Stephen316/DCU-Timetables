@@ -220,6 +220,16 @@ describe('Supabase requests', () => {
     expect(calls[1]).toMatchObject({ url: 'https://proj.supabase.co/rest/v1/rpc/set_programme', body: { p_programme: programme } });
   });
 
+  test('the last-seen day goes through its RPC, and only when signed in', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: null }));
+    await new SupabaseProfileStore(await signedInREST(fn)).touchLastSeen();
+    expect(calls[0]).toMatchObject({ url: 'https://proj.supabase.co/rest/v1/rpc/touch_last_seen', body: {} });
+    const anon = fakeFetch();
+    const error = await new SupabaseProfileStore(await anonREST(anon.fn)).touchLastSeen().catch((e: unknown) => e);
+    expect(isNotSignedIn(error)).toBe(true);
+    expect(anon.calls).toHaveLength(0);
+  });
+
   // An account from before the column existed, or one that never picked, gets the search.
   test('no saved programme, or a malformed one, reads as none', async () => {
     for (const row of [{ saved_programme: null }, { saved_programme: { name: 'CASE1' } }, {}]) {

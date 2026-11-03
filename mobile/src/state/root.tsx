@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { cohortForCourseKey, decodeProfile, StudentProfile, TimetableAudience } from '../core/profile';
+import { localDateString } from '../core/time';
 import { categoryCode, TimetableCategory } from '../core/timetableEvent';
 import { AllocationRefresh, LabRotationRefresh, ModuleSplitRefresh, ModuleTitleRefresh, TimetableChangeRefresh } from '../data/courseData';
 import { ModuleAbbreviationRefresh } from '../data/abbreviations';
@@ -69,6 +70,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
   const [programme] = usePrefJSON<TimetableCategory | null>(PrefKey.selectedProgramme, null);
   const [triedRaw, setTried] = usePrefJSON<Record<string, number>>(PrefKey.allocationTried, {});
   const [programmeSaved, setProgrammeSaved] = usePref(PrefKey.programmeSaved);
+  const [lastSeenSent, setLastSeenSent] = usePref(PrefKey.lastSeenSent);
   const profile = useMemo(() => decodeProfile(profileRaw), [profileRaw]);
   /**
    * A confirmation or password-reset link comes back to the website with the session in
@@ -176,6 +178,28 @@ export function RootProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [user, programme, programmeSaved, services, setProgrammeSaved]);
+
+  /**
+   * The day the app was last opened goes up with the account, the one measure of whether
+   * students come back. Once a day at most: on launch, sign-in and return to the foreground.
+   */
+  const [foregrounded, setForegrounded] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setForegrounded((n) => n + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    const today = `${user.id}:${localDateString(new Date())}`;
+    if (lastSeenSent === today) return;
+    services.profiles
+      .touchLastSeen()
+      .then(() => setLastSeenSent(today))
+      // Tried again on the next launch or return; a missed day only undercounts.
+      .catch(() => undefined);
+  }, [user, foregrounded, lastSeenSent, services, setLastSeenSent]);
 
   const refreshing = useRef(false);
   /** What the refresh reads when it runs — it outlives the render that started it. */
