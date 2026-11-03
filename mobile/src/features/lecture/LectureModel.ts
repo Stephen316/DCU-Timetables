@@ -11,6 +11,7 @@ import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
 import { shareDeadline } from '../deadlines/DeadlinesModel';
 import { DetailsEdits } from '../deadlines/DetailsEdits';
+import { canEdit, Moderation, moderationFor } from '../deadlines/Moderation';
 
 /** Everything known about one class: the crowd, any verdict, and the module's deadlines. */
 export class LectureModel extends Observable {
@@ -41,6 +42,8 @@ export class LectureModel extends Observable {
   private beforePractice: CancellationStatus | null = null;
 
   readonly details: DetailsEdits;
+  /** A moderator confirms deadlines for everyone; only an admin may edit someone else's. */
+  moderation: Moderation;
 
   constructor(private readonly services: Services, readonly event: TimetableEvent, known: Deadline[] = []) {
     super();
@@ -52,6 +55,7 @@ export class LectureModel extends Observable {
       changed: () => this.changed(),
     });
     this.canDecide = Roles.canDecide(services.role.current);
+    this.moderation = moderationFor(services.role.current);
     this.lecturers = lecturerDirectory.lecturersFor(event);
     // Seeded from the timetable's own copy so the page opens with its banner already drawn.
     this.deadlines = DeadlineRules.upcoming(known.filter((d) => d.moduleKey === this.moduleKey));
@@ -95,6 +99,7 @@ export class LectureModel extends Observable {
     if (profile) {
       role.save(profile.role);
       this.canDecide = AccountRules.canDecide(profile);
+      this.moderation = moderationFor(AccountRules.isBanned(profile) ? 'student' : profile.role);
     }
     try {
       this.deadlines = DeadlineRules.upcoming(await deadlines.deadlinesForModule(this.moduleKey));
@@ -216,13 +221,21 @@ export class LectureModel extends Observable {
     }, "Couldn't send that.");
   }
 
-  /** The poster's fields, then the details if they changed. */
+  /** The poster's fields, then the details if they changed. A moderator's edit confirms it too. */
   async editDeadline(deadline: Deadline, fields: DeadlineFields, details: string = deadline.details): Promise<void> {
-    if (!this.isMine(deadline) || !DeadlineRules.isValid(fields.title, fields.due) || DeadlineRules.detailsProblem(details)) return;
+    if (!canEdit(this.moderation, this.isMine(deadline))) return;
+    if (!DeadlineRules.isValid(fields.title, fields.due) || DeadlineRules.detailsProblem(details)) return;
     await this.busy(async () => {
       await this.services.deadlines.edit(deadline.id, fields);
       if (details.trim() !== deadline.details) await this.services.deadlines.setDetails(deadline.id, details.trim());
+      if (this.moderation.canVerify) await this.services.deadlines.verify(deadline.id, true);
     }, "Couldn't save that change.");
+  }
+
+  /** A moderator's Confirm, or tapping it again to take it back. */
+  async toggleVerified(deadline: Deadline): Promise<void> {
+    if (!this.moderation.canVerify) return;
+    await this.busy(() => this.services.deadlines.verify(deadline.id, deadline.status !== 'verified'), "Couldn't confirm that.");
   }
 
   /** Only this student sees the name. */

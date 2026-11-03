@@ -164,6 +164,7 @@ class PreviewDeadlineStore implements DeadlineStore {
   async setDetails(id: string, details: string) {
     this.details.set(id, { details: details.trim(), detailsEditedAt: new Date() });
   }
+  async verify() {}
   async withdraw() {}
   async standings(ids: string[]) {
     return new Map(ids.length > 0 ? [[ids[0], new DeadlineStanding(4, true)]] : []);

@@ -3,6 +3,7 @@ import { groupKeyOf } from '../src/core/timetableEvent';
 import { createServices } from '../src/data/services';
 import { MemoryKV } from '../src/data/storage';
 import { DeadlinesModel } from '../src/features/deadlines/DeadlinesModel';
+import { canEdit, moderationFor } from '../src/features/deadlines/Moderation';
 import { at, event } from './helpers';
 
 const noSecrets = { get: async () => null, set: async () => {}, remove: async () => {} };
@@ -144,5 +145,52 @@ describe('Editing a deadline', () => {
     const edit = jest.spyOn(services.deadlines, 'edit');
     await model.edit(added, { title: 'Lab 2', kind: 'labReport', due: added.due, gradeWeight: 0 }, 'x'.repeat(DETAILS_LIMIT + 1));
     expect(edit).not.toHaveBeenCalled();
+  });
+});
+
+describe('A moderator on the Deadlines tab', () => {
+  async function asRole(role: 'student' | 'trusted' | 'admin') {
+    const services = await createServices({ kv: new MemoryKV(), secrets: noSecrets, env: {}, alerts: null });
+    services.role.save(role);
+    const model = new DeadlinesModel(services);
+    await model.load(['CA116']);
+    return { services, model };
+  }
+
+  test('a trusted person confirms and an admin also edits anyone\'s; a student does neither', () => {
+    expect(moderationFor('student')).toEqual({ canVerify: false, canEditAny: false });
+    expect(moderationFor('trusted')).toEqual({ canVerify: true, canEditAny: false });
+    expect(moderationFor('admin')).toEqual({ canVerify: true, canEditAny: true });
+    expect(canEdit(moderationFor('trusted'), false)).toBe(false);
+    expect(canEdit(moderationFor('student'), true)).toBe(true);
+  });
+
+  test("Confirm marks it confirmed by a moderator, and pressing it again takes that back", async () => {
+    const { services, model } = await asRole('trusted');
+    await services.deadlines.submit(makeDeadline({ moduleKey: 'CA116', title: 'Lab', due: inDays(3), submitterID: 'someone' }));
+    await model.reload();
+    await model.toggleVerified(model.sections[0].deadlines[0]);
+    expect(model.sections[0].deadlines[0].status).toBe('verified');
+    await model.toggleVerified(model.sections[0].deadlines[0]);
+    expect(model.sections[0].deadlines[0].status).toBe('pending');
+  });
+
+  test("a moderator's edit confirms the deadline; a student's doesn't", async () => {
+    for (const [role, status] of [['trusted', 'verified'], ['student', 'pending']] as const) {
+      const { model } = await asRole(role);
+      await model.add({ title: 'Lab', kind: 'labReport', due: inDays(3), gradeWeight: 0 }, { moduleKey: 'CA116', atGroupKey: null, label: '' });
+      const [added] = model.sections.flatMap((s) => s.deadlines);
+      await model.edit(added, { title: 'Lab 1', kind: 'labReport', due: added.due, gradeWeight: 0 });
+      expect(model.sections.flatMap((s) => s.deadlines)[0]).toMatchObject({ title: 'Lab 1', status });
+    }
+  });
+
+  test("a student's Confirm does nothing", async () => {
+    const { services, model } = await asRole('student');
+    await services.deadlines.submit(makeDeadline({ moduleKey: 'CA116', title: 'Lab', due: inDays(3), submitterID: 'someone' }));
+    await model.reload();
+    const verify = jest.spyOn(services.deadlines, 'verify');
+    await model.toggleVerified(model.sections[0].deadlines[0]);
+    expect(verify).not.toHaveBeenCalled();
   });
 });

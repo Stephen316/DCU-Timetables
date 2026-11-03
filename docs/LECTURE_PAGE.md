@@ -184,9 +184,15 @@ A moderator's confirmation — from a trusted student or the console — sits ab
 and reads **"Confirmed by a moderator"**, the same precedence a verdict has over cancellation
 reports.
 
+In the app, a moderator sees **Confirm** where everyone else sees **This is right** (and on
+their own deadlines, beside Delete). It turns into **Confirmed**, and pressing it again takes
+the confirmation back. A moderator's edit confirms the deadline too: the edit form's button
+reads **Confirm** for everyone, and for a moderator saving through it is the confirmation.
+
 ## Changing a deadline
 
-- **The poster edits their own** (title, type, due date). Moving the date or type clears
+- **The poster edits their own** (title, type, due date), from **Edit** beside the details;
+  an admin can edit anyone's. The form has the Details box too, at the bottom. Moving the date or type clears
   everyone else's confirmations, since they vouched for the old one; the form says how many
   before you save. An edit to a moderator-confirmed deadline sends it back to waiting, and the
   row is marked "edited". A blocked deadline can't be edited back into view.

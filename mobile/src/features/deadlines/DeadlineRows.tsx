@@ -15,13 +15,13 @@ import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
 import { useNow } from '../../state/hooks';
 import { Radius, Space, useTheme } from '../../ui/theme';
 import { DuePicker } from './DuePicker';
+import { canEdit, Moderation } from './Moderation';
 
 export interface DeadlineActions {
   onConfirm: () => void;
   /** "The details are wrong", or taking that back. */
   onDispute: () => void;
-  /** The poster changing their own, for everyone. */
-  /** The poster's fields, and the shared details alongside them. */
+  /** The poster (or an admin) changing it for everyone: their fields, and the shared details alongside. */
   onEdit: (fields: DeadlineFields, details: string) => void;
   /** This student's own name for it. Blank goes back to the shared title. */
   onRename: (label: string) => void;
@@ -31,7 +31,11 @@ export interface DeadlineActions {
   /** The shared Details box: anyone's to change, on anyone's deadline. */
   onSaveDetails: (text: string) => void;
   onReportDetails: () => void;
+  /** A moderator's Confirm, or taking it back. */
+  onVerify: () => void;
 }
+
+const STUDENT: Moderation = { canVerify: false, canEditAny: false };
 
 /**
  * One shared date. `schedule` is the Deadlines tab's version: a compact card with its kind's
@@ -40,6 +44,7 @@ export interface DeadlineActions {
  */
 export function DeadlineRow({
   deadline, moduleName, standing, isMine, variant, showDate = true, actions, detailsProblem = null, detailsReported = false,
+  moderation = STUDENT,
 }: {
   deadline: Deadline;
   /** What to call its module on the `schedule` row: the name, or the code when there isn't one. */
@@ -53,23 +58,28 @@ export function DeadlineRow({
   /** Why the last save of the details didn't stick, said under them. */
   detailsProblem?: string | null;
   detailsReported?: boolean;
+  moderation?: Moderation;
 }) {
   const theme = useTheme();
   const large = useLargeText();
+  // Whoever may edit the whole deadline does it in one form, details and all.
+  const editsAll = canEdit(moderation, isMine);
   const [sheet, setSheet] = useState<'edit' | 'rename' | 'details' | null>(null);
   const edited = deadline.editedAt ? ' · edited' : '';
   const worth = gradeWeightLabel(deadline.gradeWeight);
 
   const sheets = (
     <>
-      {isMine ? (
+      {editsAll ? (
         <DeadlineForm
           visible={sheet === 'edit'}
           editing={{ deadline, standing }}
+          confirms={moderation.canVerify}
           onClose={() => setSheet(null)}
           onSubmit={actions.onEdit}
         />
-      ) : (
+      ) : null}
+      {isMine ? null : (
         <RenameSheet
           visible={sheet === 'rename'}
           deadline={deadline}
@@ -87,15 +97,21 @@ export function DeadlineRow({
     </>
   );
   const detailsBlock = (
-    <DetailsBlock deadline={deadline} problem={detailsProblem} reported={detailsReported} onEdit={() => setSheet('details')} />
+    <DetailsBlock
+      deadline={deadline}
+      problem={detailsProblem}
+      reported={detailsReported}
+      editsAll={editsAll}
+      onEdit={() => setSheet(editsAll ? 'edit' : 'details')}
+    />
   );
   const standingLine = (
     <StandingLine
       deadline={deadline}
       standing={standing}
       isMine={isMine}
+      canVerify={moderation.canVerify}
       actions={actions}
-      onEdit={() => setSheet('edit')}
       onRename={() => setSheet('rename')}
     />
   );
@@ -152,13 +168,13 @@ export function DeadlineRow({
  * is worth less than three people's, and the row says which.
  */
 function StandingLine({
-  deadline, standing, isMine, actions, onEdit, onRename,
+  deadline, standing, isMine, canVerify, actions, onRename,
 }: {
   deadline: Deadline;
   standing: DeadlineStanding;
   isMine: boolean;
+  canVerify: boolean;
   actions: DeadlineActions;
-  onEdit: () => void;
   onRename: () => void;
 }) {
   const theme = useTheme();
@@ -184,12 +200,15 @@ function StandingLine({
       {isMine ? (
         // Swipe-to-delete on iOS; a visible button here, so it can be found without knowing to swipe.
         <View style={styles.actions}>
-          <InlineAction title="Edit" onPress={onEdit} />
+          {canVerify ? <VerifyButton deadline={deadline} onPress={actions.onVerify} /> : null}
           <InlineAction title="Delete" tint={theme.destructive} onPress={actions.onDelete} />
         </View>
       ) : (
         <View style={styles.actions}>
-          {standing.disputedByMe ? (
+          {canVerify ? (
+            // A moderator's word settles it, so it takes the place of the crowd's "This is right".
+            <VerifyButton deadline={deadline} onPress={actions.onVerify} />
+          ) : standing.disputedByMe ? (
             // Tapping takes it back, the way "Confirmed" does.
             <InlineAction title="You said it's wrong" tint={theme.tint.off} onPress={actions.onDispute} />
           ) : (
@@ -203,6 +222,19 @@ function StandingLine({
         </View>
       )}
     </AdaptiveStack>
+  );
+}
+
+/** "Confirm", or "Confirmed" once a moderator has — tapping it again takes that back. */
+function VerifyButton({ deadline, onPress }: { deadline: Deadline; onPress: () => void }) {
+  const theme = useTheme();
+  const verified = deadline.status === 'verified';
+  return (
+    <InlineAction
+      title={verified ? 'Confirmed' : 'Confirm'}
+      tint={verified ? theme.tint.confirmed : theme.accent}
+      onPress={onPress}
+    />
   );
 }
 
@@ -260,10 +292,12 @@ function MoreMenu({
  * The shared Details box on a row: the text and how long ago it changed, or a quiet way to
  * start it. Tapping either opens the editor, which is everyone's, not only the poster's.
  */
-function DetailsBlock({ deadline, problem, reported, onEdit }: {
+function DetailsBlock({ deadline, problem, reported, editsAll, onEdit }: {
   deadline: Deadline;
   problem: string | null;
   reported: boolean;
+  /** Opens the whole deadline's form rather than the details alone. */
+  editsAll: boolean;
   onEdit: () => void;
 }) {
   const theme = useTheme();
@@ -272,14 +306,14 @@ function DetailsBlock({ deadline, problem, reported, onEdit }: {
     <View style={styles.details}>
       {deadline.details ? (
         <>
-          <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Details: ${deadline.details}`} accessibilityHint="Edits the details">
+          <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Details: ${deadline.details}`} accessibilityHint={editsAll ? 'Edits the deadline' : 'Edits the details'}>
             <Txt type="footnote" numberOfLines={4}>{deadline.details}</Txt>
           </Pressable>
           <View style={styles.detailsLine}>
             {deadline.detailsEditedAt ? (
               <Txt type="caption2" color={theme.inkSecondary} style={styles.text}>{detailsEditedLabel(deadline.detailsEditedAt, now)}</Txt>
             ) : <View style={styles.text} />}
-            <InlineAction title="Edit details" onPress={onEdit} />
+            <InlineAction title={editsAll ? 'Edit' : 'Edit details'} onPress={onEdit} />
           </View>
         </>
       ) : (
@@ -436,13 +470,15 @@ function RenameSheet({
  * one class only, which), and takes the student's own name for it last.
  */
 export function DeadlineForm({
-  visible, onClose, onSubmit, editing, defaultDue, modules, defaultModule,
+  visible, onClose, onSubmit, editing, confirms = false, defaultDue, modules, defaultModule,
 }: {
   visible: boolean;
   onClose: () => void;
   /** `placement` is only given when the form chose the module itself (`modules`). */
   onSubmit: (fields: DeadlineFields, details: string, placement?: DeadlinePlacement) => void;
   editing?: { deadline: Deadline; standing: DeadlineStanding };
+  /** A moderator's edit: saving it confirms the deadline for everyone. */
+  confirms?: boolean;
   /** Where a new one's date starts — the class it's added from. A week out when there's no class. */
   defaultDue?: Date;
   /** The student's modules to choose from, on the Deadlines tab. A class page knows its own. */
@@ -514,7 +550,7 @@ export function DeadlineForm({
       left={<BarButton title="Cancel" onPress={onClose} />}
       right={
         <BarButton
-          title={editing ? 'Save' : 'Add'}
+          title={editing ? 'Confirm' : 'Add'}
           bold
           disabled={!valid}
           onPress={() => {
@@ -528,7 +564,7 @@ export function DeadlineForm({
       }
     >
       <ListScroll>
-        <Section footer={editing ? editFooter(editing, kind, due) : 'Everyone taking this module will see this.'}>
+        <Section footer={editing ? editFooter(editing, kind, due, confirms) : 'Everyone taking this module will see this.'}>
           {choosing ? (
             <Row>
               <View style={styles.dueRow}>
@@ -661,7 +697,9 @@ export function DeadlineForm({
 }
 
 /** What saving will cost, said before it's spent: other people's vouches, or a verification. */
-function editFooter({ deadline, standing }: { deadline: Deadline; standing: DeadlineStanding }, kind: DeadlineKind, due: Date): string {
+function editFooter(
+  { deadline, standing }: { deadline: Deadline; standing: DeadlineStanding }, kind: DeadlineKind, due: Date, confirms: boolean,
+): string {
   const parts = ['Everyone taking this module sees the change.'];
   // The poster's own vouch survives their edit, so it isn't counted as lost.
   const others = standing.confirmCount - (standing.confirmedByMe ? 1 : 0);
@@ -670,7 +708,8 @@ function editFooter({ deadline, standing }: { deadline: Deadline; standing: Dead
       ? "Changing the date or type clears the other person's confirmation — they vouched for the old one."
       : `Changing the date or type clears the ${others} other confirmations — they vouched for the old one.`);
   }
-  if (deadline.status === 'verified') parts.push('It goes back to waiting on a moderator.');
+  if (confirms) parts.push('Confirming marks it as confirmed by a moderator.');
+  else if (deadline.status === 'verified') parts.push('It goes back to waiting on a moderator.');
   return parts.join(' ');
 }
 

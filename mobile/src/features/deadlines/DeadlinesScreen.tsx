@@ -200,9 +200,11 @@ export function DeadlinesScreen() {
                     onHideAuthor: () => void model.hideAuthor(d),
                     onSaveDetails: (text) => void model.details.save(d, text),
                     onReportDetails: () => void model.details.report(d),
+                    onVerify: () => void model.toggleVerified(d),
                   }}
                   detailsProblem={model.details.problem(d)}
                   detailsReported={model.details.reported.has(d.id)}
+                  moderation={model.moderation}
                 />
               ))}
             </View>

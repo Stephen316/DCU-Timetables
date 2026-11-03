@@ -6,6 +6,7 @@ import { errorMessage } from '../../data/rest';
 import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
 import { DetailsEdits } from './DetailsEdits';
+import { canEdit, Moderation, moderationFor } from './Moderation';
 
 /**
  * Posting a new deadline, from a class page or this tab. Submitting is itself a vouch —
@@ -34,10 +35,13 @@ export class DeadlinesModel extends Observable {
   private readonly reporterID: string;
 
   readonly details: DetailsEdits;
+  /** A moderator confirms deadlines for everyone; only an admin may edit someone else's. */
+  readonly moderation: Moderation;
 
   constructor(private readonly services: Services) {
     super();
     this.reporterID = services.reporter.current;
+    this.moderation = moderationFor(services.role.current);
     this.details = new DetailsEdits(services, {
       replace: (deadline) => {
         this.all = this.all.map((d) => (d.id === deadline.id ? deadline : d));
@@ -168,13 +172,24 @@ export class DeadlinesModel extends Observable {
     }, 'Shared, but your name for it or the details didn\'t save.');
   }
 
-  /** The poster's fields, then the details if they changed: one reload, once both have landed. */
+  /**
+   * The poster's fields, then the details if they changed: one reload, once all of it has
+   * landed. A moderator's edit confirms it too — they've just checked every field.
+   */
   async edit(deadline: Deadline, fields: DeadlineFields, details: string = deadline.details): Promise<void> {
-    if (!this.isMine(deadline) || !DeadlineRules.isValid(fields.title, fields.due) || DeadlineRules.detailsProblem(details)) return;
+    if (!canEdit(this.moderation, this.isMine(deadline))) return;
+    if (!DeadlineRules.isValid(fields.title, fields.due) || DeadlineRules.detailsProblem(details)) return;
     await this.act(async () => {
       await this.services.deadlines.edit(deadline.id, fields);
       if (details.trim() !== deadline.details) await this.services.deadlines.setDetails(deadline.id, details.trim());
+      if (this.moderation.canVerify) await this.services.deadlines.verify(deadline.id, true);
     }, "Couldn't save that change.");
+  }
+
+  /** A moderator's Confirm, or tapping it again to take it back. */
+  async toggleVerified(deadline: Deadline): Promise<void> {
+    if (!this.moderation.canVerify) return;
+    await this.act(() => this.services.deadlines.verify(deadline.id, deadline.status !== 'verified'), "Couldn't confirm that.");
   }
 
   /** Only this student sees the name. */

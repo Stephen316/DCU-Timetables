@@ -138,6 +138,8 @@ export interface DeadlineStore {
    * the version it replaces, and who wrote it, for moderators. Blank clears it.
    */
   setDetails(id: string, details: string): Promise<void>;
+  /** A moderator confirming it for everyone, or taking that back. The server checks the role. */
+  verify(id: string, verified: boolean): Promise<void>;
   /** Only the submitter can remove one — enforced by RLS, not just by hiding the button. */
   withdraw(id: string, submitterID: string): Promise<void>;
   /** How many vouched for each deadline, and whether this person did — never who. */
@@ -237,6 +239,10 @@ export class SupabaseDeadlineStore implements DeadlineStore {
 
   async setDetails(id: string, details: string): Promise<void> {
     await this.rpc('set_deadline_details', { p_deadline: id, p_details: details });
+  }
+
+  async verify(id: string, verified: boolean): Promise<void> {
+    await this.rpc('verify_deadline', { deadline: id, new_status: verified ? 'verified' : 'pending' });
   }
 
   async withdraw(id: string, submitterID: string): Promise<void> {
@@ -369,6 +375,10 @@ export class LocalDeadlineStore implements DeadlineStore {
   async setDetails(id: string, details: string): Promise<void> {
     const text = details.trim();
     this.save(this.load().map((d) => (d.id === id && d.details !== text ? { ...d, details: text, detailsEditedAt: new Date() } : d)));
+  }
+
+  async verify(id: string, verified: boolean): Promise<void> {
+    this.save(this.load().map((d): Deadline => (d.id === id ? { ...d, status: verified ? 'verified' : 'pending' } : d)));
   }
 
   async withdraw(id: string, submitterID: string): Promise<void> {
