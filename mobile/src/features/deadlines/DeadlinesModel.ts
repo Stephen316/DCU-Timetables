@@ -1,10 +1,19 @@
 import {
-  Deadline, deadlineBelongsTo, DeadlineFields, DeadlineReportReason, DeadlineRules, DeadlineSchedule, DeadlineSection,
-  DeadlineStanding,
+  Deadline, deadlineBelongsTo, DeadlineFields, DeadlinePlacement, DeadlineReportReason, DeadlineRules, DeadlineSchedule,
+  DeadlineSection, DeadlineStanding, makeDeadline,
 } from '../../core/deadline';
 import { errorMessage } from '../../data/rest';
 import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
+
+/**
+ * Posting a new deadline, from a class page or this tab. Submitting is itself a vouch —
+ * otherwise a first-hand report reads "0 confirmed".
+ */
+export async function shareDeadline(services: Services, deadline: Deadline, reporterID: string): Promise<void> {
+  await services.deadlines.submit(deadline);
+  await services.deadlines.confirm(deadline.id, reporterID).catch(() => undefined);
+}
 
 /**
  * Every shared date across every module the student takes. Reads the same store as the
@@ -120,6 +129,31 @@ export class DeadlinesModel extends Observable {
       if (this.standing(deadline).disputedByMe) await this.services.deadlines.withdrawReport(deadline.id);
       else await this.services.deadlines.report(deadline.id, 'wrong');
     }, "Couldn't send that.");
+  }
+
+  /**
+   * A new one, for whichever of the student's modules they picked. In the list at once; the
+   * reload confirms it landed. Their own name for it goes on once the row exists.
+   */
+  async add(fields: DeadlineFields, placement: DeadlinePlacement): Promise<void> {
+    if (!DeadlineRules.isValid(fields.title, fields.due)) return;
+    const deadline = makeDeadline({
+      moduleKey: placement.moduleKey, atGroupKey: placement.atGroupKey, ...fields, submitterID: this.reporterID, isMine: true,
+    });
+    this.all = DeadlineRules.upcoming([...this.all, deadline]);
+    this.regroup();
+    this.changed();
+    try {
+      await shareDeadline(this.services, deadline, this.reporterID);
+    } catch (error) {
+      this.errorText = errorMessage(error, "Couldn't share that deadline.");
+      await this.reload();
+      return;
+    }
+    const label = DeadlineRules.labelToSave(deadline, placement.label);
+    await this.act(async () => {
+      if (label) await this.services.deadlines.setLabel(deadline.id, label);
+    }, 'Shared, but your name for it didn\'t save.');
   }
 
   async edit(deadline: Deadline, fields: DeadlineFields): Promise<void> {

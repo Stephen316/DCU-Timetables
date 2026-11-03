@@ -18,7 +18,8 @@ export type TutorialTarget =
   | 'undoReport' // "Undo my report" on a class's page ("Mark as on" for a moderator)
   | 'backButton' // Back, in a class page's header
   | 'more' // ⋯, top right
-  | 'deadlinesTab'; // the Deadlines tab
+  | 'deadlinesTab' // the Deadlines tab
+  | 'addDeadline'; // +, top right of the Deadlines page
 
 /**
  * A movement the student makes to go on — shown by a moving hand, and passed through the
@@ -119,10 +120,11 @@ function classSteps(tapTitle: string): TutorialStep[] {
 
 const deadlines: TutorialStep[] = [
   press({ id: 'deadlines', target: 'deadlinesTab', advancesOn: 'deadlinesShown', title: 'Deadlines', body: 'Tap here to open them.' }),
-  // On the page itself, so the student sees it before the tour moves on.
+  // On the page itself, so the student sees it before the tour moves on — pointing at +
+  // rather than pressing it, since the form would take them off the tour.
   step({
-    id: 'deadlinesPage', continues: true, title: 'Deadlines',
-    body: 'Assignments and tests shared by your classmates. Add one and everyone on the module sees it.',
+    id: 'deadlinesPage', target: 'addDeadline', continues: true, title: 'Deadlines',
+    body: 'Assignments and tests shared by your classmates. Tap + to add one, and everyone on the module sees it.',
   }),
 ];
 

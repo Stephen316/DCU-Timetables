@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { ReactNode, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
   ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DeadlineFields, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
-  DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, displayTitle, LABEL_LIMIT, reportReasonLabel,
-  gradeWeightLabel, TITLE_LIMIT,
+  DeadlinePlacement, DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, displayTitle, LABEL_LIMIT,
+  ModuleChoice, reportReasonLabel, gradeWeightLabel, TITLE_LIMIT,
 } from '../../core/deadline';
 import { addDays, formatAbbreviated, formatTime, formatWeekdayDayMonthTime } from '../../core/time';
 import {
   ActionRow, ActionSheet, AdaptiveStack, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
   useLargeText,
 } from '../../ui/components';
+import { DropdownMenu } from '../../ui/DropdownMenu';
 import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
 import { useNow } from '../../state/hooks';
 import { Radius, Space, useTheme } from '../../ui/theme';
@@ -287,40 +288,77 @@ function RenameSheet({
 
 /**
  * Adding a deadline, or the poster editing theirs. Kept to four fields — a title, what it
- * is, when it's due, and how much of the grade it's worth.
+ * is, when it's due, and how much of the grade it's worth. Added from the Deadlines tab, where
+ * no class says which module it's for, it also asks for the module first (and, if it's for
+ * one class only, which), and takes the student's own name for it last.
  */
 export function DeadlineForm({
-  visible, onClose, onSubmit, editing, defaultDue,
+  visible, onClose, onSubmit, editing, defaultDue, modules, defaultModule,
 }: {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (fields: DeadlineFields) => void;
+  /** `placement` is only given when the form chose the module itself (`modules`). */
+  onSubmit: (fields: DeadlineFields, placement?: DeadlinePlacement) => void;
   editing?: { deadline: Deadline; standing: DeadlineStanding };
   /** Where a new one's date starts — the class it's added from. A week out when there's no class. */
   defaultDue?: Date;
+  /** The student's modules to choose from, on the Deadlines tab. A class page knows its own. */
+  modules?: ModuleChoice[];
+  /** The module picked when it opens, such as the one the tab is showing. */
+  defaultModule?: string | null;
 }) {
   const theme = useTheme();
   const initial = editing?.deadline;
+  const choosing = !!modules && !editing;
+  const firstModule = () => (modules?.length === 1 ? modules[0].key : defaultModule ?? null);
+  const [moduleKey, setModuleKey] = useState<string | null>(null);
+  const [atGroupKey, setAtGroupKey] = useState<string | null>(null);
   const [title, setTitle] = useState('');
+  // An empty title is only called a problem once the student has been in the box.
+  const [titleTouched, setTitleTouched] = useState(false);
   const [kind, setKind] = useState<DeadlineKind>('assignment');
   const [due, setDue] = useState(() => addDays(new Date(), 7));
   // Kept as typed; blank is 0, which is not graded.
   const [weightText, setWeightText] = useState('');
+  const [label, setLabel] = useState('');
   const weight = DeadlineRules.parseGradeWeight(weightText);
   const now = useNow();
-  const valid = DeadlineRules.isValid(title, due, now) && weight !== null;
+  const problems = DeadlineRules.draftProblems(
+    { moduleKey: choosing ? moduleKey : initial?.moduleKey ?? '', title, due, weightText, label: choosing ? label : '' },
+    now,
+  );
+  const valid = Object.keys(problems).length === 0;
+  const chosen = modules?.find((m) => m.key === moduleKey) ?? null;
+  const moduleButton = useRef<View>(null);
+  const [pickingModule, setPickingModule] = useState(false);
 
   // Filled in each time it opens, so an edit starts from what's saved now, not at first render.
   const [wasVisible, setWasVisible] = useState(visible);
   if (visible !== wasVisible) {
     setWasVisible(visible);
     if (visible) {
+      setModuleKey(firstModule());
+      setAtGroupKey(null);
       setTitle(initial?.title ?? '');
+      setTitleTouched(false);
       setKind(initial?.kind ?? 'assignment');
       setDue(initial?.due ?? defaultDue ?? addDays(new Date(), 7));
       setWeightText(initial && initial.gradeWeight > 0 ? String(initial.gradeWeight) : '');
+      setLabel('');
     }
   }
+
+  const chip = (selected: boolean, onPress: () => void, content: ReactNode, key: string) => (
+    <Pressable
+      key={key}
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      style={[styles.kind, { backgroundColor: selected ? theme.accent : theme.raised }]}
+    >
+      {content}
+    </Pressable>
+  );
 
   return (
     <Sheet
@@ -335,7 +373,9 @@ export function DeadlineForm({
           disabled={!valid}
           onPress={() => {
             if (weight === null) return;
-            onSubmit({ title: title.trim(), kind, due, gradeWeight: weight });
+            const fields = { title: title.trim(), kind, due, gradeWeight: weight };
+            if (choosing && moduleKey) onSubmit(fields, { moduleKey, atGroupKey, label });
+            else onSubmit(fields);
             onClose();
           }}
         />
@@ -343,10 +383,50 @@ export function DeadlineForm({
     >
       <ListScroll>
         <Section footer={editing ? editFooter(editing, kind, due) : 'Everyone taking this module will see this.'}>
+          {choosing ? (
+            <Row>
+              <View style={styles.dueRow}>
+                <Txt type="footnote" color={theme.inkSecondary}>Module</Txt>
+                <View ref={moduleButton} collapsable={false} style={styles.moduleButton}>
+                  <InlineAction title={chosen?.name ?? 'Choose'} onPress={() => setPickingModule(true)} />
+                </View>
+              </View>
+              {problems.module ? <Txt type="caption" color={theme.inkSecondary}>{problems.module}</Txt> : null}
+              <DropdownMenu
+                visible={pickingModule}
+                anchor={moduleButton}
+                onClose={() => setPickingModule(false)}
+                actions={(modules ?? []).map((m) => ({
+                  label: m.name,
+                  selected: m.key === moduleKey,
+                  onPress: () => {
+                    // A class belongs to its module, so a new module starts module-wide.
+                    if (m.key !== moduleKey) setAtGroupKey(null);
+                    setModuleKey(m.key);
+                  },
+                }))}
+              />
+            </Row>
+          ) : null}
+          {choosing && chosen && chosen.classes.length > 0 ? (
+            <Row>
+              <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Class</Txt>
+              <View style={styles.kinds}>
+                {chip(atGroupKey === null, () => setAtGroupKey(null),
+                  <Txt type="footnote" color={atGroupKey === null ? theme.onAccent : theme.ink}>Whole module</Txt>, 'all')}
+                {chosen.classes.map((c) => chip(c.groupKey === atGroupKey, () => setAtGroupKey(c.groupKey),
+                  <Txt type="footnote" color={c.groupKey === atGroupKey ? theme.onAccent : theme.ink}>{c.label}</Txt>, c.groupKey))}
+              </View>
+              <Txt type="caption" color={theme.inkTertiary} style={styles.fieldNote}>
+                {"If it's due at one class, pick it: that class shows it first. Every class in the module still lists it."}
+              </Txt>
+            </Row>
+          ) : null}
           <Row>
             <TextInput
               value={title}
               onChangeText={setTitle}
+              onBlur={() => setTitleTouched(true)}
               maxLength={TITLE_LIMIT}
               placeholder="What's due?"
               placeholderTextColor={theme.inkTertiary}
@@ -354,21 +434,13 @@ export function DeadlineForm({
               accessibilityLabel="What's due?"
               returnKeyType="done"
             />
+            {titleTouched && problems.title ? <Txt type="caption" color={theme.tint.off}>{problems.title}</Txt> : null}
           </Row>
           <Row>
             <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Type</Txt>
             <View style={styles.kinds}>
-              {DEADLINE_KINDS.map((k) => (
-                <Pressable
-                  key={k}
-                  onPress={() => setKind(k)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: k === kind }}
-                  style={[styles.kind, { backgroundColor: k === kind ? theme.accent : theme.raised }]}
-                >
-                  <Label icon={deadlineKindIcon(k)} text={deadlineKindLabel(k)} type="footnote" color={k === kind ? theme.onAccent : theme.ink} />
-                </Pressable>
-              ))}
+              {DEADLINE_KINDS.map((k) => chip(k === kind, () => setKind(k),
+                <Label icon={deadlineKindIcon(k)} text={deadlineKindLabel(k)} type="footnote" color={k === kind ? theme.onAccent : theme.ink} />, k))}
             </View>
           </Row>
           <Row>
@@ -376,8 +448,8 @@ export function DeadlineForm({
               <Txt type="footnote" color={theme.inkSecondary}>Due</Txt>
               <DuePicker value={due} onChange={setDue} />
             </View>
-            {due.getTime() <= now.getTime() ? (
-              <Txt type="caption" color={theme.tint.off}>That time has passed. Pick a later one.</Txt>
+            {problems.due ? (
+              <Txt type="caption" color={theme.tint.off}>{problems.due}</Txt>
             ) : !editing && defaultDue && due.getTime() === defaultDue.getTime() ? (
               <Txt type="caption" color={theme.inkTertiary}>When this class starts</Txt>
             ) : null}
@@ -397,11 +469,29 @@ export function DeadlineForm({
               />
               <Txt color={theme.inkSecondary}>%</Txt>
               {/* Read back in words, so 0 is seen to mean "not graded" rather than "nothing typed". */}
-              <Txt type="footnote" color={weight === null ? theme.tint.off : theme.inkSecondary} style={styles.weightReadout}>
-                {weight === null ? 'A whole number from 0 to 100' : gradeWeightLabel(weight)}
+              <Txt type="footnote" color={problems.weight ? theme.tint.off : theme.inkSecondary} style={styles.weightReadout}>
+                {problems.weight ?? gradeWeightLabel(weight ?? 0)}
               </Txt>
             </View>
           </Row>
+          {choosing ? (
+            <Row>
+              <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Your name for it</Txt>
+              <TextInput
+                value={label}
+                onChangeText={setLabel}
+                maxLength={LABEL_LIMIT}
+                placeholder={title.trim() || 'Optional'}
+                placeholderTextColor={theme.inkTertiary}
+                style={[styles.input, { color: theme.ink }]}
+                accessibilityLabel="Your name for this deadline"
+                returnKeyType="done"
+              />
+              <Txt type="caption" color={problems.label ? theme.tint.off : theme.inkTertiary}>
+                {problems.label ?? 'Only you see this name. Everyone else sees the title.'}
+              </Txt>
+            </Row>
+          ) : null}
         </Section>
       </ListScroll>
     </Sheet>
@@ -441,6 +531,8 @@ const styles = StyleSheet.create({
   moreButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   input: { fontSize: 17, minHeight: 40 },
   fieldLabel: { marginBottom: Space.xs },
+  fieldNote: { marginTop: Space.xs },
+  moduleButton: { flexShrink: 1 },
   dueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.m },
   kinds: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.s },
   kind: { borderRadius: 8, paddingHorizontal: Space.m, paddingVertical: Space.s },

@@ -109,10 +109,10 @@ ACTION: Tap the tab
 
 
 Step 6b — On the Deadlines page (counts as part of step 6)
-POINTS AT: nothing (a card over the Deadlines page)
+POINTS AT: the + button, top right of the Deadlines page (pointed at, not pressed)
 --------------------------------------------------------
 TITLE: Deadlines
-BODY: Assignments and tests shared by your classmates. Add one and everyone on the module sees it.
+BODY: Assignments and tests shared by your classmates. Tap + to add one, and everyone on the module sees it.   (drafted by Claude — edit freely)
 BUTTONS: Next
 
 

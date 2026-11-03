@@ -1,5 +1,5 @@
 import { CancellationStatus, verdictSource } from './cancellation';
-import { groupKeyOf, shortTitleOf, TimetableEvent } from './timetableEvent';
+import { groupKeyOf, groupLabelOf, shortTitleOf, TimetableEvent } from './timetableEvent';
 import { addDays, daysBetween, isSameDay, startOfDay, startOfWeek } from './time';
 import { uuid } from './uuid';
 
@@ -46,6 +46,37 @@ export interface DeadlineFields {
   due: Date;
   /** Whole percent of the module's grade. 0 means not graded. */
   gradeWeight: number;
+}
+
+/**
+ * A deadline being filled in on the form, as typed. `moduleKey` is null on the Deadlines tab
+ * until a module is picked; a class page fills it in itself.
+ */
+export interface DeadlineDraft {
+  moduleKey: string | null;
+  title: string;
+  due: Date;
+  weightText: string;
+  /** This student's own name for it. Blank is none. */
+  label: string;
+}
+
+/** What's wrong with each field of a draft, in words to show under it. Empty is savable. */
+export type DraftProblems = Partial<Record<'module' | 'title' | 'due' | 'weight' | 'label', string>>;
+
+/** Where a deadline added from the Deadlines tab goes, and the student's own name for it. */
+export interface DeadlinePlacement {
+  moduleKey: string;
+  /** One class of the module (a `groupKeyOf` value), or null for the whole module. */
+  atGroupKey: string | null;
+  label: string;
+}
+
+/** A module the student can add a deadline to, and the classes of theirs it has. */
+export interface ModuleChoice {
+  key: string;
+  name: string;
+  classes: { groupKey: string; label: string }[];
 }
 
 /** "Not graded" for 0, which is the default: an unsaid weight is not a guessed one. */
@@ -380,6 +411,41 @@ export const DeadlineRules = {
   },
 
   countdown: deadlineCountdown,
+
+  /**
+   * Everything that would stop a draft saving, checked against the server's own limits so
+   * the form refuses what the database would. Both screens' forms ask this.
+   */
+  draftProblems(draft: DeadlineDraft, now: Date = new Date()): DraftProblems {
+    const problems: DraftProblems = {};
+    if (draft.moduleKey === null) problems.module = 'Choose a module.';
+    const title = draft.title.trim();
+    if (title.length === 0) problems.title = "Say what's due.";
+    else if (title.length > TITLE_LIMIT) problems.title = `Keep it to ${TITLE_LIMIT} characters.`;
+    if (draft.due.getTime() <= now.getTime()) problems.due = 'That time has passed. Pick a later one.';
+    if (DeadlineRules.parseGradeWeight(draft.weightText) === null) problems.weight = 'A whole number from 0 to 100';
+    if (draft.label.trim().length > LABEL_LIMIT) problems.label = `Keep it to ${LABEL_LIMIT} characters.`;
+    return problems;
+  },
+
+  /**
+   * The student's own modules, by name, each with its classes, from the timetable already
+   * loaded — so the Deadlines tab offers only what the student actually takes.
+   */
+  moduleChoices(events: TimetableEvent[], nameOf: (key: string) => string): ModuleChoice[] {
+    const byModule = new Map<string, Map<string, string>>();
+    for (const e of events) {
+      const key = DeadlineRules.moduleKey(e);
+      const classes = byModule.get(key) ?? new Map<string, string>();
+      classes.set(groupKeyOf(e), groupLabelOf(e));
+      byModule.set(key, classes);
+    }
+    return [...byModule].map(([key, classes]) => ({
+      key,
+      name: nameOf(key),
+      classes: [...classes].map(([groupKey, label]) => ({ groupKey, label })).sort((a, b) => a.label.localeCompare(b.label)),
+    })).sort((a, b) => a.name.localeCompare(b.name));
+  },
 };
 
 /**

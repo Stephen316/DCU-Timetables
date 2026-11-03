@@ -9,6 +9,7 @@ import { groupKeyOf, TimetableEvent } from '../../core/timetableEvent';
 import { errorMessage } from '../../data/rest';
 import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
+import { shareDeadline } from '../deadlines/DeadlinesModel';
 
 /** Everything known about one class: the crowd, any verdict, and the module's deadlines. */
 export class LectureModel extends Observable {
@@ -184,9 +185,7 @@ export class LectureModel extends Observable {
     this.deadlines = DeadlineRules.upcoming([...this.deadlines, deadline]);
     this.changed();
     try {
-      await this.services.deadlines.submit(deadline);
-      // Submitting is itself a vouch — otherwise a first-hand report reads "0 confirmed".
-      await this.services.deadlines.confirm(deadline.id, this.reporterID).catch(() => undefined);
+      await shareDeadline(this.services, deadline, this.reporterID);
     } catch (error) {
       this.errorText = errorMessage(error, "Couldn't share that deadline.");
     }

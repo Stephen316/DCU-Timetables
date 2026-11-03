@@ -140,12 +140,17 @@ class PreviewCancellationStore implements CancellationStore {
   async withdraw(): Promise<void> {}
 }
 
+/** The fixture's deadlines, plus any added this session, so an added one stays in the list. */
 class PreviewDeadlineStore implements DeadlineStore {
-  async deadlinesForModule(moduleKey: string) { return PreviewData.deadlines().filter((d) => d.moduleKey === moduleKey); }
-  async deadlinesForModules() { return PreviewData.deadlines(); }
-  async submit() {}
+  private added: Deadline[] = [];
+  private all() { return [...PreviewData.deadlines(), ...this.added]; }
+  async deadlinesForModule(moduleKey: string) { return this.all().filter((d) => d.moduleKey === moduleKey); }
+  async deadlinesForModules() { return this.all(); }
+  async submit(deadline: Deadline) { this.added.push({ ...deadline, isMine: true }); }
   async edit() {}
-  async setLabel() {}
+  async setLabel(id: string, label: string | null) {
+    this.added = this.added.map((d) => (d.id === id ? { ...d, myLabel: label } : d));
+  }
   async withdraw() {}
   async standings(ids: string[]) {
     return new Map(ids.length > 0 ? [[ids[0], new DeadlineStanding(4, true)]] : []);

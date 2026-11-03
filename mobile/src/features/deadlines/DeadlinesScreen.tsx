@@ -2,16 +2,16 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { deadlineSectionTitle } from '../../core/deadline';
+import { deadlineSectionTitle, DeadlineRules } from '../../core/deadline';
 import { startOfWeek } from '../../core/time';
 import { useModel, useNow, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { EmptyState, Icon, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
+import { EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { CardInset, Radius, Space, useTheme } from '../../ui/theme';
-import { DeadlineRow } from './DeadlineRows';
+import { DeadlineForm, DeadlineRow } from './DeadlineRows';
 import { DeadlinesModel } from './DeadlinesModel';
-import { useTutorial } from '../tutorial/Tutorial';
+import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
 
 /**
  * Every assignment, quiz and exam the student's modules have, soonest first. The timetable
@@ -37,6 +37,12 @@ export function DeadlinesScreen() {
   // The tutorial has the student open this tab.
   const tutorial = useTutorial();
   useFocusEffect(useCallback(() => tutorial?.signal('deadlinesShown'), [tutorial]));
+
+  // Every module the student takes, not only those with something due: the first deadline
+  // for a module has to be addable from here too.
+  const moduleOptions = DeadlineRules.moduleChoices([...week.eventsByWeekNumber.values()].flat(), (key) => week.moduleName(key));
+  const [adding, setAdding] = useState(false);
+  const addButton = useTutorialTarget('addDeadline');
 
   const filterButton = useRef<View>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -66,6 +72,18 @@ export function DeadlinesScreen() {
           </Pressable>
         </View>
       )}
+      <View ref={addButton} collapsable={false} style={styles.add}>
+        <IconButton icon="add" label="Add a deadline" disabled={moduleOptions.length === 0} onPress={() => setAdding(true)} />
+      </View>
+      <DeadlineForm
+        visible={adding}
+        modules={moduleOptions}
+        defaultModule={model.moduleFilter}
+        onClose={() => setAdding(false)}
+        onSubmit={(fields, placement) => {
+          if (placement) void model.add(fields, placement);
+        }}
+      />
       <DropdownMenu
         visible={filterOpen}
         anchor={filterButton}
@@ -114,7 +132,7 @@ export function DeadlinesScreen() {
           message={
             modules.length === 0
               ? 'Once your timetable loads, deadlines your classmates share will appear here.'
-              : 'Nobody has shared an assignment, quiz or exam for your modules yet. Open a class and add the first one.'
+              : 'Nobody has shared an assignment, quiz or exam for your modules yet. Tap + to add the first one.'
           }
         />
       </View>
@@ -195,6 +213,8 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   filter: { maxWidth: '80%' },
+  // Level with the title, as ⋯ is on the timetable.
+  add: { position: 'absolute', right: Space.s, bottom: 0 },
   card: { marginHorizontal: Space.l, marginTop: Space.l, borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   sectionBox: { paddingHorizontal: CardInset.x, paddingVertical: CardInset.y, gap: Space.s },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
