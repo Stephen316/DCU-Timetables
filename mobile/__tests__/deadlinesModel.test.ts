@@ -1,4 +1,4 @@
-import { DeadlineDraft, DeadlineRules, LABEL_LIMIT, makeDeadline, TITLE_LIMIT } from '../src/core/deadline';
+import { DeadlineDraft, DeadlineRules, DETAILS_LIMIT, LABEL_LIMIT, makeDeadline, TITLE_LIMIT } from '../src/core/deadline';
 import { groupKeyOf } from '../src/core/timetableEvent';
 import { createServices } from '../src/data/services';
 import { MemoryKV } from '../src/data/storage';
@@ -101,5 +101,48 @@ describe('Adding a deadline from the Deadlines tab', () => {
     expect(model.isMine(saved)).toBe(true);
     expect(model.standing(saved).confirmedByMe).toBe(true);
     expect(model.errorText).toBeNull();
+  });
+
+  test('details written on the form go up with the new deadline', async () => {
+    const services = await createServices({ kv: new MemoryKV(), secrets: noSecrets, env: {}, alerts: null });
+    const model = new DeadlinesModel(services);
+    await model.load(['CA116']);
+    const adding = model.add(
+      { title: 'Lab 2', kind: 'labReport', due: inDays(5), gradeWeight: 0 },
+      { moduleKey: 'CA116', atGroupKey: null, label: '' },
+      '  Upload the PDF to Loop  ',
+    );
+    expect(model.sections.flatMap((s) => s.deadlines)[0].details).toBe('Upload the PDF to Loop');
+    await adding;
+    expect(model.sections.flatMap((s) => s.deadlines)[0].details).toBe('Upload the PDF to Loop');
+  });
+});
+
+describe('Editing a deadline', () => {
+  test("saves changed details with the poster's fields, and leaves unchanged ones alone", async () => {
+    const services = await createServices({ kv: new MemoryKV(), secrets: noSecrets, env: {}, alerts: null });
+    const model = new DeadlinesModel(services);
+    await model.load(['CA116']);
+    await model.add({ title: 'Lab 2', kind: 'labReport', due: inDays(5), gradeWeight: 0 }, { moduleKey: 'CA116', atGroupKey: null, label: '' });
+    const [added] = model.sections.flatMap((s) => s.deadlines);
+    const setDetails = jest.spyOn(services.deadlines, 'setDetails');
+
+    await model.edit(added, { title: 'Lab 2', kind: 'labReport', due: added.due, gradeWeight: 0 }, '');
+    expect(setDetails).not.toHaveBeenCalled();
+
+    await model.edit(added, { title: 'Lab two', kind: 'labReport', due: added.due, gradeWeight: 5 }, 'In pairs');
+    expect(setDetails).toHaveBeenCalledWith(added.id, 'In pairs');
+    expect(model.sections.flatMap((s) => s.deadlines)[0]).toMatchObject({ title: 'Lab two', gradeWeight: 5, details: 'In pairs' });
+  });
+
+  test('details over the limit are not sent', async () => {
+    const services = await createServices({ kv: new MemoryKV(), secrets: noSecrets, env: {}, alerts: null });
+    const model = new DeadlinesModel(services);
+    await model.load(['CA116']);
+    await model.add({ title: 'Lab 2', kind: 'labReport', due: inDays(5), gradeWeight: 0 }, { moduleKey: 'CA116', atGroupKey: null, label: '' });
+    const [added] = model.sections.flatMap((s) => s.deadlines);
+    const edit = jest.spyOn(services.deadlines, 'edit');
+    await model.edit(added, { title: 'Lab 2', kind: 'labReport', due: added.due, gradeWeight: 0 }, 'x'.repeat(DETAILS_LIMIT + 1));
+    expect(edit).not.toHaveBeenCalled();
   });
 });

@@ -184,17 +184,23 @@ export class LectureModel extends Observable {
     await this.busy(() => this.services.cancellations.withdraw(this.eventKey, this.reporterID), "Couldn't undo that report.");
   }
 
-  async addDeadline(fields: DeadlineFields): Promise<void> {
-    if (!DeadlineRules.isValid(fields.title, fields.due)) return;
+  async addDeadline(fields: DeadlineFields, details = ''): Promise<void> {
+    if (!DeadlineRules.isValid(fields.title, fields.due) || DeadlineRules.detailsProblem(details)) return;
     // Pinned to this class, so only this lecture or practical leads with it.
     const deadline = makeDeadline({
       moduleKey: this.moduleKey, atGroupKey: groupKeyOf(this.event), ...fields, submitterID: this.reporterID, isMine: true,
+      details: details.trim(), detailsEditedAt: details.trim() ? new Date() : null,
     });
     // Show it straight away; the reload confirms it landed.
     this.deadlines = DeadlineRules.upcoming([...this.deadlines, deadline]);
     this.changed();
     try {
       await shareDeadline(this.services, deadline, this.reporterID);
+      try {
+        if (deadline.details) await this.services.deadlines.setDetails(deadline.id, deadline.details);
+      } catch (error) {
+        this.errorText = errorMessage(error, "Shared, but the details didn't save.");
+      }
     } catch (error) {
       this.errorText = errorMessage(error, "Couldn't share that deadline.");
     }
@@ -210,9 +216,13 @@ export class LectureModel extends Observable {
     }, "Couldn't send that.");
   }
 
-  async editDeadline(deadline: Deadline, fields: DeadlineFields): Promise<void> {
-    if (!this.isMine(deadline) || !DeadlineRules.isValid(fields.title, fields.due)) return;
-    await this.busy(() => this.services.deadlines.edit(deadline.id, fields), "Couldn't save that change.");
+  /** The poster's fields, then the details if they changed. */
+  async editDeadline(deadline: Deadline, fields: DeadlineFields, details: string = deadline.details): Promise<void> {
+    if (!this.isMine(deadline) || !DeadlineRules.isValid(fields.title, fields.due) || DeadlineRules.detailsProblem(details)) return;
+    await this.busy(async () => {
+      await this.services.deadlines.edit(deadline.id, fields);
+      if (details.trim() !== deadline.details) await this.services.deadlines.setDetails(deadline.id, details.trim());
+    }, "Couldn't save that change.");
   }
 
   /** Only this student sees the name. */

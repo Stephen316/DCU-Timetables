@@ -80,8 +80,8 @@ export function DeadlinesScreen() {
         modules={moduleOptions}
         defaultModule={model.moduleFilter}
         onClose={() => setAdding(false)}
-        onSubmit={(fields, placement) => {
-          if (placement) void model.add(fields, placement);
+        onSubmit={(fields, details, placement) => {
+          if (placement) void model.add(fields, placement, details);
         }}
       />
       <DropdownMenu
@@ -193,7 +193,7 @@ export function DeadlinesScreen() {
                   actions={{
                     onConfirm: () => void model.toggleConfirmation(d),
                     onDispute: () => void model.toggleDispute(d),
-                    onEdit: (fields) => void model.edit(d, fields),
+                    onEdit: (fields, details) => void model.edit(d, fields, details),
                     onRename: (label) => void model.rename(d, label),
                     onDelete: () => void model.remove(d),
                     onReport: (reason) => void model.report(d, reason),

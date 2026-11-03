@@ -143,12 +143,13 @@ export class DeadlinesModel extends Observable {
 
   /**
    * A new one, for whichever of the student's modules they picked. In the list at once; the
-   * reload confirms it landed. Their own name for it goes on once the row exists.
+   * reload confirms it landed. Their own name for it, and any details, go on once the row exists.
    */
-  async add(fields: DeadlineFields, placement: DeadlinePlacement): Promise<void> {
-    if (!DeadlineRules.isValid(fields.title, fields.due)) return;
+  async add(fields: DeadlineFields, placement: DeadlinePlacement, details = ''): Promise<void> {
+    if (!DeadlineRules.isValid(fields.title, fields.due) || DeadlineRules.detailsProblem(details)) return;
     const deadline = makeDeadline({
       moduleKey: placement.moduleKey, atGroupKey: placement.atGroupKey, ...fields, submitterID: this.reporterID, isMine: true,
+      details: details.trim(), detailsEditedAt: details.trim() ? new Date() : null,
     });
     this.all = DeadlineRules.upcoming([...this.all, deadline]);
     this.regroup();
@@ -163,12 +164,17 @@ export class DeadlinesModel extends Observable {
     const label = DeadlineRules.labelToSave(deadline, placement.label);
     await this.act(async () => {
       if (label) await this.services.deadlines.setLabel(deadline.id, label);
-    }, 'Shared, but your name for it didn\'t save.');
+      if (deadline.details) await this.services.deadlines.setDetails(deadline.id, deadline.details);
+    }, 'Shared, but your name for it or the details didn\'t save.');
   }
 
-  async edit(deadline: Deadline, fields: DeadlineFields): Promise<void> {
-    if (!this.isMine(deadline) || !DeadlineRules.isValid(fields.title, fields.due)) return;
-    await this.act(() => this.services.deadlines.edit(deadline.id, fields), "Couldn't save that change.");
+  /** The poster's fields, then the details if they changed: one reload, once both have landed. */
+  async edit(deadline: Deadline, fields: DeadlineFields, details: string = deadline.details): Promise<void> {
+    if (!this.isMine(deadline) || !DeadlineRules.isValid(fields.title, fields.due) || DeadlineRules.detailsProblem(details)) return;
+    await this.act(async () => {
+      await this.services.deadlines.edit(deadline.id, fields);
+      if (details.trim() !== deadline.details) await this.services.deadlines.setDetails(deadline.id, details.trim());
+    }, "Couldn't save that change.");
   }
 
   /** Only this student sees the name. */

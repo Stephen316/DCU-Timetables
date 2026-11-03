@@ -21,7 +21,8 @@ export interface DeadlineActions {
   /** "The details are wrong", or taking that back. */
   onDispute: () => void;
   /** The poster changing their own, for everyone. */
-  onEdit: (fields: DeadlineFields) => void;
+  /** The poster's fields, and the shared details alongside them. */
+  onEdit: (fields: DeadlineFields, details: string) => void;
   /** This student's own name for it. Blank goes back to the shared title. */
   onRename: (label: string) => void;
   onDelete: () => void;
@@ -429,8 +430,8 @@ function RenameSheet({
 }
 
 /**
- * Adding a deadline, or the poster editing theirs. Kept to four fields — a title, what it
- * is, when it's due, and how much of the grade it's worth. Added from the Deadlines tab, where
+ * Adding a deadline, or the poster editing theirs: a title, what it is, when it's due, how
+ * much of the grade it's worth, and the shared details. Added from the Deadlines tab, where
  * no class says which module it's for, it also asks for the module first (and, if it's for
  * one class only, which), and takes the student's own name for it last.
  */
@@ -440,7 +441,7 @@ export function DeadlineForm({
   visible: boolean;
   onClose: () => void;
   /** `placement` is only given when the form chose the module itself (`modules`). */
-  onSubmit: (fields: DeadlineFields, placement?: DeadlinePlacement) => void;
+  onSubmit: (fields: DeadlineFields, details: string, placement?: DeadlinePlacement) => void;
   editing?: { deadline: Deadline; standing: DeadlineStanding };
   /** Where a new one's date starts — the class it's added from. A week out when there's no class. */
   defaultDue?: Date;
@@ -463,13 +464,15 @@ export function DeadlineForm({
   // Kept as typed; blank is 0, which is not graded.
   const [weightText, setWeightText] = useState('');
   const [label, setLabel] = useState('');
+  const [details, setDetails] = useState('');
+  const detailsProblem = DeadlineRules.detailsProblem(details);
   const weight = DeadlineRules.parseGradeWeight(weightText);
   const now = useNow();
   const problems = DeadlineRules.draftProblems(
     { moduleKey: choosing ? moduleKey : initial?.moduleKey ?? '', title, due, weightText, label: choosing ? label : '' },
     now,
   );
-  const valid = Object.keys(problems).length === 0;
+  const valid = Object.keys(problems).length === 0 && !detailsProblem;
   const chosen = modules?.find((m) => m.key === moduleKey) ?? null;
   const moduleButton = useRef<View>(null);
   const [pickingModule, setPickingModule] = useState(false);
@@ -487,6 +490,7 @@ export function DeadlineForm({
       setDue(initial?.due ?? defaultDue ?? addDays(new Date(), 7));
       setWeightText(initial && initial.gradeWeight > 0 ? String(initial.gradeWeight) : '');
       setLabel('');
+      setDetails(initial?.details ?? '');
     }
   }
 
@@ -516,8 +520,8 @@ export function DeadlineForm({
           onPress={() => {
             if (weight === null) return;
             const fields = { title: title.trim(), kind, due, gradeWeight: weight };
-            if (choosing && moduleKey) onSubmit(fields, { moduleKey, atGroupKey, label });
-            else onSubmit(fields);
+            if (choosing && moduleKey) onSubmit(fields, details.trim(), { moduleKey, atGroupKey, label });
+            else onSubmit(fields, details.trim());
             onClose();
           }}
         />
@@ -616,6 +620,22 @@ export function DeadlineForm({
               </Txt>
             </View>
           </Row>
+          <Row>
+            <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Details</Txt>
+            <TextInput
+              value={details}
+              onChangeText={setDetails}
+              multiline
+              maxLength={DETAILS_LIMIT}
+              placeholder="Where to hand it in, what the brief leaves out"
+              placeholderTextColor={theme.inkTertiary}
+              style={[styles.input, styles.detailsInput, { color: theme.ink }]}
+              accessibilityLabel="Details"
+            />
+            <Txt type="caption" color={detailsProblem ? theme.tint.off : theme.inkTertiary}>
+              {detailsProblem ?? 'Optional. Anyone taking the module can change these.'}
+            </Txt>
+          </Row>
           {choosing ? (
             <Row>
               <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Your name for it</Txt>
@@ -684,5 +704,5 @@ const styles = StyleSheet.create({
   details: { gap: Space.xxs, marginTop: Space.xs },
   detailsLine: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   addDetails: { alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' },
-  detailsInput: { minHeight: 160 },
+  detailsInput: { minHeight: 72 },
 });
