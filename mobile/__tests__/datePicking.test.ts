@@ -29,26 +29,35 @@ describe('The due-date calendar', () => {
   });
 });
 
-describe('The time dial', () => {
-  test('puts 1–12 round the edge and 13–00 inside, each under its twelve-hour twin', () => {
-    expect(DatePicking.hourPlace(3)).toEqual({ angle: 90, inner: false });
-    expect(DatePicking.hourPlace(15)).toEqual({ angle: 90, inner: true });
-    expect(DatePicking.hourPlace(12)).toEqual({ angle: 0, inner: false });
-    expect(DatePicking.hourPlace(0)).toEqual({ angle: 0, inner: true });
-    const all = [...DatePicking.hours.outer, ...DatePicking.hours.inner].sort((a, b) => a - b);
-    expect(all).toEqual(Array.from({ length: 24 }, (_, h) => h));
+describe('The time wheels', () => {
+  test('repeat their values an odd number of times, enough to fling through', () => {
+    for (const count of [24, 60]) {
+      const copies = DatePicking.wheelCopies(count);
+      expect(copies % 2).toBe(1);
+      expect(copies * count).toBeGreaterThanOrEqual(600);
+    }
   });
 
-  test('minutes sit where a clock puts them, in fives', () => {
-    expect(DatePicking.minuteAngle(15)).toBe(90);
-    expect(DatePicking.minuteAngle(45)).toBe(270);
-    expect(DatePicking.minutes).toEqual([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]);
+  test('open on the value in the middle copy, and read it back from any copy', () => {
+    const row = DatePicking.wheelRow(17, 24);
+    const copies = DatePicking.wheelCopies(24);
+    expect(Math.floor(row / 24)).toBe(Math.floor(copies / 2));
+    expect(DatePicking.wheelValue(row, 24)).toBe(17);
+    expect(DatePicking.wheelValue(row + 24 * 3, 24)).toBe(17);
+    expect(DatePicking.wheelValue(row - 1, 24)).toBe(16);
+    expect(DatePicking.wheelRow(-1, 60)).toBe(DatePicking.wheelRow(59, 60));
   });
 
-  test('places a mark on its ring clockwise from the top', () => {
-    const p = DatePicking.point(90, 100);
-    expect(p.x).toBeCloseTo(100);
-    expect(p.y).toBeCloseTo(0);
-    expect(DatePicking.point(0, 100).y).toBeCloseTo(-100);
+  test('come to rest on the nearest row, never off either end', () => {
+    expect(DatePicking.restingRow(119, 40, 600)).toBe(3);
+    expect(DatePicking.restingRow(101, 40, 600)).toBe(3);
+    expect(DatePicking.restingRow(-80, 40, 600)).toBe(0);
+    expect(DatePicking.restingRow(1e6, 40, 600)).toBe(599);
+  });
+
+  test('step round the loop', () => {
+    expect(DatePicking.stepWheel(23, 1, 24)).toBe(0);
+    expect(DatePicking.stepWheel(0, -1, 60)).toBe(59);
+    expect(DatePicking.stepWheel(30, 1, 60)).toBe(31);
   });
 });

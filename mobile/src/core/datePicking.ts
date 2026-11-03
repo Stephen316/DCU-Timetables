@@ -1,6 +1,6 @@
 /**
- * The arithmetic behind the due-date popups: a month laid out as a calendar page, and where
- * each hour and minute sits on the clock-face dial. No views, so it can be tested.
+ * The arithmetic behind the due-date popups: a month laid out as a calendar page, and the
+ * looping hour and minute wheels. No views, so it can be tested.
  */
 export const DatePicking = {
   /**
@@ -33,27 +33,41 @@ export const DatePicking = {
   },
 
   /**
-   * Where an hour sits on a 24-hour dial, in degrees clockwise from the top: 1–12 round the
-   * outside as on any clock, 13–23 and 00 on a ring inside, each beneath its 12-hour twin.
+   * How many times a time wheel repeats its values. The wheels loop as Clock's do: the
+   * values are laid end to end many times over, and a wheel that comes to rest is moved back
+   * to the same value in the middle copy. Odd, so there is a middle; long enough — about
+   * `WHEEL_ROWS` rows — that no fling reaches either end.
    */
-  hourPlace(hour: number): { angle: number; inner: boolean } {
-    const inner = hour === 0 || hour > 12;
-    return { angle: (hour % 12) * 30, inner };
+  wheelCopies(count: number): number {
+    const copies = Math.ceil(WHEEL_ROWS / count);
+    return copies % 2 === 1 ? copies : copies + 1;
   },
 
-  /** Where a minute sits on the dial: the hour marks are every five minutes. */
-  minuteAngle(minute: number): number {
-    return (minute % 60) * 6;
+  /** The row that shows `value` in the middle copy of a wheel of `count` values. */
+  wheelRow(value: number, count: number): number {
+    return Math.floor(DatePicking.wheelCopies(count) / 2) * count + wrap(value, count);
   },
 
-  /** The dial's hours, in the order they're drawn round each ring. */
-  hours: { outer: [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], inner: [0, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] },
-  /** The dial's minutes, in five-minute steps. */
-  minutes: Array.from({ length: 12 }, (_, i) => i * 5),
+  /** The value a row shows, whichever copy it's in. */
+  wheelValue(row: number, count: number): number {
+    return wrap(row, count);
+  },
 
-  /** A point on a ring of `radius`, at `angle` degrees clockwise from the top, from the centre. */
-  point(angle: number, radius: number): { x: number; y: number } {
-    const radians = (angle * Math.PI) / 180;
-    return { x: Math.sin(radians) * radius, y: -Math.cos(radians) * radius };
+  /** The row a wheel has come to rest on at `offset`: the nearest one, kept on the wheel. */
+  restingRow(offset: number, rowHeight: number, rows: number): number {
+    return Math.min(Math.max(Math.round(offset / rowHeight), 0), rows - 1);
+  },
+
+  /** `value` moved `by` rows, round the loop: one up from 23 is 00, one down from 00 is 59. */
+  stepWheel(value: number, by: number, count: number): number {
+    return wrap(value + by, count);
   },
 };
+
+/** Rows on a time wheel, give or take a copy of its values. */
+const WHEEL_ROWS = 600;
+
+/** `n` folded into 0..count-1, negatives included. */
+function wrap(n: number, count: number): number {
+  return ((n % count) + count) % count;
+}

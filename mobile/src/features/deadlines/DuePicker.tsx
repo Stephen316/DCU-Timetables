@@ -3,11 +3,12 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { DatePicking } from '../../core/datePicking';
 import { formatTime, formatWeekdayDayMonth, isSameDay, monthName, startOfDay, weekdayName } from '../../core/time';
 import { BottomCard, Icon, InlineAction, PrimaryButton, Txt } from '../../ui/components';
-import { Radius, Space, useTheme, withAlpha } from '../../ui/theme';
+import { TimeWheel } from '../../ui/TimeWheel';
+import { Space, useTheme } from '../../ui/theme';
 
 /**
  * The due date and the time as two chips on one line, each opening a popup: a month
- * calendar for the day, a clock-face dial for the time. The same on the phone, in a browser
+ * calendar for the day, hour and minute wheels for the time. The same on the phone, in a browser
  * and on the Mac — the browser has no picker of its own worth the name. Changing one keeps
  * the other.
  */
@@ -26,7 +27,7 @@ export function DuePicker({ value, onChange }: { value: Date; onChange: (date: D
         }}
         onClose={() => setOpen(null)}
       />
-      <DialCard visible={open === 'time'} value={value} onChange={onChange} onClose={() => setOpen(null)} />
+      <TimeCard visible={open === 'time'} value={value} onChange={onChange} onClose={() => setOpen(null)} />
     </View>
   );
 }
@@ -121,103 +122,29 @@ function MonthStep({ icon, label, disabled, onPress }: { icon: 'back' | 'forward
   );
 }
 
-const DIAL = 248;
-const OUTER = 100;
-const INNER = 66;
-const MARK = 36;
-
 /**
- * A clock face to set the time on, as Android's is: tap the hour — 1 to 12 round the edge,
- * 13 to 00 inside — and it turns to the minutes, in fives. The time sits large above it, and
- * either half can be tapped to go back to it. Each tap applies straight away.
+ * The time on two wheels, hour and minute, as Clock sets an alarm. The day it's for heads
+ * the card, since the chip that opened it is now hidden. Each turn applies straight away.
  */
-function DialCard({ visible, value, onChange, onClose }: {
+function TimeCard({ visible, value, onChange, onClose }: {
   visible: boolean;
   value: Date;
   onChange: (date: Date) => void;
   onClose: () => void;
 }) {
-  const theme = useTheme();
-  const [part, setPart] = useState<'hour' | 'minute'>('hour');
-  const [wasVisible, setWasVisible] = useState(visible);
-  if (visible !== wasVisible) {
-    setWasVisible(visible);
-    if (visible) setPart('hour');
-  }
-  const hour = value.getHours();
-  const minute = value.getMinutes();
-  const hand = part === 'hour'
-    ? { angle: DatePicking.hourPlace(hour).angle, length: DatePicking.hourPlace(hour).inner ? INNER : OUTER }
-    : { angle: DatePicking.minuteAngle(minute), length: OUTER };
-
-  const mark = (label: string, angle: number, radius: number, selected: boolean, onPress: () => void, spoken: string, small = false) => {
-    const p = DatePicking.point(angle, radius);
-    return (
-      <Pressable
-        key={`${radius}-${label}`}
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={spoken}
-        accessibilityState={{ selected }}
-        style={[styles.mark, { left: DIAL / 2 + p.x - MARK / 2, top: DIAL / 2 + p.y - MARK / 2 }, selected && { backgroundColor: theme.accent }]}
-      >
-        <Txt type={small ? 'footnote' : 'callout'} color={selected ? theme.onAccent : small ? theme.inkSecondary : theme.ink}>{label}</Txt>
-      </Pressable>
-    );
-  };
-
   return (
     <BottomCard visible={visible} onClose={onClose}>
-      <View style={styles.readout}>
-        <Segment text={pad(hour)} active={part === 'hour'} onPress={() => setPart('hour')} label="Hour" />
-        <Txt type="largeTitle" color={theme.inkSecondary}>:</Txt>
-        <Segment text={pad(minute)} active={part === 'minute'} onPress={() => setPart('minute')} label="Minutes" />
-      </View>
-      <View style={[styles.dial, { backgroundColor: theme.raised }]}>
-        {/* The hand: from the centre to the chosen mark. */}
-        <View pointerEvents="none" style={[styles.handFrame, { height: hand.length * 2, top: DIAL / 2 - hand.length, transform: [{ rotate: `${hand.angle}deg` }] }]}>
-          <View style={[styles.hand, { backgroundColor: withAlpha(theme.accent, 0.6) }]} />
-        </View>
-        <View pointerEvents="none" style={[styles.pivot, { backgroundColor: theme.accent }]} />
-        {part === 'hour'
-          ? [
-              ...DatePicking.hours.outer.map((h) => mark(String(h), DatePicking.hourPlace(h).angle, OUTER, h === hour, () => {
-                onChange(DatePicking.withTime(value, h, minute));
-                setPart('minute');
-              }, `${pad(h)}:00`)),
-              ...DatePicking.hours.inner.map((h) => mark(pad(h), DatePicking.hourPlace(h).angle, INNER, h === hour, () => {
-                onChange(DatePicking.withTime(value, h, minute));
-                setPart('minute');
-              }, `${pad(h)}:00`, true)),
-            ]
-          : DatePicking.minutes.map((m) => mark(pad(m), DatePicking.minuteAngle(m), OUTER, m === minute, () => {
-              onChange(DatePicking.withTime(value, hour, m));
-            }, `${m} minutes past`))}
-      </View>
+      <Txt type="headline" accessibilityRole="header" style={styles.timeTitle}>{formatWeekdayDayMonth(value)}</Txt>
+      <TimeWheel
+        hours={value.getHours()}
+        minutes={value.getMinutes()}
+        onChange={(h, m) => onChange(DatePicking.withTime(value, h, m))}
+      />
       <View style={styles.done}>
         <PrimaryButton title="Done" onPress={onClose} />
       </View>
     </BottomCard>
   );
-}
-
-function Segment({ text, active, onPress, label }: { text: string; active: boolean; onPress: () => void; label: string }) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${label}, ${text}`}
-      accessibilityState={{ selected: active }}
-      style={[styles.segment, { backgroundColor: active ? withAlpha(theme.accent, 0.18) : 'transparent' }]}
-    >
-      <Txt type="largeTitle" color={active ? theme.accent : theme.ink}>{text}</Txt>
-    </Pressable>
-  );
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0');
 }
 
 const styles = StyleSheet.create({
@@ -229,12 +156,6 @@ const styles = StyleSheet.create({
   cell: { width: CELL, height: CELL },
   day: { borderRadius: CELL / 2, alignItems: 'center', justifyContent: 'center' },
   bold: { fontWeight: '700' },
-  readout: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, marginBottom: Space.l },
-  segment: { borderRadius: Radius.control, paddingHorizontal: Space.s, paddingVertical: Space.xxs },
-  dial: { width: DIAL, height: DIAL, borderRadius: DIAL / 2, alignSelf: 'center' },
-  handFrame: { position: 'absolute', left: DIAL / 2 - 1, width: 2 },
-  hand: { flex: 0.5, width: 2 },
-  pivot: { position: 'absolute', left: DIAL / 2 - 4, top: DIAL / 2 - 4, width: 8, height: 8, borderRadius: 4 },
-  mark: { position: 'absolute', width: MARK, height: MARK, borderRadius: MARK / 2, alignItems: 'center', justifyContent: 'center' },
+  timeTitle: { textAlign: 'center', marginBottom: Space.m },
   done: { marginTop: Space.l },
 });
