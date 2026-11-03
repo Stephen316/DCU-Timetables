@@ -149,6 +149,7 @@ export async function createServices(platform: Platform): Promise<Services> {
       for (const key of [
         PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme, PrefKey.programmeSaved,
         PrefKey.skipped, PrefKey.timetableEdits, PrefKey.tutorialDue, PrefKey.allocationTried,
+        PrefKey.contributionsTold,
       ]) {
         prefs.set(key, null);
       }

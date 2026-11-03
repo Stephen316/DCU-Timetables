@@ -18,6 +18,7 @@ import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
 import { NotificationsSheet } from '../alerts/NotificationsSheet';
 import { DayPage } from './DayPage';
 import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
+import { ContributionCard } from './ContributionCard';
 import { ExportCalendarCard } from './ExportCalendarCard';
 import { Pager, PagerControl } from './Pager';
 import { WeekGridView } from './WeekGrid';
@@ -227,6 +228,7 @@ export function TimetableScreen() {
       <AccountSheet visible={sheet === 'account'} onClose={() => setSheet(null)} />
       <NotificationsSheet visible={sheet === 'alerts'} onClose={() => setSheet(null)} />
       <ExportCalendarCard visible={sheet === 'export'} onClose={() => setSheet(null)} />
+      <ContributionCard ready={hasWeek && sheet === null && !editing} />
       <EditChoiceSheet
         pending={pendingEdit}
         onChoose={({ event, kind }, repeat) => model.edit(kind, repeat, event)}

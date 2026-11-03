@@ -112,6 +112,8 @@ export const PrefKey = {
   programmeSaved: 'programmeSaved',
   /** `accountID:YYYY-MM-DD` last sent as the account's last-seen day, so it goes up once a day. */
   lastSeenSent: 'lastSeenSent',
+  /** `Contributions.toldKey`s already shown on the "your report helped" card. */
+  contributionsTold: 'contributionsTold',
   /** The old "I won't attend" list. Read once, to carry it over into `timetableEdits`. */
   skipped: 'skippedEvents',
   /** `TimetableEdit[]`: classes the student added to or dropped from their own timetable. */

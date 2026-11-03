@@ -4,6 +4,7 @@ import {
 import {
   Deadline, DeadlineConfirmation, DeadlineFields, DeadlineReportReason, DeadlineRules, DeadlineStanding, isDeadlineKind,
 } from '../core/deadline';
+import { Contribution, Contributions } from '../core/contributions';
 import { AccountProfile, makeAccountProfile, parseRole } from '../core/identity';
 import { isoSeconds, parseISO } from '../core/time';
 import { TimetableCategory } from '../core/timetableEvent';
@@ -511,6 +512,8 @@ export interface ProfileStore {
   saveProgramme(programme: TimetableCategory): Promise<void>;
   /** Records that the app was opened today. The server keeps the day, nothing finer. */
   touchLastSeen(): Promise<void>;
+  /** This account's reports and deadlines from the last two weeks that others agreed with. */
+  myRecentContributions(): Promise<Contribution[]>;
   /** Deletes the account for good. Contributions survive with the link broken. */
   deleteAccount(): Promise<void>;
 }
@@ -585,6 +588,12 @@ export class SupabaseProfileStore implements ProfileStore {
     await this.rest.json('POST', '/rest/v1/rpc/touch_last_seen', SupabaseProfileStore.describe, { body: {} });
   }
 
+  async myRecentContributions(): Promise<Contribution[]> {
+    if (!this.rest.session.userID) throw notSignedIn();
+    const json = await this.rest.json('POST', '/rest/v1/rpc/my_recent_contributions', SupabaseProfileStore.describe, { body: {} });
+    return Contributions.decode(rows(json));
+  }
+
   async deleteAccount(): Promise<void> {
     // An anon key can't delete from auth.users, so this goes through the `security
     // definer` RPC, which deletes only `auth.uid()`'s own row.
@@ -608,5 +617,8 @@ export class LocalProfileStore implements ProfileStore {
   }
   async saveProgramme(): Promise<void> {}
   async touchLastSeen(): Promise<void> {}
+  async myRecentContributions(): Promise<Contribution[]> {
+    return [];
+  }
   async deleteAccount(): Promise<void> {}
 }
