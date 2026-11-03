@@ -52,6 +52,18 @@ export async function editDeadline(id: string, title: string, kind: string, due:
   return {};
 }
 
+/// Replaces the shared Details box — usually putting back an earlier version after
+/// vandalism. The same function students save through, so the version being replaced goes
+/// into the history like any other, and an admin's save is also audited.
+export async function setDeadlineDetails(id: string, details: string) {
+  if (!(await consoleOpen())) return { error: LOCKED };
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("set_deadline_details", { p_deadline: id, p_details: details });
+  if (error) return { error: error.message };
+  revalidatePath("/deadlines");
+  return {};
+}
+
 /// Closes every open report on a deadline. "remove" also rejects the deadline, which takes
 /// it out of every student's view.
 export async function resolveReports(id: string, action: "dismiss" | "remove") {

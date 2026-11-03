@@ -10,7 +10,7 @@ export type Reported = {
 };
 
 const reasonLabel: Record<string, string> = {
-  offensive: "offensive", spam: "spam", wrong: "wrong details", other: "other",
+  offensive: "offensive", spam: "spam", wrong: "wrong details", other: "other", details: "details box",
 };
 
 const when = new Intl.DateTimeFormat("en-IE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });

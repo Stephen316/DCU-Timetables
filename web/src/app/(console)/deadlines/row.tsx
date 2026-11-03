@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { editDeadline, moderateDeadline } from "../actions";
+import { editDeadline, moderateDeadline, setDeadlineDetails } from "../actions";
+
+/** A version of the Details box that a later save replaced. */
+export type DetailsVersion = {
+  details: string;
+  written_at: string | null;
+  /** The student ID of whoever wrote this version, when known and the account still exists. */
+  writer: string | null;
+  replaced_at: string;
+  replacer: string | null;
+};
 
 export type ConsoleDeadline = {
   id: string;
@@ -21,6 +31,16 @@ export type ConsoleDeadline = {
   reports: number;
   /** The poster's student ID, when the account still exists. */
   poster: string | null;
+  /** The shared Details box, which any student can edit. Empty when nobody has. */
+  details: string;
+  details_edited_at: string | null;
+  details_edited_by: string | null;
+  /** Student ID of the last editor, when the account still exists. */
+  detailsEditor: string | null;
+  /** Open reports that are about the details rather than the deadline. */
+  detailReports: number;
+  /** Earlier versions, newest first. */
+  history: DetailsVersion[];
 };
 
 const KINDS: Record<string, string> = {
@@ -44,6 +64,54 @@ function localInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/// The Details box under the title: the text, who last changed it, and — because any student
+/// can — every earlier version, any of which can be put back in one click.
+function Details({ deadline, showHistory, onToggle, onRestore, onClear, pending }: {
+  deadline: ConsoleDeadline;
+  showHistory: boolean;
+  onToggle: () => void;
+  onRestore: (text: string) => void;
+  onClear: () => void;
+  pending: boolean;
+}) {
+  if (!deadline.details && deadline.history.length === 0) return null;
+  return (
+    <div style={{ marginTop: 6, fontSize: 12 }}>
+      {deadline.details ? (
+        <div style={{ whiteSpace: "pre-wrap", maxWidth: 420 }}>{deadline.details}</div>
+      ) : (
+        <div className="dim">No details now.</div>
+      )}
+      <div className="dim" style={{ marginTop: 4 }}>
+        {deadline.details_edited_at && <>Edited {dateFormat.format(new Date(deadline.details_edited_at))} by {deadline.detailsEditor ?? "--"}</>}
+        {deadline.detailReports > 0 && (
+          <span className="tag off"> {deadline.detailReports} report{deadline.detailReports === 1 ? "" : "s"} on the details</span>
+        )}
+        {deadline.history.length > 0 && (
+          <> · <button onClick={onToggle}>{showHistory ? "Hide" : "History"} ({deadline.history.length})</button></>
+        )}
+        {deadline.details && (
+          <> <button className="danger" disabled={pending} onClick={() => { if (window.confirm("Clear the details for everyone? The text is kept in the history.")) onClear(); }}>Clear</button></>
+        )}
+      </div>
+      {showHistory && (
+        <ol style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+          {deadline.history.map((v, i) => (
+            <li key={i} style={{ marginBottom: 6 }}>
+              <div style={{ whiteSpace: "pre-wrap", maxWidth: 420 }}>{v.details || <span className="dim">(empty)</span>}</div>
+              <div className="dim">
+                Written {v.written_at ? dateFormat.format(new Date(v.written_at)) : "with the deadline"} by {v.writer ?? "--"} ·
+                replaced {dateFormat.format(new Date(v.replaced_at))} by {v.replacer ?? "--"}{" "}
+                {v.details !== deadline.details && <button disabled={pending} onClick={() => onRestore(v.details)}>Restore</button>}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 export function DeadlineRow({ deadline }: { deadline: ConsoleDeadline }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +120,7 @@ export function DeadlineRow({ deadline }: { deadline: ConsoleDeadline }) {
   const [kind, setKind] = useState(deadline.kind);
   const [due, setDue] = useState("");
   const [weight, setWeight] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const weightValue = weight.trim() === "" ? 0 : /^\d{1,3}$/.test(weight.trim()) ? Number(weight) : NaN;
   const weightOK = weightValue >= 0 && weightValue <= 100;
 
@@ -146,6 +215,9 @@ export function DeadlineRow({ deadline }: { deadline: ConsoleDeadline }) {
         {deadline.title}
         {deadline.edited_at && <span className="dim"> · edited</span>}
         {deadline.source !== "student" && <span className="dim"> · {deadline.source}</span>}
+        <Details deadline={deadline} showHistory={showHistory} onToggle={() => setShowHistory(!showHistory)}
+          onRestore={(text) => run(() => setDeadlineDetails(deadline.id, text))} onClear={() => run(() => setDeadlineDetails(deadline.id, ""))}
+          pending={pending} />
         {error && <div className="err">{error}</div>}
       </td>
       <td className={isPast ? "tag off" : undefined} style={{ whiteSpace: "nowrap" }}>

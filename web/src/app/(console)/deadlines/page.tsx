@@ -1,5 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
-import { DeadlineRow, type ConsoleDeadline } from "./row";
+import { DeadlineRow, type ConsoleDeadline, type DetailsVersion } from "./row";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,7 @@ export default async function Deadlines({
   const supabase = await supabaseServer();
   let query = supabase
     .from("module_deadlines")
-    .select("id, module_key, title, due_at, kind, grade_weight, status, source, submitted_at, edited_at, submitter_id")
+    .select("id, module_key, title, due_at, kind, grade_weight, status, source, submitted_at, edited_at, submitter_id, details, details_edited_at, details_edited_by")
     .limit(300);
   if (status !== "all") query = query.eq("status", status);
   // From the start of today, as the app lists them: a 9am hand-in stays upcoming all day.
@@ -38,28 +38,52 @@ export default async function Deadlines({
   if (q) query = query.or(`module_key.ilike.*${q}*,title.ilike.*${q}*`);
 
   const { data, error } = await query;
-  const rows = (data ?? []) as Omit<ConsoleDeadline, "confirmations" | "disputes" | "reports" | "poster">[];
+  const rows = (data ?? []) as Omit<ConsoleDeadline, "confirmations" | "disputes" | "reports" | "detailReports" | "poster" | "detailsEditor" | "history">[];
   const ids = rows.map((r) => r.id);
 
   // Counted here, as on the review page: PostgREST can't aggregate a child table in a select.
   const confirmations = new Map<string, number>();
   const disputes = new Map<string, number>();
   const reports = new Map<string, number>();
+  const detailReports = new Map<string, number>();
   const posters = new Map<string, string | null>();
+  const history = new Map<string, DetailsVersion[]>();
   if (ids.length) {
-    const [{ data: c }, { data: r }] = await Promise.all([
+    const [{ data: c }, { data: r }, { data: h }] = await Promise.all([
       supabase.from("deadline_confirmations").select("deadline_id").in("deadline_id", ids),
       supabase.from("deadline_reports").select("deadline_id, reason").in("deadline_id", ids).is("resolved_at", null),
+      // Newest first: the version just replaced is the one a vandalised box wants back.
+      supabase.from("deadline_details_history")
+        .select("deadline_id, details, written_by, written_at, replaced_by, replaced_at")
+        .in("deadline_id", ids).order("replaced_at", { ascending: false }).limit(1000),
     ]);
     for (const row of c ?? []) confirmations.set(row.deadline_id, (confirmations.get(row.deadline_id) ?? 0) + 1);
     for (const row of r ?? []) {
-      const into = row.reason === "wrong" ? disputes : reports;
+      const into = row.reason === "wrong" ? disputes : row.reason === "details" ? detailReports : reports;
       into.set(row.deadline_id, (into.get(row.deadline_id) ?? 0) + 1);
     }
-    const submitters = [...new Set(rows.map((r) => r.submitter_id).filter((id) => UUID.test(id)))];
-    if (submitters.length) {
-      const { data: people } = await supabase.from("contributor_stats").select("id, pi").in("id", submitters);
-      for (const p of people ?? []) posters.set(p.id, p.pi);
+    // Who wrote each version is looked up the same way as who posted the deadline.
+    const people = new Set<string>(rows.map((r) => r.submitter_id));
+    for (const r of rows) if (r.details_edited_by) people.add(r.details_edited_by);
+    for (const v of h ?? []) {
+      if (v.written_by) people.add(v.written_by);
+      if (v.replaced_by) people.add(v.replaced_by);
+    }
+    const lookup = [...people].filter((id) => UUID.test(id));
+    if (lookup.length) {
+      const { data: found } = await supabase.from("contributor_stats").select("id, pi").in("id", lookup);
+      for (const p of found ?? []) posters.set(p.id, p.pi);
+    }
+    for (const v of h ?? []) {
+      const list = history.get(v.deadline_id) ?? [];
+      list.push({
+        details: v.details,
+        written_at: v.written_at,
+        writer: v.written_by ? posters.get(v.written_by) ?? null : null,
+        replaced_at: v.replaced_at,
+        replacer: v.replaced_by ? posters.get(v.replaced_by) ?? null : null,
+      });
+      history.set(v.deadline_id, list);
     }
   }
 
@@ -68,7 +92,10 @@ export default async function Deadlines({
     confirmations: confirmations.get(r.id) ?? 0,
     disputes: disputes.get(r.id) ?? 0,
     reports: reports.get(r.id) ?? 0,
+    detailReports: detailReports.get(r.id) ?? 0,
     poster: posters.get(r.submitter_id) ?? null,
+    detailsEditor: r.details_edited_by ? posters.get(r.details_edited_by) ?? null : null,
+    history: history.get(r.id) ?? [],
   }));
   const waiting = deadlines.filter((d) => d.status === "pending").length;
   const disputed = deadlines.filter((d) => d.disputes > 0 && d.disputes >= d.confirmations).length;
@@ -80,7 +107,8 @@ export default async function Deadlines({
         <p>
           Every deadline students have shared, whatever its state. Confirm puts a moderator&apos;s name
           behind it; block takes it down and catches the same title on the same day if it&apos;s posted
-          again; remove deletes it outright.
+          again; remove deletes it outright. Any student can edit a deadline&apos;s details, so each
+          keeps its earlier versions, and who wrote them, under History.
         </p>
       </div>
 
