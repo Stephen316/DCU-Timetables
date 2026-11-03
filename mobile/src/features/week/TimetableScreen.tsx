@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { addDays, isSameDay, startOfDay } from '../../core/time';
+import { addDays, isSameDay, startOfDay, WeekHeading } from '../../core/time';
 import { WeekdayIndex } from '../../core/misc';
 import { TimetableEvent } from '../../core/timetableEvent';
 import { listenForMacAlertTaps, MacShell } from '../../data/macShell';
@@ -26,9 +26,12 @@ import { WeekGridView } from './WeekGrid';
 export function TimetableScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { shell, signOut } = useRoot();
+  const { signOut } = useRoot();
   const model = useModel(useWeekModel());
   const now = useNow();
+  // Said relative to today, so it moves on by itself when Monday comes.
+  const shownWeek = model.weeks[model.weekIndex];
+  const heading = shownWeek ? WeekHeading.of(shownWeek.firstDay, shownWeek.label, now) : null;
   const [prefersCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
   // The Mac app is the week and the deadlines: the day list is a phone's view.
   const [onMac] = useState(() => MacShell.isPresent());
@@ -186,9 +189,9 @@ export function TimetableScreen() {
           </View>
         )}
         <View style={styles.titleBlock} accessible accessibilityRole="header">
-          <Txt type="headline" numberOfLines={1}>{editing ? 'Edit timetable' : shell?.title ?? ''}</Txt>
+          <Txt type="headline" numberOfLines={1}>{editing ? 'Edit timetable' : heading?.title ?? ''}</Txt>
           <View style={styles.subtitle}>
-            <Txt type="caption" color={theme.inkSecondary}>{model.weekLabel}</Txt>
+            <Txt type="caption" color={theme.inkSecondary}>{editing ? heading?.title : heading?.detail}</Txt>
             {model.campusName && !editing ? <Label icon="place" text={model.campusName} type="caption" color={theme.inkSecondary} /> : null}
           </View>
         </View>

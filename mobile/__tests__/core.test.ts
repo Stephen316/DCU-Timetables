@@ -5,7 +5,7 @@ import {
 } from '../src/core/identity';
 import { locationDisplay, parseRoom, roomDisplayText } from '../src/core/roomLocation';
 import { ClashDetector, DaySchedule, DaySlot, DefaultDay, NextClassWindow, WeekGrid, gapLabel } from '../src/core/schedule';
-import { DublinTime, parseISO, isoSeconds } from '../src/core/time';
+import { DublinTime, parseISO, isoSeconds, WeekHeading } from '../src/core/time';
 import { compactTitleOf, EventType, isOnline, shortTitleOf } from '../src/core/timetableEvent';
 import { at, event, utc } from './helpers';
 
@@ -580,6 +580,19 @@ describe('Time', () => {
     expect(parseISO('2026-09-15T14:30:00.123456+01:00')?.getTime()).toBe(utc(2026, 9, 15, 13, 30).getTime() + 123);
     expect(parseISO('not a date')).toBeNull();
     expect(isoSeconds(utc(2026, 9, 16, 9))).toBe('2026-09-16T09:00:00Z');
+  });
+
+  test('a week is headed This, Last or Next week by its number, and further off by its month', () => {
+    // Wednesday of week 9 (Monday 2 November); the week a clock change falls in is still 7 days.
+    const now = at(2026, 11, 4, 14);
+    expect(WeekHeading.of(at(2026, 11, 2), '9', now)).toEqual({ title: 'This week', detail: 'Week 9' });
+    expect(WeekHeading.of(at(2026, 10, 26), '8', now)).toEqual({ title: 'Last week', detail: 'Week 8' });
+    expect(WeekHeading.of(at(2026, 11, 9), '10', now)).toEqual({ title: 'Next week', detail: 'Week 10' });
+    expect(WeekHeading.of(at(2026, 10, 19), '7', now)).toEqual({ title: 'Week 7', detail: 'October' });
+    expect(WeekHeading.of(at(2026, 11, 30), '13', now)).toEqual({ title: 'Week 13', detail: 'November – December' });
+    // Sunday evening is still this week; Monday morning moves it on.
+    expect(WeekHeading.of(at(2026, 11, 2), '9', at(2026, 11, 8, 23)).title).toBe('This week');
+    expect(WeekHeading.of(at(2026, 11, 2), '9', at(2026, 11, 9, 8)).title).toBe('Last week');
   });
 });
 

@@ -94,6 +94,29 @@ export function monthName(date: Date): string {
   return MONTHS[date.getMonth()];
 }
 
+/**
+ * The timetable's heading for a week: "This week", "Last week" or "Next week" with its
+ * number underneath, and further off the number, with the month it falls in underneath.
+ */
+export const WeekHeading = {
+  of(firstDay: Date, label: string, now: Date = new Date()): { title: string; detail: string } {
+    const offset = Math.round(daysBetween(startOfWeek(now), startOfWeek(firstDay)) / 7);
+    const number = `Week ${label}`;
+    if (offset === 0) return { title: 'This week', detail: number };
+    if (offset === -1) return { title: 'Last week', detail: number };
+    if (offset === 1) return { title: 'Next week', detail: number };
+    return { title: number, detail: WeekHeading.months(firstDay) };
+  },
+
+  /** The month of the week's Monday to Friday — both, when it runs from one into the next. */
+  months(firstDay: Date): string {
+    const monday = startOfWeek(firstDay);
+    const first = monthName(monday);
+    const last = monthName(addDays(monday, 4));
+    return first === last ? first : `${first} – ${last}`;
+  },
+};
+
 /** "17 September" */
 export function formatDayMonth(date: Date): string {
   return `${date.getDate()} ${monthName(date)}`;

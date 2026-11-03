@@ -23,7 +23,6 @@ export interface ShellConfig {
   key: string;
   programme: TimetableCategory;
   source: TimetableSource;
-  title: string;
   audience: TimetableAudience | null;
   /** Matched to a class list: groups and labs come from it, so there is nothing to choose. */
   groupsAssigned: boolean;
@@ -133,7 +132,6 @@ export function RootProvider({ children }: { children: ReactNode }) {
         key: `profile:${JSON.stringify(profile)}:${programme?.identity ?? ''}`,
         programme: { identity: `profile-${profile.group}`, name: 'Year 1 Engineering', categoryTypeIdentity: '' },
         source: services.sourceOverride ?? new ProfileTimetableSource(profile, services.rotationCache, services.dcu),
-        title: 'Year 1 Eng',
         audience: TimetableAudience.forProfile(profile, programme ? categoryCode(programme) : null),
         groupsAssigned: true,
       };
@@ -143,7 +141,6 @@ export function RootProvider({ children }: { children: ReactNode }) {
         key: `programme:${programme.identity}`,
         programme,
         source,
-        title: categoryCode(programme),
         audience: TimetableAudience.forProgramme(categoryCode(programme)),
         groupsAssigned: false,
       };
