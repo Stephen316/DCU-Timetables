@@ -121,7 +121,7 @@ Step 7 — More
 POINTS AT: the ⋯ button, top right
 --------------------------------------------------------
 TITLE: More
-BODY: Edit your timetable, set class alerts, export it to your calendar, and manage your account.
+BODY: Edit your timetable, set notifications, export it to your calendar, and manage your account.
 ACTION: Tap ⋯; the menu opens, and the tour waits for it to close
 
 

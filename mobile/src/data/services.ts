@@ -19,6 +19,7 @@ import {
   VerdictStore,
 } from './stores';
 import { TimetableCache } from './timetable';
+import { SupabasePushSubscriptionStore, WebPush } from './webPush';
 
 /**
  * Everything the screens talk to, built once at launch. What the factories did on iOS:
@@ -58,6 +59,8 @@ export interface Services {
   sourceOverride: TimetableSource | null;
   /** Class alerts on the phone or the Mac. Null in a browser, which has nothing to fire them. */
   alerts: AlertScheduler | null;
+  /** Notifications pushed by the server, in the web build. Null everywhere else, and until Supabase is configured. */
+  webPush: WebPush | null;
   /**
    * Everything this student left on the device goes, not just their credentials: the next
    * person to sign in here is a different person.
@@ -72,6 +75,8 @@ export interface Platform {
   fetchFn?: typeof fetch;
   /** Left out, one that fires nothing: tests, the preview. Null where alerts can't work at all. */
   alerts?: AlertScheduler | null;
+  /** The web build in a browser, where the server pushes notifications instead. */
+  webPush?: boolean;
 }
 
 export async function createServices(platform: Platform): Promise<Services> {
@@ -97,6 +102,9 @@ export async function createServices(platform: Platform): Promise<Services> {
   const reporter = new ReporterID(prefs, user);
   const role = new CachedRole(prefs);
   const alerts = platform.alerts === undefined ? new MemoryAlertScheduler() : platform.alerts;
+  const webPush = platform.webPush && rest
+    ? new WebPush(new SupabasePushSubscriptionStore(rest), prefs, platform.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY?.trim() || null)
+    : null;
 
   const services: Services = {
     prefs,
@@ -130,7 +138,10 @@ export async function createServices(platform: Platform): Promise<Services> {
     ),
     sourceOverride: null,
     alerts,
+    webPush,
     signOut() {
+      // First, while who's signed in is still known: nothing more reaches this browser.
+      webPush?.forget();
       user.forget();
       void session.clear();
       reporter.reset();

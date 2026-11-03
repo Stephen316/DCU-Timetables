@@ -131,7 +131,7 @@ const deadlines: TutorialStep[] = [
 const more: TutorialStep[] = [
   press({
     id: 'more', target: 'more', advancesOn: 'menuOpened', toTimetable: true, title: 'More',
-    body: 'Edit your timetable, set class alerts, export it to your calendar, and manage your account.',
+    body: 'Edit your timetable, set notifications, export it to your calendar, and manage your account.',
   }),
   step({ id: 'menu', advancesOn: 'menuClosed', continues: true, hidden: true, primary: null, title: 'More' }),
 ];

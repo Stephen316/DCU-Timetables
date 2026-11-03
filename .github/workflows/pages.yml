@@ -2,7 +2,9 @@
 # to GitHub Pages. The app and the App Store listing link to the site pages, so they must
 # stay public. One-time setup: repository Settings → Pages → Source: GitHub Actions, and the
 # repository variables EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (both are
-# public by design; without them the app runs with sign-in switched off).
+# public by design; without them the app runs with sign-in switched off), and
+# EXPO_PUBLIC_VAPID_PUBLIC_KEY for notifications (public too; without it the Notifications
+# sheet says the browser can't have them). See docs/PUSH.md.
 name: Pages
 
 on:
@@ -44,6 +46,7 @@ jobs:
           EXPO_BASE_URL: /${{ github.event.repository.name }}/app
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.EXPO_PUBLIC_VAPID_PUBLIC_KEY }}
       - run: cp -R site/. _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -10,6 +10,9 @@
 // The code and assets are named after their contents (entry-<hash>.js), so a saved copy of
 // one never goes stale and is only replaced when a build names a different file.
 //
+// It also shows the notifications the server pushes (supabase/functions/send-pushes), at the
+// end of this file.
+//
 // Copied as-is into the export by Expo (public/), and registered by src/data/webOffline.ts.
 
 const CACHE = 'dcu-timetable-app';
@@ -132,3 +135,43 @@ async function builtFile(request) {
   }
   return response;
 }
+
+// Notifications. Each push is one the student asked for (src/data/webPush.ts), worded by the
+// server: { title, body, tag, path }. iOS stops delivering to a Home Screen app that receives
+// a push without showing one, so even one that doesn't read shows something.
+
+self.addEventListener('push', (event) => {
+  let notice = null;
+  try {
+    notice = event.data ? event.data.json() : null;
+  } catch {
+    notice = null;
+  }
+  const title = typeof notice?.title === 'string' ? notice.title : 'DCU Timetable';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: typeof notice?.body === 'string' ? notice.body : '',
+      // The same class or deadline replaces its earlier notification rather than stacking.
+      tag: typeof notice?.tag === 'string' ? notice.tag : undefined,
+      icon: new URL('icon-192.png', ROOT).href,
+      data: { path: typeof notice?.path === 'string' ? notice.path : '' },
+    }),
+  );
+});
+
+/** Opens the app at the notification's page: an open window if there is one, else a new one. */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.path ?? '', ROOT).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windows) => {
+      const open = windows.find((w) => w.url.startsWith(PAGE));
+      if (open) {
+        await open.focus();
+        if (open.url !== url && 'navigate' in open) await open.navigate(url).catch(() => undefined);
+        return;
+      }
+      await self.clients.openWindow(url);
+    }),
+  );
+});

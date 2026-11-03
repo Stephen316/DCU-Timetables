@@ -40,6 +40,7 @@ function env(): Record<string, string | undefined> {
     EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
     EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     EXPO_PUBLIC_DCU_API_BASE: process.env.EXPO_PUBLIC_DCU_API_BASE,
+    EXPO_PUBLIC_VAPID_PUBLIC_KEY: process.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY,
   };
 }
 
@@ -93,9 +94,10 @@ async function createWebServices(kv: AsyncKV): Promise<Services> {
       }
     },
   };
-  // In the Mac app, class alerts go to the Mac. A browser has nothing to fire them: a page
-  // can't schedule a notification, and one shown from a push needs a server sending it.
-  services = await createServices({ kv, secrets, env: env(), alerts: MacShell.alerts() });
+  // In the Mac app, class alerts go to the Mac. A browser has nothing to fire them, since a
+  // page can't schedule a notification: there the server pushes them instead.
+  const mac = MacShell.isPresent();
+  services = await createServices({ kv, secrets, env: env(), alerts: MacShell.alerts(), webPush: !mac });
   for (const key of HANDOVER_PREFS) services.prefs.subscribe(key, publish);
   publish();
   return services;

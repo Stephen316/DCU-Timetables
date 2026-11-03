@@ -128,6 +128,10 @@ export const PrefKey = {
   /** `CompletedDeadlines`: the ids this student has ticked off, as a JSON array. */
   completedDeadlines: 'completedDeadlines',
   appearance: 'appearance',
+  /** `PushKinds`: which web push notifications this browser wants. Cleared on sign-out. */
+  pushKinds: 'pushKinds',
+  /** `PushTargetsRules.signature` of what the server last saved for this browser. */
+  pushSent: 'pushSent',
   /** `AlertSettings`: how long before a class it alerts. Kept across sign-outs, like appearance. */
   classAlerts: 'classAlerts',
   labRotation: (courseKey: string) => `labRotation:${courseKey}`,

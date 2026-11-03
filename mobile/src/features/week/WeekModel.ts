@@ -10,6 +10,7 @@ import { addDays, startOfDay } from '../../core/time';
 import { ModuleTitle, ModuleTitles, TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar } from '../../core/timetableEvent';
 import { ModuleAbbreviation, ModuleAbbreviations } from '../../core/abbreviations';
 import { EditRepeat, TimetableEdit, TimetableEdits } from '../../core/timetableEdits';
+import { PushTargetsRules } from '../../core/webPush';
 import { errorMessage } from '../../data/rest';
 import { userEmail } from '../../data/session';
 import { Services } from '../../data/services';
@@ -432,10 +433,13 @@ export class WeekModel extends Observable {
   /**
    * Hands the phone an alert for every class still to come in the loaded weeks — the same
    * moments the widget is refreshed, so the two can't disagree about what's on. `force`
-   * schedules even an unchanged plan: after permission is granted, say.
+   * schedules even an unchanged plan: after permission is granted, say. In the web build,
+   * tells the server the same weeks instead, for the notifications it pushes.
    */
   scheduleAlerts(force = false): void {
-    if (!this.started || this.disposed || !this.services.alerts) return;
+    if (!this.started || this.disposed) return;
+    this.services.webPush?.setTargets(PushTargetsRules.from([...this.eventsByWeekNumber.values()].flat(), this.moduleNames, new Date()));
+    if (!this.services.alerts) return;
     const settings = ClassAlerts.settings(this.services.prefs.getJSON<unknown>(PrefKey.classAlerts, null));
     const events = [...this.eventsByWeekNumber.values()].flat();
     const plan = ClassAlerts.plan(
