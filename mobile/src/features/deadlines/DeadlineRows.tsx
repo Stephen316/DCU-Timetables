@@ -1,5 +1,5 @@
 import { ReactNode, useRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
   ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DeadlineFields, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
   DeadlinePlacement, DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, DETAILS_LIMIT, detailsEditedLabel,
@@ -8,7 +8,7 @@ import {
 import { addDays, formatAbbreviated, formatTime, formatWeekdayDayMonthTime } from '../../core/time';
 import {
   ActionRow, ActionSheet, AdaptiveStack, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
-  useLargeText,
+  useLargeText, useReduceMotion,
 } from '../../ui/components';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
@@ -68,6 +68,22 @@ export function DeadlineRow({
   const large = useLargeText();
   // Whoever may edit the whole deadline does it in one form, details and all.
   const editsAll = canEdit(moderation, isMine);
+
+  // Mark done sweeps a tick across the row before it settles green; unticking is instant.
+  const reduceMotion = useReduceMotion();
+  const [sweep] = useState(() => new Animated.Value(0));
+  const [sweeping, setSweeping] = useState(false);
+  const toggleCompleted = () => {
+    if (sweeping) return;
+    if (completed || reduceMotion) return actions.onToggleCompleted();
+    setSweeping(true);
+    sweep.setValue(0);
+    Animated.timing(sweep, { toValue: 1, duration: 520, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }).start(() => {
+      actions.onToggleCompleted();
+      setSweeping(false);
+    });
+  };
+  const sweepLayer = sweeping ? <CompletionSweep progress={sweep} /> : null;
   const [sheet, setSheet] = useState<'edit' | 'rename' | 'details' | null>(null);
   const edited = deadline.editedAt ? ' · edited' : '';
   const worth = gradeWeightLabel(deadline.gradeWeight);
@@ -116,7 +132,7 @@ export function DeadlineRow({
       isMine={isMine}
       canVerify={moderation.canVerify}
       completed={completed}
-      actions={actions}
+      actions={{ ...actions, onToggleCompleted: toggleCompleted }}
       onRename={() => setSheet('rename')}
     />
   );
@@ -149,6 +165,7 @@ export function DeadlineRow({
           <View style={[styles.divider, styles.itemDivider, { backgroundColor: theme.separator }]} />
           {standingLine}
         </View>
+        {sweepLayer}
         {sheets}
       </View>
     );
@@ -156,7 +173,7 @@ export function DeadlineRow({
 
   return (
     <Row>
-      <View style={styles.rowBody}>
+      <View style={[styles.rowBody, styles.sweepable]}>
         <AdaptiveStack gap={Space.m}>
           <View style={styles.kindIcon} importantForAccessibility="no" accessibilityElementsHidden>
             <Icon name={completed ? 'confirmed' : deadlineKindIcon(deadline.kind)} color={completed ? theme.tint.confirmed : theme.inkSecondary} />
@@ -170,6 +187,7 @@ export function DeadlineRow({
         </AdaptiveStack>
         <View style={large ? undefined : styles.indent}>{detailsBlock}</View>
         <View style={large ? undefined : styles.indent}>{standingLine}</View>
+        {sweepLayer}
       </View>
       {sheets}
     </Row>
@@ -242,10 +260,30 @@ function StandingLine({
   );
 }
 
-/** Green either way; once pressed it carries a tick, and pressing it again unticks it. */
+/** "Mark done", then "Completed" — green either way. Pressing "Completed" unticks it. */
 function CompletedButton({ completed, onPress }: { completed: boolean; onPress: () => void }) {
   const theme = useTheme();
-  return <InlineAction title={completed ? 'Completed ✓' : 'Completed'} tint={theme.tint.confirmed} onPress={onPress} />;
+  return <InlineAction title={completed ? 'Completed' : 'Mark done'} tint={theme.tint.confirmed} onPress={onPress} />;
+}
+
+/**
+ * The green wash Mark done leaves behind, drawn left to right with a tick riding its leading
+ * edge. The edge fades as it reaches the far side, so the row lands on its completed colours.
+ */
+function CompletionSweep({ progress }: { progress: Animated.Value }) {
+  const theme = useTheme();
+  const done = theme.tint.confirmed;
+  const width = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  const edge = progress.interpolate({ inputRange: [0, 0.85, 1], outputRange: [1, 1, 0] });
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+      <Animated.View style={[styles.sweepWash, { width, backgroundColor: withAlpha(done, 0.14) }]}>
+        <Animated.View style={[styles.sweepEdge, { opacity: edge, backgroundColor: withAlpha(done, 0.35) }]}>
+          <Icon name="check" size={16} color={done} />
+        </Animated.View>
+      </Animated.View>
+    </View>
+  );
 }
 
 /** "Confirm", or "Confirmed" once a moderator has — tapping it again takes that back. */
@@ -753,6 +791,9 @@ const styles = StyleSheet.create({
   indent: { marginLeft: 22 + Space.m },
   actions: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   standing: { gap: Space.xs },
+  sweepable: { overflow: 'hidden' },
+  sweepWash: { position: 'absolute', top: 0, bottom: 0, left: 0 },
+  sweepEdge: { position: 'absolute', top: 0, bottom: 0, right: 0, width: 28, alignItems: 'center', justifyContent: 'center' },
   standingActions: { justifyContent: 'flex-end', flexWrap: 'wrap' },
   moreButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   input: { fontSize: 17, minHeight: 40 },
