@@ -13,7 +13,7 @@ import {
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
 import { useNow } from '../../state/hooks';
-import { Radius, Space, useTheme } from '../../ui/theme';
+import { Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DuePicker } from './DuePicker';
 import { canEdit, Moderation } from './Moderation';
 
@@ -33,6 +33,8 @@ export interface DeadlineActions {
   onReportDetails: () => void;
   /** A moderator's Confirm, or taking it back. */
   onVerify: () => void;
+  /** Ticking it off for this student alone, or unticking it. */
+  onToggleCompleted: () => void;
 }
 
 const STUDENT: Moderation = { canVerify: false, canEditAny: false };
@@ -44,7 +46,7 @@ const STUDENT: Moderation = { canVerify: false, canEditAny: false };
  */
 export function DeadlineRow({
   deadline, moduleName, standing, isMine, variant, showDate = true, actions, detailsProblem = null, detailsReported = false,
-  moderation = STUDENT,
+  moderation = STUDENT, completed = false,
 }: {
   deadline: Deadline;
   /** What to call its module on the `schedule` row: the name, or the code when there isn't one. */
@@ -59,6 +61,8 @@ export function DeadlineRow({
   detailsProblem?: string | null;
   detailsReported?: boolean;
   moderation?: Moderation;
+  /** Ticked off by this student: the row turns green. */
+  completed?: boolean;
 }) {
   const theme = useTheme();
   const large = useLargeText();
@@ -111,6 +115,7 @@ export function DeadlineRow({
       standing={standing}
       isMine={isMine}
       canVerify={moderation.canVerify}
+      completed={completed}
       actions={actions}
       onRename={() => setSheet('rename')}
     />
@@ -118,12 +123,20 @@ export function DeadlineRow({
 
   if (variant === 'schedule') {
     const graded = deadline.gradeWeight > 0 ? ` · ${deadline.gradeWeight}%` : '';
+    const done = theme.tint.confirmed;
     return (
-      <View style={[styles.item, { backgroundColor: theme.canvas, borderColor: theme.separator }]}>
-        <View style={[styles.accentBar, { backgroundColor: deadlineTint(deadline.kind, theme) }]} />
+      <View
+        style={[
+          styles.item,
+          completed
+            ? { backgroundColor: withAlpha(done, 0.14), borderColor: withAlpha(done, 0.5) }
+            : { backgroundColor: theme.canvas, borderColor: theme.separator },
+        ]}
+      >
+        <View style={[styles.accentBar, { backgroundColor: completed ? done : deadlineTint(deadline.kind, theme) }]} />
         <View style={styles.itemBody}>
           <View style={styles.itemTop}>
-            <Txt type="subheadline" style={[styles.semibold, styles.text]}>{displayTitle(deadline)}</Txt>
+            <Txt type="subheadline" color={completed ? done : undefined} style={[styles.semibold, styles.text]}>{displayTitle(deadline)}</Txt>
             <Txt type="footnote" color={theme.inkSecondary} style={styles.tabular}>{formatTime(deadline.due)}</Txt>
           </View>
           {/* Your own name for it would otherwise hide what classmates are talking about. */}
@@ -146,10 +159,10 @@ export function DeadlineRow({
       <View style={styles.rowBody}>
         <AdaptiveStack gap={Space.m}>
           <View style={styles.kindIcon} importantForAccessibility="no" accessibilityElementsHidden>
-            <Icon name={deadlineKindIcon(deadline.kind)} color={theme.inkSecondary} />
+            <Icon name={completed ? 'confirmed' : deadlineKindIcon(deadline.kind)} color={completed ? theme.tint.confirmed : theme.inkSecondary} />
           </View>
           <View style={styles.text}>
-            <Txt type="body">{displayTitle(deadline)}</Txt>
+            <Txt type="body" color={completed ? theme.tint.confirmed : undefined}>{displayTitle(deadline)}</Txt>
             {deadline.myLabel ? <Txt type="caption" color={theme.inkTertiary}>Shared as “{deadline.title}”</Txt> : null}
             <Txt type="caption" color={theme.inkSecondary}>{deadlineKindLabel(deadline.kind)}, due {formatAbbreviated(deadline.due)} · {worth}{edited}</Txt>
           </View>
@@ -168,12 +181,13 @@ export function DeadlineRow({
  * is worth less than three people's, and the row says which.
  */
 function StandingLine({
-  deadline, standing, isMine, canVerify, actions, onRename,
+  deadline, standing, isMine, canVerify, completed, actions, onRename,
 }: {
   deadline: Deadline;
   standing: DeadlineStanding;
   isMine: boolean;
   canVerify: boolean;
+  completed: boolean;
   actions: DeadlineActions;
   onRename: () => void;
 }) {
@@ -181,7 +195,8 @@ function StandingLine({
   const trust = deadlineTrust(deadline, standing);
   const dispute = standing.disputeSummary;
   return (
-    <AdaptiveStack>
+    // The trust line on its own, then the buttons: three of them beside it squeeze it to a word a line.
+    <View style={styles.standing}>
       <View style={styles.text}>
         {trust === 'verified' ? (
           <Label icon="confirmed" text="Confirmed by a moderator" type="caption2" color={theme.tint.confirmed} />
@@ -199,12 +214,14 @@ function StandingLine({
       </View>
       {isMine ? (
         // Swipe-to-delete on iOS; a visible button here, so it can be found without knowing to swipe.
-        <View style={styles.actions}>
+        <View style={[styles.actions, styles.standingActions]}>
+          <CompletedButton completed={completed} onPress={actions.onToggleCompleted} />
           {canVerify ? <VerifyButton deadline={deadline} onPress={actions.onVerify} /> : null}
           <InlineAction title="Delete" tint={theme.destructive} onPress={actions.onDelete} />
         </View>
       ) : (
-        <View style={styles.actions}>
+        <View style={[styles.actions, styles.standingActions]}>
+          <CompletedButton completed={completed} onPress={actions.onToggleCompleted} />
           {canVerify ? (
             // A moderator's word settles it, so it takes the place of the crowd's "This is right".
             <VerifyButton deadline={deadline} onPress={actions.onVerify} />
@@ -221,8 +238,14 @@ function StandingLine({
           <MoreMenu deadline={deadline} standing={standing} actions={actions} onRename={onRename} />
         </View>
       )}
-    </AdaptiveStack>
+    </View>
   );
+}
+
+/** Green either way; once pressed it carries a tick, and pressing it again unticks it. */
+function CompletedButton({ completed, onPress }: { completed: boolean; onPress: () => void }) {
+  const theme = useTheme();
+  return <InlineAction title={completed ? 'Completed ✓' : 'Completed'} tint={theme.tint.confirmed} onPress={onPress} />;
 }
 
 /** "Confirm", or "Confirmed" once a moderator has — tapping it again takes that back. */
@@ -729,6 +752,8 @@ const styles = StyleSheet.create({
   medium: { fontWeight: '500' },
   indent: { marginLeft: 22 + Space.m },
   actions: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  standing: { gap: Space.xs },
+  standingActions: { justifyContent: 'flex-end', flexWrap: 'wrap' },
   moreButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   input: { fontSize: 17, minHeight: 40 },
   fieldLabel: { marginBottom: Space.xs },

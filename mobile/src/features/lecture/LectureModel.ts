@@ -11,6 +11,7 @@ import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
 import { shareDeadline } from '../deadlines/DeadlinesModel';
 import { DetailsEdits } from '../deadlines/DetailsEdits';
+import { CompletedDeadlines } from '../deadlines/Completed';
 import { canEdit, Moderation, moderationFor } from '../deadlines/Moderation';
 
 /** Everything known about one class: the crowd, any verdict, and the module's deadlines. */
@@ -42,12 +43,14 @@ export class LectureModel extends Observable {
   private beforePractice: CancellationStatus | null = null;
 
   readonly details: DetailsEdits;
+  private readonly completed: CompletedDeadlines;
   /** A moderator confirms deadlines for everyone; only an admin may edit someone else's. */
   moderation: Moderation;
 
   constructor(private readonly services: Services, readonly event: TimetableEvent, known: Deadline[] = []) {
     super();
     this.reporterID = services.reporter.current;
+    this.completed = new CompletedDeadlines(services.prefs);
     this.details = new DetailsEdits(services, {
       replace: (deadline) => {
         this.deadlines = this.deadlines.map((d) => (d.id === deadline.id ? deadline : d));
@@ -76,6 +79,16 @@ export class LectureModel extends Observable {
 
   isMine(deadline: Deadline): boolean {
     return deadlineBelongsTo(deadline, this.reporterID);
+  }
+
+  /** Ticked off by this student, on this device. */
+  isCompleted(deadline: Deadline): boolean {
+    return this.completed.has(deadline.id);
+  }
+
+  toggleCompleted(deadline: Deadline): void {
+    this.completed.toggle(deadline.id);
+    this.changed();
   }
 
   standing(deadline: Deadline): DeadlineStanding {

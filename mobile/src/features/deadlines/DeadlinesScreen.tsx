@@ -201,10 +201,12 @@ export function DeadlinesScreen() {
                     onSaveDetails: (text) => void model.details.save(d, text),
                     onReportDetails: () => void model.details.report(d),
                     onVerify: () => void model.toggleVerified(d),
+                    onToggleCompleted: () => model.toggleCompleted(d),
                   }}
                   detailsProblem={model.details.problem(d)}
                   detailsReported={model.details.reported.has(d.id)}
                   moderation={model.moderation}
+                  completed={model.isCompleted(d)}
                 />
               ))}
             </View>

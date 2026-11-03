@@ -199,6 +199,9 @@ reads **Confirm** for everyone, and for a moderator saving through it is the con
 - **What it's worth.** The form has a "Worth" box for the percentage of the module's grade,
   a whole number from 0 to 100. Blank or 0 means not graded, and every row says so ("Not
   graded", or "20% of the grade"). Changing only the weight keeps the confirmations.
+- **Anyone ticks a deadline off** with **Completed**, in green on every row. The row turns
+  green and the button reads "Completed ✓"; pressing it again unticks it. It's a reminder to
+  yourself, so it's kept on the device (`CompletedDeadlines`) and nobody else sees it.
 - **Anyone gives any deadline their own name** ("Give it my own name…"). Only they see it —
   on the row, the class banner, the timetable outline and the widget — with the shared title
   underneath. It's stored per account (`deadline_labels`), so it follows them to a new phone.

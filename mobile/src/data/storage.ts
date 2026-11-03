@@ -123,6 +123,8 @@ export const PrefKey = {
   tutorialOfferedToExisting: 'tutorialOfferedToExisting',
   allocationTried: 'allocationTried',
   weekShowsCalendar: 'weekShowsCalendar',
+  /** `CompletedDeadlines`: the ids this student has ticked off, as a JSON array. */
+  completedDeadlines: 'completedDeadlines',
   appearance: 'appearance',
   /** `AlertSettings`: how long before a class it alerts. Kept across sign-outs, like appearance. */
   classAlerts: 'classAlerts',

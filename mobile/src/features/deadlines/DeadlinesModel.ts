@@ -6,6 +6,7 @@ import { errorMessage } from '../../data/rest';
 import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
 import { DetailsEdits } from './DetailsEdits';
+import { CompletedDeadlines } from './Completed';
 import { canEdit, Moderation, moderationFor } from './Moderation';
 
 /**
@@ -35,12 +36,14 @@ export class DeadlinesModel extends Observable {
   private readonly reporterID: string;
 
   readonly details: DetailsEdits;
+  private readonly completed: CompletedDeadlines;
   /** A moderator confirms deadlines for everyone; only an admin may edit someone else's. */
   readonly moderation: Moderation;
 
   constructor(private readonly services: Services) {
     super();
     this.reporterID = services.reporter.current;
+    this.completed = new CompletedDeadlines(services.prefs);
     this.moderation = moderationFor(services.role.current);
     this.details = new DetailsEdits(services, {
       replace: (deadline) => {
@@ -85,6 +88,16 @@ export class DeadlinesModel extends Observable {
 
   isMine(deadline: Deadline): boolean {
     return deadlineBelongsTo(deadline, this.reporterID);
+  }
+
+  /** Ticked off by this student, on this device. */
+  isCompleted(deadline: Deadline): boolean {
+    return this.completed.has(deadline.id);
+  }
+
+  toggleCompleted(deadline: Deadline): void {
+    this.completed.toggle(deadline.id);
+    this.changed();
   }
 
   standing(deadline: Deadline): DeadlineStanding {
