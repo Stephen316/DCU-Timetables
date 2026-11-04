@@ -6,8 +6,8 @@ const moduleName = (key: string) => names.get(key) ?? key;
 const report = (count: number, at = '2026-10-28T09:00:00Z'): Contribution => ({
   kind: 'report', ref: 'EEG1006[1]OC/P1/02|2026-10-28T10:00:00Z', moduleKey: null, title: null, count, happenedAt: new Date(at),
 });
-const deadline = (count: number, at = '2026-10-27T09:00:00Z'): Contribution => ({
-  kind: 'deadline', ref: 'd-1', moduleKey: 'EEG1000', title: 'Reflective essay', count, happenedAt: new Date(at),
+const deadline = (count: number, at = '2026-10-27T09:00:00Z', ref = 'd-1'): Contribution => ({
+  kind: 'deadline', ref, moduleKey: 'EEG1000', title: 'Reflective essay', count, happenedAt: new Date(at),
 });
 
 describe('Contributions', () => {
@@ -24,8 +24,8 @@ describe('Contributions', () => {
 
   test('the newest untold one is next, and a told one is never told again', () => {
     const all = [deadline(2), report(4)];
-    expect(Contributions.next(all, [])?.kind).toBe('report');
-    expect(Contributions.next(all, [Contributions.toldKey(report(4))])?.kind).toBe('deadline');
+    expect(Contributions.next(all, [])?.map((c) => c.kind)).toEqual(['report']);
+    expect(Contributions.next(all, [Contributions.toldKey(report(4))])?.map((c) => c.kind)).toEqual(['deadline']);
     expect(Contributions.next(all, all.map(Contributions.toldKey))).toBeNull();
   });
 
@@ -36,17 +36,35 @@ describe('Contributions', () => {
   test('a report names the class from its key, even one the phone has not loaded', () => {
     expect(Contributions.className(report(4).ref, moduleName)).toBe('Materials Engineering lab');
     expect(Contributions.className('|2026-10-28T10:00:00Z', moduleName)).toBe('your class');
-    expect(Contributions.message(report(4), moduleName).body)
+    expect(Contributions.message([report(4)], moduleName).body)
       .toBe('You and 3 others reported Materials Engineering lab cancelled, so your classmates knew not to go.');
-    expect(Contributions.message(report(2), moduleName).body).toMatch(/^You and 1 other reported/);
+    expect(Contributions.message([report(2)], moduleName).body).toMatch(/^You and 1 other reported/);
     // Only the caller's own report, so an organiser is what called it off.
-    expect(Contributions.message(report(1), moduleName).body).toMatch(/an organiser confirmed it/);
+    expect(Contributions.message([report(1)], moduleName).body).toMatch(/an organiser confirmed it/);
   });
 
   test('a deadline counts the classmates who confirmed it, or says a moderator did', () => {
-    expect(Contributions.message(deadline(3), moduleName))
+    expect(Contributions.message([deadline(3)], moduleName))
       .toEqual({ title: 'Your deadline helped', body: '3 classmates confirmed “Reflective essay” for Professional Development, which you added.' });
-    expect(Contributions.message(deadline(1), moduleName).body).toMatch(/^1 classmate confirmed/);
-    expect(Contributions.message(deadline(0), moduleName).body).toMatch(/^A moderator confirmed/);
+    expect(Contributions.message([deadline(1)], moduleName).body).toMatch(/^1 classmate confirmed/);
+    expect(Contributions.message([deadline(0)], moduleName).body).toMatch(/^A moderator confirmed/);
+  });
+
+  test('untold deadlines are told together on one card, and a report still on its own', () => {
+    const report1 = report(4, '2026-10-26T09:00:00Z');
+    const all = [deadline(2, '2026-10-29T09:00:00Z', 'd-1'), report1, deadline(0, '2026-10-28T09:00:00Z', 'd-2')];
+    const shown = Contributions.next(all, []);
+    expect(shown?.map((c) => c.ref)).toEqual(['d-1', 'd-2']);
+    expect(Contributions.next(all, shown!.map(Contributions.toldKey))).toEqual([report1]);
+  });
+
+  test('more than one deadline says how many, and who confirmed them', () => {
+    const two = [deadline(3, undefined, 'd-1'), deadline(1, undefined, 'd-2')];
+    expect(Contributions.message(two, moduleName))
+      .toEqual({ title: 'Your deadlines helped', body: 'Your classmates confirmed 2 deadlines, which you added.' });
+    expect(Contributions.message([deadline(0, undefined, 'd-1'), deadline(0, undefined, 'd-2')], moduleName).body)
+      .toBe('A moderator confirmed 2 deadlines, which you added.');
+    expect(Contributions.message([deadline(2, undefined, 'd-1'), deadline(0, undefined, 'd-2'), deadline(1, undefined, 'd-3')], moduleName).body)
+      .toBe('Classmates and moderators confirmed 3 deadlines, which you added.');
   });
 });

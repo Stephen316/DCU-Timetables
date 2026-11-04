@@ -42,13 +42,18 @@ export const Contributions = {
   },
 
   /**
-   * The one to tell now: the newest not told before. One at a time, so opening the app is
-   * never a stack of cards; the rest wait for the next launch.
+   * What to tell now: the newest not told before. One card at a time, so opening the app is
+   * never a stack of them; the rest wait for the next launch. Deadlines go together — three
+   * confirmed is one piece of news, not three — so a deadline brings every untold deadline
+   * with it, newest first. A report is told on its own.
    */
-  next(all: Contribution[], told: string[]): Contribution | null {
+  next(all: Contribution[], told: string[]): Contribution[] | null {
     const seen = new Set(told);
-    return [...all].sort((a, b) => b.happenedAt.getTime() - a.happenedAt.getTime())
-      .find((c) => !seen.has(Contributions.toldKey(c))) ?? null;
+    const untold = [...all].sort((a, b) => b.happenedAt.getTime() - a.happenedAt.getTime())
+      .filter((c) => !seen.has(Contributions.toldKey(c)));
+    const first = untold[0];
+    if (!first) return null;
+    return first.kind === 'deadline' ? untold.filter((c) => c.kind === 'deadline') : [first];
   },
 
   /**
@@ -62,8 +67,16 @@ export const Contributions = {
     return `${moduleName(activity.moduleCode)} ${kind}`;
   },
 
-  /** The card's title and body. */
-  message(c: Contribution, moduleName: (moduleKey: string) => string): { title: string; body: string } {
+  /** The card's title and body, for what `next` gave. */
+  message(shown: Contribution[], moduleName: (moduleKey: string) => string): { title: string; body: string } {
+    const c = shown[0];
+    if (shown.length > 1) {
+      // Who confirmed them, as near as the counts say: classmates, a moderator, or both.
+      const byClassmates = shown.some((d) => d.count > 0);
+      const byModerator = shown.some((d) => d.count === 0);
+      const who = byClassmates && byModerator ? 'Classmates and moderators' : byClassmates ? 'Your classmates' : 'A moderator';
+      return { title: 'Your deadlines helped', body: `${who} confirmed ${shown.length} deadlines, which you added.` };
+    }
     if (c.kind === 'report') {
       const others = c.count - 1;
       const what = Contributions.className(c.ref, moduleName);

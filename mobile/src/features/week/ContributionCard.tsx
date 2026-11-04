@@ -17,7 +17,7 @@ export function ContributionCard({ ready }: { ready: boolean }) {
   const week = useWeekModel();
   const [tutorialDue] = usePrefBool(PrefKey.tutorialDue);
   const [told, setTold] = usePrefJSON<string[]>(PrefKey.contributionsTold, []);
-  const [shown, setShown] = useState<Contribution | null>(null);
+  const [shown, setShown] = useState<Contribution[] | null>(null);
   const asked = useRef(false);
 
   // Once per opening of the timetable; whatever else there is waits for the next launch.
@@ -36,7 +36,7 @@ export function ContributionCard({ ready }: { ready: boolean }) {
   }, [ready, tutorialDue, profiles, told, setTold]);
 
   const close = () => {
-    if (shown) setTold([...told, Contributions.toldKey(shown)]);
+    if (shown) setTold([...told, ...shown.map(Contributions.toldKey)]);
     setShown(null);
   };
 
@@ -44,7 +44,7 @@ export function ContributionCard({ ready }: { ready: boolean }) {
   return (
     <BottomCard visible={shown !== null && ready} onClose={close}>
       <View style={styles.body}>
-        <Icon name={shown?.kind === 'deadline' ? 'confirmed' : 'report'} size={30} color={theme.accent} />
+        <Icon name={shown?.[0].kind === 'deadline' ? 'confirmed' : 'report'} size={30} color={theme.accent} />
         <Txt type="headline" style={styles.centred}>{message?.title ?? ''}</Txt>
         <Txt type="subheadline" color={theme.inkSecondary} style={styles.centred}>{message?.body ?? ''}</Txt>
       </View>
