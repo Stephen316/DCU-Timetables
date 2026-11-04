@@ -1,5 +1,5 @@
 import { ReactNode, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 import {
   ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DeadlineFields, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
   DeadlinePlacement, DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, DETAILS_LIMIT, detailsEditedLabel,
@@ -216,7 +216,9 @@ function StandingLine({
     // The trust line on its own, then the buttons: three of them beside it squeeze it to a word a line.
     <View style={styles.standing}>
       <View style={styles.text}>
-        {trust === 'verified' ? (
+        {deadline.isPrivate ? (
+          <Label icon="hide" text="Only you can see this" type="caption2" color={theme.inkSecondary} />
+        ) : trust === 'verified' ? (
           <Label icon="confirmed" text="Confirmed by a moderator" type="caption2" color={theme.tint.confirmed} />
         ) : (
           <Label
@@ -234,7 +236,7 @@ function StandingLine({
         // Swipe-to-delete on iOS; a visible button here, so it can be found without knowing to swipe.
         <View style={[styles.actions, styles.standingActions]}>
           <CompletedButton completed={completed} onPress={actions.onToggleCompleted} />
-          {canVerify ? <VerifyButton deadline={deadline} onPress={actions.onVerify} /> : null}
+          {canVerify && !deadline.isPrivate ? <VerifyButton deadline={deadline} onPress={actions.onVerify} /> : null}
           <InlineAction title="Delete" tint={theme.destructive} onPress={actions.onDelete} />
         </View>
       ) : (
@@ -562,11 +564,13 @@ export function DeadlineForm({
   const [weightText, setWeightText] = useState('');
   const [label, setLabel] = useState('');
   const [details, setDetails] = useState('');
+  // Off unless asked for: a deadline is for the class by default.
+  const [isPrivate, setIsPrivate] = useState(false);
   const detailsProblem = DeadlineRules.detailsProblem(details);
   const weight = DeadlineRules.parseGradeWeight(weightText);
   const now = useNow();
   const problems = DeadlineRules.draftProblems(
-    { moduleKey: choosing ? moduleKey : initial?.moduleKey ?? '', title, due, weightText, label: choosing ? label : '' },
+    { moduleKey: choosing ? moduleKey : initial?.moduleKey ?? '', title, due, weightText, label: choosing && !isPrivate ? label : '' },
     now,
   );
   const valid = Object.keys(problems).length === 0 && !detailsProblem;
@@ -588,6 +592,7 @@ export function DeadlineForm({
       setWeightText(initial && initial.gradeWeight > 0 ? String(initial.gradeWeight) : '');
       setLabel('');
       setDetails(initial?.details ?? '');
+      setIsPrivate(false);
     }
   }
 
@@ -616,8 +621,9 @@ export function DeadlineForm({
           disabled={!valid}
           onPress={() => {
             if (weight === null) return;
-            const fields = { title: title.trim(), kind, due, gradeWeight: weight };
-            if (choosing && moduleKey) onSubmit(fields, details.trim(), { moduleKey, atGroupKey, label });
+            const fields = { title: title.trim(), kind, due, gradeWeight: weight, ...(!editing && isPrivate ? { isPrivate: true } : {}) };
+            // A private one has no shared title for its own name to stand in for.
+            if (choosing && moduleKey) onSubmit(fields, details.trim(), { moduleKey, atGroupKey, label: isPrivate ? '' : label });
             else onSubmit(fields, details.trim());
             onClose();
           }}
@@ -625,7 +631,11 @@ export function DeadlineForm({
       }
     >
       <ListScroll>
-        <Section footer={editing ? editFooter(editing, kind, due, confirms) : 'Everyone taking this module will see this.'}>
+        <Section
+          footer={editing
+            ? editFooter(editing, kind, due, confirms)
+            : isPrivate ? 'Only you will see this.' : 'Everyone taking this module will see this.'}
+        >
           {choosing ? (
             <Row>
               <View style={styles.dueRow}>
@@ -730,10 +740,10 @@ export function DeadlineForm({
               accessibilityLabel="Details"
             />
             <Txt type="caption" color={detailsProblem ? theme.tint.off : theme.inkTertiary}>
-              {detailsProblem ?? 'Optional. Anyone taking the module can change these.'}
+              {detailsProblem ?? (isPrivate || initial?.isPrivate ? 'Optional.' : 'Optional. Anyone taking the module can change these.')}
             </Txt>
           </Row>
-          {choosing ? (
+          {choosing && !isPrivate ? (
             <Row>
               <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Your name for it</Txt>
               <TextInput
@@ -751,6 +761,25 @@ export function DeadlineForm({
               </Txt>
             </Row>
           ) : null}
+          {editing ? null : (
+            <Row>
+              <View style={styles.dueRow}>
+                <Txt type="footnote" color={theme.inkSecondary} style={styles.text}>Only visible to me</Txt>
+                <Switch
+                  value={isPrivate}
+                  onValueChange={setIsPrivate}
+                  trackColor={{ true: theme.accent, false: theme.raised }}
+                  thumbColor={theme.onAccent}
+                  // The browser's switch takes the on colour of its knob separately.
+                  {...{ activeThumbColor: theme.onAccent }}
+                  accessibilityLabel="Only visible to me"
+                />
+              </View>
+              <Txt type="caption" color={theme.inkTertiary}>
+                {"Kept on this device and never shared, so classmates can't see or confirm it."}
+              </Txt>
+            </Row>
+          )}
         </Section>
       </ListScroll>
     </Sheet>

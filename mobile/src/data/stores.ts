@@ -312,7 +312,17 @@ export class SupabaseDeadlineStore implements DeadlineStore {
  * one else's, so there is no one else's content to moderate.
  */
 export class LocalDeadlineStore implements DeadlineStore {
-  constructor(private readonly prefs: Prefs) {}
+  constructor(
+    private readonly prefs: Prefs,
+    private readonly keys: { deadlines: string; confirmations: string } = {
+      deadlines: PrefKey.localDeadlines, confirmations: PrefKey.localConfirmations,
+    },
+  ) {}
+
+  /** Whether this store holds the deadline, so a caller can send what's done to it here. */
+  holds(id: string): boolean {
+    return this.load().some((d) => d.id === id);
+  }
 
   private load(): Deadline[] {
     // Rows saved before status, edits, names and details existed have none of them.
@@ -322,7 +332,7 @@ export class LocalDeadlineStore implements DeadlineStore {
         gradeWeight?: number; details?: string; detailsEditedAt?: number | null;
       };
     return this.prefs
-      .getJSON<Stored[]>(PrefKey.localDeadlines, [])
+      .getJSON<Stored[]>(this.keys.deadlines, [])
       .map((d) => ({
         ...d,
         due: new Date(d.due),
@@ -339,7 +349,7 @@ export class LocalDeadlineStore implements DeadlineStore {
 
   private save(list: Deadline[]): void {
     this.prefs.setJSON(
-      PrefKey.localDeadlines,
+      this.keys.deadlines,
       list.map((d) => ({
         ...d, due: d.due.getTime(), submittedAt: d.submittedAt.getTime(), editedAt: d.editedAt?.getTime() ?? null,
         detailsEditedAt: d.detailsEditedAt?.getTime() ?? null,
@@ -348,7 +358,7 @@ export class LocalDeadlineStore implements DeadlineStore {
   }
 
   private loadConfirmations(): DeadlineConfirmation[] {
-    return this.prefs.getJSON<DeadlineConfirmation[]>(PrefKey.localConfirmations, []);
+    return this.prefs.getJSON<DeadlineConfirmation[]>(this.keys.confirmations, []);
   }
 
   async deadlinesForModule(moduleKey: string): Promise<Deadline[]> {
@@ -397,12 +407,12 @@ export class LocalDeadlineStore implements DeadlineStore {
   async confirm(deadlineID: string, confirmerID: string): Promise<void> {
     const all = this.loadConfirmations();
     if (all.some((c) => c.deadlineID === deadlineID && c.confirmerID === confirmerID)) return;
-    this.prefs.setJSON(PrefKey.localConfirmations, [...all, { deadlineID, confirmerID }]);
+    this.prefs.setJSON(this.keys.confirmations, [...all, { deadlineID, confirmerID }]);
   }
 
   async unconfirm(deadlineID: string, confirmerID: string): Promise<void> {
     this.prefs.setJSON(
-      PrefKey.localConfirmations,
+      this.keys.confirmations,
       this.loadConfirmations().filter((c) => !(c.deadlineID === deadlineID && c.confirmerID === confirmerID)),
     );
   }
@@ -412,6 +422,64 @@ export class LocalDeadlineStore implements DeadlineStore {
   async hideAuthor(): Promise<void> {}
   async hiddenAuthorCount(): Promise<number> { return 0; }
   async unhideAllAuthors(): Promise<void> {}
+}
+
+/**
+ * Deadlines a student keeps to themselves, beside the shared ones. Their own are kept on the
+ * device and never sent anywhere, so nobody else — moderators included — can see them, and
+ * everything done to one stays here too. Read back only for the account that made them,
+ * since the device outlives a sign-out.
+ */
+export class PrivateDeadlineStore implements DeadlineStore {
+  private readonly own: LocalDeadlineStore;
+
+  constructor(private readonly shared: DeadlineStore, prefs: Prefs, private readonly ownerID: () => string) {
+    this.own = new LocalDeadlineStore(prefs, { deadlines: PrefKey.privateDeadlines, confirmations: PrefKey.privateConfirmations });
+  }
+
+  private mine(list: Deadline[]): Deadline[] {
+    return list.filter((d) => d.submitterID === this.ownerID()).map((d) => ({ ...d, isPrivate: true, isMine: true }));
+  }
+
+  /** Where a deadline's changes go: here if it's a private one, otherwise to everyone's. */
+  private storeFor(id: string): DeadlineStore {
+    return this.own.holds(id) ? this.own : this.shared;
+  }
+
+  async deadlinesForModule(moduleKey: string): Promise<Deadline[]> {
+    const [shared, own] = await Promise.all([this.shared.deadlinesForModule(moduleKey), this.own.deadlinesForModule(moduleKey)]);
+    return DeadlineRules.upcoming([...shared, ...this.mine(own)]);
+  }
+
+  async deadlinesForModules(moduleKeys: string[]): Promise<Deadline[]> {
+    const [shared, own] = await Promise.all([this.shared.deadlinesForModules(moduleKeys), this.own.deadlinesForModules(moduleKeys)]);
+    return DeadlineRules.upcoming([...shared, ...this.mine(own)]);
+  }
+
+  submit(deadline: Deadline): Promise<void> {
+    return deadline.isPrivate ? this.own.submit(deadline) : this.shared.submit(deadline);
+  }
+
+  edit(id: string, fields: DeadlineFields): Promise<void> { return this.storeFor(id).edit(id, fields); }
+  setLabel(id: string, label: string | null): Promise<void> { return this.storeFor(id).setLabel(id, label); }
+  setDetails(id: string, details: string): Promise<void> { return this.storeFor(id).setDetails(id, details); }
+  verify(id: string, verified: boolean): Promise<void> { return this.storeFor(id).verify(id, verified); }
+  withdraw(id: string, submitterID: string): Promise<void> { return this.storeFor(id).withdraw(id, submitterID); }
+
+  async standings(ids: string[]): Promise<Map<string, DeadlineStanding>> {
+    const own = ids.filter((id) => this.own.holds(id));
+    const shared = ids.filter((id) => !this.own.holds(id));
+    const [a, b] = await Promise.all([shared.length > 0 ? this.shared.standings(shared) : new Map(), this.own.standings(own)]);
+    return new Map([...a, ...b]);
+  }
+
+  confirm(deadlineID: string, confirmerID: string): Promise<void> { return this.storeFor(deadlineID).confirm(deadlineID, confirmerID); }
+  unconfirm(deadlineID: string, confirmerID: string): Promise<void> { return this.storeFor(deadlineID).unconfirm(deadlineID, confirmerID); }
+  report(deadlineID: string, reason: DeadlineReportReason): Promise<void> { return this.storeFor(deadlineID).report(deadlineID, reason); }
+  withdrawReport(deadlineID: string): Promise<void> { return this.storeFor(deadlineID).withdrawReport(deadlineID); }
+  hideAuthor(deadlineID: string): Promise<void> { return this.storeFor(deadlineID).hideAuthor(deadlineID); }
+  hiddenAuthorCount(): Promise<number> { return this.shared.hiddenAuthorCount(); }
+  unhideAllAuthors(): Promise<void> { return this.shared.unhideAllAuthors(); }
 }
 
 // MARK: - Verdicts

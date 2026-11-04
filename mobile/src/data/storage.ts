@@ -144,4 +144,7 @@ export const PrefKey = {
   localReports: 'local:cancellationReports',
   localDeadlines: 'local:deadlines',
   localConfirmations: 'local:deadlineConfirmations',
+  /** Deadlines only their poster sees (`PrivateDeadlineStore`), which never leave the device. */
+  privateDeadlines: 'private:deadlines',
+  privateConfirmations: 'private:deadlineConfirmations',
 } as const;

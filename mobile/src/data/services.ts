@@ -15,7 +15,7 @@ import {
 import { AsyncKV, PrefKey, Prefs } from './storage';
 import {
   CancellationStore, DeadlineStore, LocalCancellationStore, LocalDeadlineStore, LocalProfileStore, LocalVerdictStore,
-  ProfileStore, SupabaseCancellationStore, SupabaseDeadlineStore, SupabaseProfileStore, SupabaseVerdictStore,
+  PrivateDeadlineStore, ProfileStore, SupabaseCancellationStore, SupabaseDeadlineStore, SupabaseProfileStore, SupabaseVerdictStore,
   VerdictStore,
 } from './stores';
 import { TimetableCache } from './timetable';
@@ -116,7 +116,7 @@ export async function createServices(platform: Platform): Promise<Services> {
     role,
     auth: config ? new SupabaseAuthService(config, session, fetchFn) : null,
     cancellations: rest ? new SupabaseCancellationStore(rest) : new LocalCancellationStore(prefs),
-    deadlines: rest ? new SupabaseDeadlineStore(rest) : new LocalDeadlineStore(prefs),
+    deadlines: new PrivateDeadlineStore(rest ? new SupabaseDeadlineStore(rest) : new LocalDeadlineStore(prefs), prefs, () => reporter.current),
     verdicts: rest ? new SupabaseVerdictStore(rest) : new LocalVerdictStore(),
     profiles: rest ? new SupabaseProfileStore(rest) : new LocalProfileStore(user),
     allocations: rest ? new SupabaseAllocationStore(rest) : null,

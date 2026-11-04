@@ -8,7 +8,7 @@ import { AlertScheduler } from './alerts';
 import { createServices, Services } from './services';
 import { SecretStore } from './session';
 import { AsyncKV, MemoryKV, PrefKey } from './storage';
-import { CancellationStore, DeadlineStore } from './stores';
+import { CancellationStore, DeadlineStore, PrivateDeadlineStore } from './stores';
 
 /**
  * Fixture data for looking at screens without a network or an account: a plausible
@@ -193,6 +193,7 @@ export async function createPreviewServices(_deviceKV: AsyncKV, alerts?: AlertSc
   const services = await createServices({ kv, secrets: secretStore, env: {}, alerts });
   services.sourceOverride = new PreviewTimetableSource();
   services.cancellations = new PreviewCancellationStore();
-  services.deadlines = new PreviewDeadlineStore();
+  // Private ones still go round the fixture, as they would round the server.
+  services.deadlines = new PrivateDeadlineStore(new PreviewDeadlineStore(), services.prefs, () => services.reporter.current);
   return services;
 }

@@ -47,6 +47,8 @@ export interface DeadlineFields {
   due: Date;
   /** Whole percent of the module's grade. 0 means not graded. */
   gradeWeight: number;
+  /** Set only when adding: kept on this device for its poster alone. */
+  isPrivate?: boolean;
 }
 
 /**
@@ -123,6 +125,8 @@ export interface Deadline {
   details: string;
   /** When the details last changed. Who changed them is the console's to know, not the class's. */
   detailsEditedAt: Date | null;
+  /** Only its poster sees it, and it never leaves their device. Absent means shared. */
+  isPrivate?: boolean;
 }
 
 export function makeDeadline(fields: {
@@ -141,6 +145,7 @@ export function makeDeadline(fields: {
   gradeWeight?: number;
   details?: string;
   detailsEditedAt?: Date | null;
+  isPrivate?: boolean;
 }): Deadline {
   return {
     id: fields.id ?? uuid(),
@@ -158,6 +163,7 @@ export function makeDeadline(fields: {
     gradeWeight: fields.gradeWeight ?? 0,
     details: fields.details ?? '',
     detailsEditedAt: fields.detailsEditedAt ?? null,
+    ...(fields.isPrivate ? { isPrivate: true } : {}),
   };
 }
 

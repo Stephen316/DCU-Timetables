@@ -199,6 +199,12 @@ reads **Confirm** for everyone, and for a moderator saving through it is the con
 - **What it's worth.** The form has a "Worth" box for the percentage of the module's grade,
   a whole number from 0 to 100. Blank or 0 means not graded, and every row says so ("Not
   graded", or "20% of the grade"). Changing only the weight keeps the confirmations.
+- **A deadline can be kept private** when it's added: **Only visible to me**, at the bottom of
+  the form, off by default. A private one never leaves the device (`PrivateDeadlineStore`,
+  beside the shared store), so no classmate or moderator can see it, confirm it or be sent a
+  push about it, and it isn't on the student's other devices. It reads "Only you can see
+  this" where the others say who has confirmed them, and is shown only to the account that
+  made it.
 - **Anyone ticks a deadline off** with **Mark done**, in green on every row. A tick sweeps
   across the row, which settles green, and the button reads **Completed**; pressing it again
   unticks it. It's a reminder to
