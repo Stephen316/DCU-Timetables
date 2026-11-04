@@ -299,8 +299,9 @@ begin
   -- Anything left to send, new or retried: wake the Edge Function. The request goes when
   -- this transaction commits. Without the Vault secrets (docs/PUSH.md) the outbox fills and
   -- waits, rather than the whole run failing and taking the queued rows with it.
-  select decrypted_secret into fn_url from vault.decrypted_secrets where name = 'push_function_url';
-  select decrypted_secret into fn_key from vault.decrypted_secrets where name = 'push_function_key';
+  -- Trimmed: a value pasted from Terminal can carry its line break into Vault.
+  select btrim(decrypted_secret, E' \n\r\t') into fn_url from vault.decrypted_secrets where name = 'push_function_url';
+  select btrim(decrypted_secret, E' \n\r\t') into fn_key from vault.decrypted_secrets where name = 'push_function_key';
   if fn_url is not null and fn_key is not null
      and exists (select 1 from public.push_outbox
                   where sent_at is null and attempts < 3

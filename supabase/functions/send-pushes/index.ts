@@ -55,7 +55,8 @@ interface Notice {
 }
 
 Deno.serve(async (req) => {
-  const key = Deno.env.get('PUSH_FUNCTION_KEY');
+  // Trimmed: a key pasted from Terminal can carry its line break into the secret.
+  const key = Deno.env.get('PUSH_FUNCTION_KEY')?.trim();
   if (!key || req.headers.get('Authorization') !== `Bearer ${key}`) return new Response('not allowed', { status: 401 });
 
   const started = Date.now();
