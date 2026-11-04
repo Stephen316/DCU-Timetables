@@ -19,11 +19,12 @@ const BUDGET_MS = 100_000;
 /** A class or deadline notification is worth little after a few hours. */
 const TTL_SECONDS = 6 * 60 * 60;
 
+// Trimmed, like the function key below: pasted secrets can carry a stray space or line break.
 webpush.setVapidDetails(
   // Who the push services can contact about these messages: the public site, by default.
-  Deno.env.get('VAPID_SUBJECT') ?? 'https://stephen316.github.io/DCU-Timetables/',
-  Deno.env.get('VAPID_PUBLIC_KEY')!,
-  Deno.env.get('VAPID_PRIVATE_KEY')!,
+  Deno.env.get('VAPID_SUBJECT')?.trim() || 'https://stephen316.github.io/DCU-Timetables/',
+  Deno.env.get('VAPID_PUBLIC_KEY')!.trim(),
+  Deno.env.get('VAPID_PRIVATE_KEY')!.trim(),
 );
 
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
