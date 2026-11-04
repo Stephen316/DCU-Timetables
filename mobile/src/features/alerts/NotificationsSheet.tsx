@@ -86,10 +86,12 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
   // Read on every render rather than kept: permission can change in Settings while the app
   // is away, and reading it costs nothing. `refresh` re-renders on the way back.
   const availability = webPush.availability();
-  const [, refresh] = useReducer((n: number) => n + 1, 0);
+  const [checked, refresh] = useReducer((n: number) => n + 1, 0);
   const [saved, setSaved] = usePrefJSON<unknown>(PrefKey.pushKinds, null);
   const kinds = PushKindsRules.read(saved);
   const [asking, setAsking] = useState(false);
+  /** Allowed, but nothing to send to: never subscribed here, or subscribed with old keys. */
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -98,6 +100,15 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
     });
     return () => sub.remove();
   }, [visible]);
+
+  useEffect(() => {
+    if (!visible || availability !== 'granted') return;
+    let current = true;
+    void webPush.subscribed().then((yes) => current && setSubscribed(yes));
+    return () => {
+      current = false;
+    };
+  }, [visible, availability, checked, webPush]);
 
   const turnOn = () => {
     setAsking(true);
@@ -112,6 +123,11 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
   };
   const set = (which: keyof PushKinds, on: boolean) => setSaved({ ...kinds, [which]: on });
 
+  const ask = (
+    <Section footer="Get a notification when one of your classes is cancelled or moved, a classmate adds a deadline for one of your modules, or a deadline is close.">
+      <ActionRow title="Turn On Notifications" icon="bell" onPress={turnOn} busy={asking} />
+    </Section>
+  );
   switch (availability) {
     case 'addToHomeScreen':
       return <Section footer="To get notifications on an iPhone, add DCU Timetable to your Home Screen and open it from there: tap ⋯, then Share, View More and Add to Home Screen." />;
@@ -120,12 +136,9 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
     case 'denied':
       return <Section footer="Notifications for DCU Timetable are turned off. Turn them on in your browser's or phone's settings, then come back here." />;
     case 'ask':
-      return (
-        <Section footer="Get a notification when one of your classes is cancelled or moved, a classmate adds a deadline for one of your modules, or a deadline is close.">
-          <ActionRow title="Turn On Notifications" icon="bell" onPress={turnOn} busy={asking} />
-        </Section>
-      );
+      return ask;
     case 'granted':
+      if (subscribed === false) return ask;
       return (
         <Section
           header="Notify me when"

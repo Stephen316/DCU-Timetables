@@ -12,6 +12,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
+import { Buffer } from 'node:buffer';
+import { createECDH } from 'node:crypto';
 
 const BATCH = 200;
 /** Stops taking new batches with room to spare before the platform's wall-clock limit. */
@@ -59,6 +61,7 @@ Deno.serve(async (req) => {
   // Trimmed: a key pasted from Terminal can carry its line break into the secret.
   const key = Deno.env.get('PUSH_FUNCTION_KEY')?.trim();
   if (!key || req.headers.get('Authorization') !== `Bearer ${key}`) return new Response('not allowed', { status: 401 });
+  if (new URL(req.url).searchParams.has('check')) return Response.json(checkKeys());
 
   const started = Date.now();
   let sent = 0;
@@ -87,16 +90,39 @@ async function send(row: Row): Promise<boolean> {
     await db.from('push_outbox').update({ sent_at: new Date().toISOString(), error: null }).eq('id', row.id);
     return true;
   } catch (e) {
-    const status = (e as { statusCode?: number }).statusCode;
+    const { statusCode: status, body } = e as { statusCode?: number; body?: string };
     if (status === 404 || status === 410) {
       await db.from('push_subscriptions').delete().eq('id', row.subscription_id);
     } else {
-      // Left claimed: a later run takes it again once the claim runs out.
+      // Left claimed: a later run takes it again once the claim runs out. The push service's
+      // own status and reason, not web-push's "unexpected response code", which says neither.
       const message = e instanceof Error ? e.message : String(e);
-      await db.from('push_outbox').update({ error: message.slice(0, 500) }).eq('id', row.id);
+      const detail = status ? `${status} ${body ?? ''} (${message})` : message;
+      await db.from('push_outbox').update({ error: detail.trim().slice(0, 500) }).eq('id', row.id);
     }
     return false;
   }
+}
+
+/**
+ * `?check`: which VAPID public key this function signs as, by its first and last 8
+ * characters, and whether the private key is that key's other half. Apple's
+ * VapidPkHashMismatch means the public key differs from the one the phone subscribed with
+ * (the website's EXPO_PUBLIC_VAPID_PUBLIC_KEY). Shows nothing secret: the private key only
+ * goes in, as the public key it works out to.
+ */
+function checkKeys() {
+  const publicKey = Deno.env.get('VAPID_PUBLIC_KEY')?.trim() ?? '';
+  const ends = (k: string) => ({ starts: k.slice(0, 8), ends: k.slice(-8), length: k.length });
+  let fromPrivate = '';
+  try {
+    const ecdh = createECDH('prime256v1');
+    ecdh.setPrivateKey(Buffer.from(Deno.env.get('VAPID_PRIVATE_KEY')?.trim() ?? '', 'base64url'));
+    fromPrivate = ecdh.getPublicKey('base64url');
+  } catch {
+    fromPrivate = '';
+  }
+  return { publicKey: ends(publicKey), privateKeyGives: ends(fromPrivate), pairMatches: fromPrivate !== '' && fromPrivate === publicKey };
 }
 
 // MARK: - Wording

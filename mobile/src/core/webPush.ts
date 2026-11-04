@@ -103,3 +103,15 @@ export function vapidKeyBytes(base64url: string): Uint8Array<ArrayBuffer> {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
 }
+
+/**
+ * Whether a subscription was made with this key (`PushSubscription.options.applicationServerKey`).
+ * A browser that can't say is given the benefit of the doubt: dropping a good subscription
+ * would cost more than keeping a stale one, which the server deletes once it's refused.
+ */
+export function sameVapidKey(subscribedWith: ArrayBuffer | null | undefined, base64url: string): boolean {
+  if (!subscribedWith) return true;
+  const want = vapidKeyBytes(base64url);
+  const have = new Uint8Array(subscribedWith);
+  return have.length === want.length && have.every((b, i) => b === want[i]);
+}

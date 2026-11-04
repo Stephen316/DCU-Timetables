@@ -1,5 +1,5 @@
 import { CancellationRules } from '../src/core/cancellation';
-import { PushEnvironment, pushAvailability, PushKindsRules, PushTargetsRules, vapidKeyBytes } from '../src/core/webPush';
+import { PushEnvironment, pushAvailability, PushKindsRules, PushTargetsRules, sameVapidKey, vapidKeyBytes } from '../src/core/webPush';
 import { at, event } from './helpers';
 
 const desktop: PushEnvironment = {
@@ -65,4 +65,15 @@ describe('Web push targets', () => {
 test('a base64url VAPID key decodes to its bytes', () => {
   // "hello?" in base64 is aGVsbG8/ — base64url writes the / as _ and drops padding.
   expect([...vapidKeyBytes('aGVsbG8_')]).toEqual([...Buffer.from('hello?')]);
+});
+
+// Changing the keys leaves the phone subscribed with the old one, which Apple refuses
+// (VapidPkHashMismatch) until it's replaced.
+test('a subscription made with another key is told apart from one made with this key', () => {
+  const key = 'aGVsbG8_';
+  expect(sameVapidKey(vapidKeyBytes(key).buffer, key)).toBe(true);
+  expect(sameVapidKey(vapidKeyBytes('aGVsbG9_').buffer, key)).toBe(false);
+  expect(sameVapidKey(vapidKeyBytes('aGVsbA').buffer, key)).toBe(false);
+  // A browser that doesn't say which key it used keeps its subscription.
+  expect(sameVapidKey(null, key)).toBe(true);
 });

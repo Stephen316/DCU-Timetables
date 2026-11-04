@@ -110,6 +110,28 @@ select status_code, content from net._http_response order by created desc limit 
 
 The function's own log is under Supabase → Edge Functions → send-pushes → Logs.
 
+## When a push is refused
+
+`push_outbox.error` keeps the push service's own status and reason. The one to expect:
+
+- **`400 {"reason":"VapidPkHashMismatch"}`** (Apple): the phone subscribed with a different
+  public key from the one the function signs with. The three copies of the public key
+  (`EXPO_PUBLIC_VAPID_PUBLIC_KEY` in GitHub, `VAPID_PUBLIC_KEY` in the function's secrets,
+  and `mobile/.env.local`) must be one key, and `VAPID_PRIVATE_KEY` its other half. To see
+  which key the function has, and whether its private key matches:
+
+  ```sql
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'push_function_url') || '?check',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || (select btrim(decrypted_secret) from vault.decrypted_secrets where name = 'push_function_key')));
+  -- then, a moment later:
+  select content from net._http_response order by created desc limit 1;
+  ```
+
+  It answers with the first and last 8 characters of the public key, and `pairMatches`.
+  Once the keys agree and the site is rebuilt, open Notifications on the phone: a
+  subscription made with the old key is dropped, and Turn On makes a new one.
+
 ## Turning it off
 
 ```sql

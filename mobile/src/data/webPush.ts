@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import {
-  PushAvailability, pushAvailability, PushKinds, PushKindsRules, PushTargets, PushTargetsRules, vapidKeyBytes,
+  PushAvailability, pushAvailability, PushKinds, PushKindsRules, PushTargets, PushTargetsRules, sameVapidKey, vapidKeyBytes,
 } from '../core/webPush';
 import { notSignedIn, SupabaseREST } from './rest';
 import { PrefKey, Prefs } from './storage';
@@ -77,13 +77,24 @@ export class WebPush {
   }
 
   /**
+   * Whether this browser has a subscription the server can send to: one made with today's
+   * key. One made with another (the keys were changed) is dropped here, so the sheet offers
+   * to turn notifications on again.
+   */
+  async subscribed(): Promise<boolean> {
+    if (this.availability() !== 'granted') return false;
+    return (await this.subscription(false).catch(() => null)) !== null;
+  }
+
+  /**
    * Asks, from the tap itself: Safari only shows the question for a tap, and only if
-   * nothing is awaited before it. Granted, everything is turned on and sent up.
+   * nothing is awaited before it. Granted, everything is turned on and sent up. Also from
+   * the tap when permission is already given but there's no subscription to send to.
    */
   async turnOn(): Promise<PushAvailability> {
-    if (this.availability() !== 'ask') return this.availability();
-    const answer = await Notification.requestPermission();
-    if (answer !== 'granted') return this.availability();
+    const before = this.availability();
+    if (before !== 'ask' && before !== 'granted') return before;
+    if (before === 'ask' && (await Notification.requestPermission()) !== 'granted') return this.availability();
     await this.subscription(true);
     // Sent whatever was sent before: this may be a new subscription for the same kinds.
     this.prefs.set(PrefKey.pushSent, null);
@@ -143,15 +154,22 @@ export class WebPush {
   /**
    * This browser's subscription, made when `create` and there isn't one. Registers the
    * service worker now if the offline copy hasn't yet (it waits for the page to go quiet).
+   * One made with another key is unsubscribed: the push service refuses every send to it
+   * (Apple's VapidPkHashMismatch), and it can't be moved onto the new key, only replaced.
    */
   private async subscription(create: boolean): Promise<PushSubscription | null> {
     const root = webAppRoot();
     const registration = (await navigator.serviceWorker.getRegistration(root))
       ?? (create ? await navigator.serviceWorker.register(`${root}sw.js`, { scope: root }) : null);
-    if (!registration) return null;
+    if (!registration || !this.vapidKey) return null;
     const ready = await navigator.serviceWorker.ready;
-    const existing = await ready.pushManager.getSubscription();
-    if (existing || !create || !this.vapidKey) return existing;
+    let existing = await ready.pushManager.getSubscription();
+    if (existing && !sameVapidKey(existing.options.applicationServerKey, this.vapidKey)) {
+      await existing.unsubscribe().catch(() => undefined);
+      this.prefs.set(PrefKey.pushSent, null);
+      existing = null;
+    }
+    if (existing || !create) return existing;
     return ready.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyBytes(this.vapidKey) });
   }
 }
