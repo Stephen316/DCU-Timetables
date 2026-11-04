@@ -30,6 +30,7 @@ export class SupabasePushSubscriptionStore implements PushSubscriptionStore {
         p_event_keys: s.targets.eventKeys, p_module_keys: s.targets.moduleKeys, p_module_names: s.targets.moduleNames,
         p_class_status: s.kinds.classStatus, p_new_deadlines: s.kinds.newDeadlines,
         p_deadline_reminders: s.kinds.deadlineReminders, p_done_deadlines: s.targets.doneDeadlines,
+        p_class_alerts: s.kinds.classAlerts, p_event_details: s.targets.eventDetails,
       },
     });
   }

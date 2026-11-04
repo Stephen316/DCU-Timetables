@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
 import { CancellationStatus } from '../core/cancellation';
 import { Deadline, DeadlineKind, DeadlineRules, displayTitle, isSatInClass } from '../core/deadline';
-import { parsedLocations } from '../core/roomLocation';
+import { roomCodes } from '../core/roomLocation';
 import { isoSeconds } from '../core/time';
-import { isOnline, moduleCodeOf, shortTitleOf, TimetableEvent } from '../core/timetableEvent';
+import { moduleCodeOf, shortTitleOf, TimetableEvent } from '../core/timetableEvent';
 
 /**
  * What the home-screen widgets draw, flattened — the app's half of the Swift widget
@@ -69,8 +69,7 @@ export const WidgetSnapshotPublisher = {
    * class with no room says so; otherwise the widget would put the module code there.
    */
   room(event: TimetableEvent): string {
-    const rooms = parsedLocations(event).map((l) => l.code).filter((c) => c.length > 0).join(' · ');
-    return rooms === '' && isOnline(event) ? 'Online' : rooms;
+    return roomCodes(event);
   },
 
   widgetClass(event: TimetableEvent, status: CancellationStatus): WidgetClass {

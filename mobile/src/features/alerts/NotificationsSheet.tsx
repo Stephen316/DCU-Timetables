@@ -124,7 +124,7 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
   const set = (which: keyof PushKinds, on: boolean) => setSaved({ ...kinds, [which]: on });
 
   const ask = (
-    <Section footer="Get a notification when one of your classes is cancelled or moved, a classmate adds a deadline for one of your modules, or a deadline is close.">
+    <Section footer="Get a notification before each of your classes, when one is cancelled or moved, when a classmate adds a deadline for one of your modules, and when a deadline is close.">
       <ActionRow title="Turn On Notifications" icon="bell" onPress={turnOn} busy={asking} />
     </Section>
   );
@@ -144,6 +144,7 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
           header="Notify me when"
           footer="Classes are covered for this week and next, the weeks the app has loaded, so open it at least once a week. Deadlines you've ticked off get no reminders."
         >
+          <ToggleRow value={kinds.classAlerts} onChange={(on) => set('classAlerts', on)}><Txt>A class starts in 15 minutes</Txt></ToggleRow>
           <ToggleRow value={kinds.classStatus} onChange={(on) => set('classStatus', on)}><Txt>A class is cancelled or moved</Txt></ToggleRow>
           <ToggleRow value={kinds.newDeadlines} onChange={(on) => set('newDeadlines', on)}><Txt>A deadline is added</Txt></ToggleRow>
           <ToggleRow value={kinds.deadlineReminders} onChange={(on) => set('deadlineReminders', on)}><Txt>A deadline is due tomorrow, and 3 hours before</Txt></ToggleRow>

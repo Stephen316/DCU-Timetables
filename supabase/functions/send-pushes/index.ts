@@ -47,7 +47,8 @@ type Payload =
   | { type: 'verdict'; eventKey: string; state: 'cancelled' | 'moved' | 'running'; room?: string | null; start?: string | null; note?: string | null; by?: string | null; names: Record<string, string> }
   | { type: 'crowd'; eventKey: string; count: number; names: Record<string, string> }
   | { type: 'deadline'; id: string; moduleKey: string; title: string; dueAt: string; kind: string; names: Record<string, string> }
-  | { type: 'reminder'; when: 'day' | 'soon'; id: string; moduleKey: string; title: string; dueAt: string; kind: string; names: Record<string, string> };
+  | { type: 'reminder'; when: 'day' | 'soon'; id: string; moduleKey: string; title: string; dueAt: string; kind: string; names: Record<string, string> }
+  | { type: 'alert'; eventKey: string; start: string; moved: boolean | null; room?: string | null; title?: string | null; place?: string | null; names: Record<string, string> };
 
 /** What the service worker shows (mobile/public/sw.js): `path` is under the app's folder. */
 interface Notice {
@@ -85,7 +86,7 @@ async function send(row: Row): Promise<boolean> {
     await webpush.sendNotification(
       { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
       JSON.stringify(notice(row.payload)),
-      { TTL: TTL_SECONDS, urgency: 'high' },
+      { TTL: ttl(row.payload), urgency: 'high' },
     );
     await db.from('push_outbox').update({ sent_at: new Date().toISOString(), error: null }).eq('id', row.id);
     return true;
@@ -123,6 +124,12 @@ function checkKeys() {
     fromPrivate = '';
   }
   return { publicKey: ends(publicKey), privateKeyGives: ends(fromPrivate), pairMatches: fromPrivate !== '' && fromPrivate === publicKey };
+}
+
+/** How long the push service may hold it: a class alert is worth nothing once the class has started. */
+function ttl(p: Payload): number {
+  if (p.type !== 'alert') return TTL_SECONDS;
+  return Math.max(60, Math.floor((new Date(p.start).getTime() - Date.now()) / 1000));
 }
 
 // MARK: - Wording
@@ -169,6 +176,16 @@ function due(iso: string): string {
 }
 
 function notice(p: Payload): Notice {
+  if (p.type === 'alert') {
+    // "Fund. of Prof. Dev." over "In 15 mins · SA301": the week grid's short name and the
+    // room's code, as the phone sent them. A class moved by an organiser says where it went.
+    const minutes = Math.round((new Date(p.start).getTime() - Date.now()) / 60_000);
+    const when = minutes <= 1 ? 'Starting now' : `In ${minutes} mins`;
+    const title = p.title || capitalised(className(p.eventKey, p.names));
+    const room = (p.moved && p.room) || p.place || '';
+    const moved = p.moved ? `moved to ${clock(p.start)}` : '';
+    return { title, body: [when, moved, room].filter((part) => part !== '').join(' · '), tag: `class:${p.eventKey}`, path: '' };
+  }
   if (p.type === 'reminder') {
     const module = p.names[p.moduleKey] ?? p.moduleKey;
     const day = dublinDay(new Date(p.dueAt)) === dublinDay(new Date()) ? 'today' : 'tomorrow';

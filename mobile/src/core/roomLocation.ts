@@ -1,4 +1,4 @@
-import { TimetableEvent } from './timetableEvent';
+import { isOnline, TimetableEvent } from './timetableEvent';
 
 /** A DCU campus. */
 export type Campus = 'glasnevin' | 'stPatricks' | 'allHallows';
@@ -130,6 +130,15 @@ export function roomShortText(location: RoomLocation): string {
   if (location.buildingName === null) return location.code;
   if (location.room === null) return location.buildingName;
   return `${location.buildingName}, Room ${location.room}`;
+}
+
+/**
+ * Rooms as bare codes ("FT301"), not "Polaris, Room 301", for one short line: the widget's
+ * rows and a class alert. An online class with no room says so.
+ */
+export function roomCodes(event: TimetableEvent): string {
+  const rooms = parsedLocations(event).map((l) => l.code).filter((c) => c.length > 0).join(' · ');
+  return rooms === '' && isOnline(event) ? 'Online' : rooms;
 }
 
 export function parsedLocations(event: TimetableEvent): RoomLocation[] {

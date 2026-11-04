@@ -1,6 +1,7 @@
 import { CancellationRules } from './cancellation';
+import { roomCodes } from './roomLocation';
 import { DeadlineRules } from './deadline';
-import { TimetableEvent } from './timetableEvent';
+import { compactTitleOf, TimetableEvent } from './timetableEvent';
 
 /**
  * Notifications for the web build, pushed by the server (supabase/phase37_web_push.sql)
@@ -46,17 +47,26 @@ export interface PushKinds {
   newDeadlines: boolean;
   /** A day before each deadline on the student's modules, and 3 hours before. */
   deadlineReminders: boolean;
+  /** 15 minutes before each class, as the native app's default class alert. */
+  classAlerts: boolean;
 }
 
 export const PushKindsRules = {
-  off: { classStatus: false, newDeadlines: false, deadlineReminders: false } as PushKinds,
+  off: { classStatus: false, newDeadlines: false, deadlineReminders: false, classAlerts: false } as PushKinds,
   /** What turning notifications on chooses: everything, since that's what the student asked for. */
-  on: { classStatus: true, newDeadlines: true, deadlineReminders: true } as PushKinds,
+  on: { classStatus: true, newDeadlines: true, deadlineReminders: true, classAlerts: true } as PushKinds,
 
-  /** Saved kinds, read defensively: anything unrecognised is off. */
+  /**
+   * Saved kinds, read defensively: anything unrecognised is off. Class alerts came later, so
+   * a student who turned notifications on before them has them on unless they say otherwise.
+   */
   read(saved: unknown): PushKinds {
-    const s = (saved ?? {}) as Partial<Record<keyof PushKinds, unknown>>;
-    return { classStatus: s.classStatus === true, newDeadlines: s.newDeadlines === true, deadlineReminders: s.deadlineReminders === true };
+    if (saved === null || typeof saved !== 'object') return PushKindsRules.off;
+    const s = saved as Partial<Record<keyof PushKinds, unknown>>;
+    return {
+      classStatus: s.classStatus === true, newDeadlines: s.newDeadlines === true,
+      deadlineReminders: s.deadlineReminders === true, classAlerts: s.classAlerts !== false,
+    };
   },
 };
 
@@ -68,6 +78,11 @@ export interface PushTargets {
   moduleNames: Record<string, string>;
   /** Deadlines the student has ticked off, which get no reminder. Ticks live on the phone. */
   doneDeadlines: string[];
+  /**
+   * Each followed class as its alert names it, since the server knows only its key: the
+   * week grid's short name ("Fund. of Prof. Dev.") and its rooms as codes ("SA301").
+   */
+  eventDetails: Record<string, { title: string; room: string }>;
 }
 
 export const PushTargetsRules = {
@@ -86,12 +101,18 @@ export const PushTargetsRules = {
       const name = moduleNames.get(key);
       if (name) names[key] = name;
     }
-    return { eventKeys, moduleKeys, moduleNames: names, doneDeadlines: [] };
+    const followed = new Set(eventKeys);
+    const eventDetails: PushTargets['eventDetails'] = {};
+    for (const e of ahead) {
+      const key = CancellationRules.eventKey(e);
+      if (followed.has(key) && !eventDetails[key]) eventDetails[key] = { title: compactTitleOf(e), room: roomCodes(e) };
+    }
+    return { eventKeys, moduleKeys, moduleNames: names, doneDeadlines: [], eventDetails };
   },
 
   /** What was last sent, to send again only on a change. Order-insensitive for event keys. */
   signature(endpoint: string, kinds: PushKinds, targets: PushTargets): string {
-    return JSON.stringify([endpoint, kinds, [...targets.eventKeys].sort(), targets.moduleKeys, targets.moduleNames, targets.doneDeadlines]);
+    return JSON.stringify([endpoint, kinds, [...targets.eventKeys].sort(), targets.moduleKeys, targets.moduleNames, targets.doneDeadlines, targets.eventDetails]);
   },
 };
 

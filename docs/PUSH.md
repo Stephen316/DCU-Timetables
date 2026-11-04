@@ -2,7 +2,7 @@
 
 The Home Screen web app can't schedule a notification of its own, so the server pushes
 them: when one of a student's classes is cancelled or moved, when a classmate adds a
-deadline on one of their modules, and before a deadline is due. Everything runs on the free Supabase plan.
+deadline on one of their modules, before a deadline is due, and 15 minutes before each class. Everything runs on the free Supabase plan.
 
 ## How it fits together
 
@@ -26,8 +26,8 @@ sw.js `notificationclick` → opens the app (the Deadlines tab for a deadline)
 - **Client**: `mobile/src/data/webPush.ts` (asking, subscribing, keeping the server's copy
   current), `mobile/src/core/webPush.ts` (the pure rules), the Notifications sheet, and the
   `push` and `notificationclick` handlers at the end of `mobile/public/sw.js`.
-- **Database**: `supabase/phase37_web_push.sql`, and `phase38_deadline_reminders.sql` for
-  the reminders.
+- **Database**: `supabase/phase37_web_push.sql`, `phase38_deadline_reminders.sql` for the
+  reminders and `phase39_class_alerts.sql` for the class alerts.
 - **Sender**: `supabase/functions/send-pushes/index.ts`.
 
 What each kind sends, and to whom:
@@ -38,6 +38,7 @@ What each kind sends, and to whom:
 | On after all | A verdict of "running" | Only those told it was off |
 | Reported cancelled | The crowd reaches the app's bar (3 reports, 2 more than "it went ahead") with no verdict | Students following that class, except those who reported it |
 | New deadline | 10 minutes after it's added, if it still stands | Students on the module, except its author, and only if the app would show it to them |
+| Class in 15 minutes | 15 minutes before it starts, or its new time if an organiser moved it; not for one called off | Students following that class, unless they turned class alerts off (on by default) |
 | Due tomorrow, due soon | Once it's due within 24 hours, and within 3 hours | Students on the module with reminders on, unless they've ticked it off (the phone sends its ticks) |
 
 The server only knows a student's classes from what the phone sends: the classes in the
@@ -84,8 +85,10 @@ In a Safari tab the sheet says how to add it.
    select vault.create_secret('<the same PUSH_FUNCTION_KEY>', 'push_function_key');
    ```
 
-7. **Run** `supabase/phase37_web_push.sql`, then `supabase/phase38_deadline_reminders.sql`, in
-   the SQL editor. The first schedules the job; the second adds reminders to it.
+7. **Run** `supabase/phase37_web_push.sql`, then `phase38_deadline_reminders.sql`, then
+   `phase39_class_alerts.sql`, in the SQL editor. The first schedules the job; the others add
+   reminders and class alerts to it. Deploy the function before running a phase that adds a
+   kind of notification, or the old function can't word it.
 
 ## Sending a test push
 

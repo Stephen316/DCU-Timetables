@@ -29,8 +29,15 @@ describe('Web push availability', () => {
 describe('Web push kinds', () => {
   test('saved kinds read defensively, and anything unrecognised is off', () => {
     expect(PushKindsRules.read(null)).toEqual(PushKindsRules.off);
-    expect(PushKindsRules.read({ classStatus: true, newDeadlines: 'yes' })).toEqual({ classStatus: true, newDeadlines: false, deadlineReminders: false });
-    expect(PushKindsRules.read(PushKindsRules.on)).toEqual({ classStatus: true, newDeadlines: true, deadlineReminders: true });
+    expect(PushKindsRules.read({ classStatus: true, newDeadlines: 'yes', classAlerts: false }))
+      .toEqual({ classStatus: true, newDeadlines: false, deadlineReminders: false, classAlerts: false });
+    expect(PushKindsRules.read(PushKindsRules.on)).toEqual({ classStatus: true, newDeadlines: true, deadlineReminders: true, classAlerts: true });
+  });
+
+  // Class alerts came after the rest, so kinds saved before them have none to read.
+  test('a student who turned notifications on before class alerts existed has them on', () => {
+    expect(PushKindsRules.read({ classStatus: true, newDeadlines: true, deadlineReminders: true }).classAlerts).toBe(true);
+    expect(PushKindsRules.read(null).classAlerts).toBe(false);
   });
 });
 
@@ -49,6 +56,15 @@ describe('Web push targets', () => {
     expect(targets.moduleNames).toEqual({ EEG1006: 'Materials Engineering' });
     // Filled in by WebPush from the Deadlines tab's ticks.
     expect(targets.doneDeadlines).toEqual([]);
+  });
+
+  test('each followed class carries its alert: the week grid\'s short name and its room code', () => {
+    const lab = event('EEG1000[1]OC/P1/02', at(2026, 11, 4, 9), at(2026, 11, 4, 11), {
+      moduleName: 'EEG1000[1,2] Fundamentals of Professional Development', locations: ['GLA.SA301'],
+    });
+    const targets = PushTargetsRules.from([later, over, sooner, lab], names, now);
+    expect(Object.keys(targets.eventDetails).sort()).toEqual([...targets.eventKeys].sort());
+    expect(targets.eventDetails[CancellationRules.eventKey(lab)]).toEqual({ title: 'Fund. of Prof. Dev.', room: 'SA301' });
   });
 
   test('the same weeks in another order are the same signature; a change is a new one', () => {
