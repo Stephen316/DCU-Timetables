@@ -191,6 +191,8 @@ export class DeadlinesModel extends Observable {
       details: details.trim(), detailsEditedAt: details.trim() ? new Date() : null,
     });
     this.all = DeadlineRules.upcoming([...this.all, deadline]);
+    // Showing another module would save it out of sight, as if adding it had failed.
+    if (this.moduleFilter && this.moduleFilter !== deadline.moduleKey) this.moduleFilter = null;
     this.regroup();
     this.changed();
     try {

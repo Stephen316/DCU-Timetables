@@ -39,6 +39,24 @@ describe('Deadlines module filter', () => {
     expect(titles(model)).toEqual(['Lab 1', 'Quiz', 'Project']);
   });
 
+  test("adding one for another module shows every module, so the new one isn't hidden", async () => {
+    const { model } = await loaded();
+    model.showModule('CA116');
+    const adding = model.add({ title: 'Problem sheet', kind: 'assignment', due: inDays(4), gradeWeight: 0 }, { moduleKey: 'MS121', atGroupKey: null, label: '' });
+    expect(model.moduleFilter).toBeNull();
+    expect(titles(model)).toContain('Problem sheet');
+    await adding;
+    expect(titles(model)).toEqual(['Lab 1', 'Quiz', 'Problem sheet', 'Project']);
+  });
+
+  test('adding one for the module being shown keeps that module chosen', async () => {
+    const { model } = await loaded();
+    model.showModule('CA116');
+    await model.add({ title: 'Lab 2', kind: 'labReport', due: inDays(4), gradeWeight: 0 }, { moduleKey: 'CA116', atGroupKey: null, label: '' });
+    expect(model.moduleFilter).toBe('CA116');
+    expect(titles(model)).toEqual(['Lab 1', 'Lab 2', 'Project']);
+  });
+
   test('a reload keeps the choice, and lets go of a module left with nothing due', async () => {
     const { services, model } = await loaded();
     model.showModule('MS121');
