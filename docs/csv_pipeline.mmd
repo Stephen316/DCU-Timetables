@@ -1,99 +1,134 @@
 ---
-title: CSV conversion pipeline + allocation resolution
+title: How class lists and lab rotations get from the console to a student's timetable (as built, Nov 2026)
 ---
 flowchart TB
 
- subgraph s1["Extraction"]
-        n60["Normalise input<br>xlsx / docx to CSV — PDF and images pass through"]
-        n61["Gemini — structured extraction<br>free tier, EEA paid-tier data terms"]
-        n40["PaddleOCR PP-Structure<br>local, independent second opinion"]
-        n42["Cross-check: diff both extractions"]
-        n43["Validators: closed vocab, group counts,<br>date vs day, subgroup implies room,<br>ID format + cohort prefix"]
-        n44{"Cell disputed?<br>diff mismatch OR validator fail"}
-        n59["Flagged for attention"]
+ subgraph A["1 · An admin adds a class list or lab rotation"]
+        a1["Admin unlocks the console<br>and picks the programme"]
+        a2["Admin drops a file into Ask<br>and can add a note"]
+        a3["The file is opened as text<br>Excel and Word are converted, PDFs and photos kept as they are<br>Old .xls and .doc files are turned away, and nothing over 4 MB"]
+        a4{"Is it already a tidy table<br>of students?"}
+        a5["Read straight in<br>No AI involved, so the names never leave the console"]
+        a6["AI reads the text<br>out of the PDF or photo"]
+        a7{"AI decides what it is"}
+        a8["AI turns the class list<br>into a table of students"]
+        a9["AI copies the rotation<br>It may only use known modules, days, times and groups<br>and leaves a cell empty rather than guess"]
+        a10["Nothing to add<br>It isn't a class list or a rotation"]
+        a11["Automatic checks<br>Are the groups balanced? Do dates match days?<br>Do student IDs look right?"]
+        a12{"Did a rotation<br>fail the checks?"}
+        a13["It is read a second time<br>and the better reading is kept"]
+        a14["A draft is shown to the admin<br>with every problem listed<br>Nothing is live yet"]
+        a15["The admin can correct the draft<br>by chatting with it"]
+        a16{"Admin presses Accept"}
+        a17["The rotation is saved<br>Empty sessions are left out"]
+        a18["The class list is saved<br>Each student becomes a coded key that can't be<br>turned back into a name or linked across courses"]
+        a19["The class list's version number goes up"]
   end
 
- subgraph s2["Supabase"]
-        n63[("lab_rotations — public read<br>week, date, day, times, module, groups — no personal data")]
-        n2[("course_allocations — anon-readable in full<br>allocation_key, group, subgroup — NO names, NO IDs")]
-        n35[("roster_members<br>name_key AND/OR student_id to allocation_key<br>admin RLS only")]
-        n11[("profiles<br>student_id — never exposed, never sent to a device")]
+ subgraph B["2 · A student signs up"]
+        b1["Student signs in with their email"]
+        b2{"Is it a DCU address?<br>Test accounts are allowed too"}
+        b3["Turned away<br>Only DCU students can make an account"]
+        b4["Their name is taken from the address<br>stephen.harcourt2 becomes Stephen Harcourt<br>Only an admin can change it"]
+        b5["Student types or scans<br>their student ID card"]
+        b6{"One letter and eight digits?"}
+        b7["The ID is saved for good<br>Only an admin can change it, so nobody<br>can try IDs until one matches"]
+        b8["Student picks their programme"]
   end
 
-    %% ---------- Admin ingestion ----------
-    n4["Course selected by admin on admin web"] --> n3["Files uploaded onto admin web"]
-    n3 --> n60
-    n60 --> n61 & n40
-    n61 --> n42
-    n40 --> n42
-    n42 --> n43 --> n44
-    n44 -- No --> n33
-    n44 -- Yes --> n59 --> n33
+ subgraph C["3 · The student's timetable is built"]
+        c1["The DCU timetable is fetched<br>for that programme and week"]
+        c2{"Did DCU answer?"}
+        c3{"Is there a saved copy<br>of that week on the phone?"}
+        c4["The programme's timetable<br>with the console's changes on top"]
+        c5["An error is shown"]
+        c6{"Is there a class list<br>for this programme?<br>Engineering only, for now"}
+        c7["The server looks for the student<br>on the class list, by name and student ID<br>Checked on opening the app, and again whenever the list changes"]
+        c8{"What did it find?"}
+        c9["Not on the list<br>The student keeps the programme's timetable"]
+        c10["The name and the ID don't agree<br>An admin flag is written down<br>The student keeps the programme's timetable"]
+        c11["Two students share the name<br>The student keeps the programme's timetable<br>There's no screen to ask which one they are yet"]
+        c12["Found them<br>The phone downloads their group and rooms<br>but never anyone's name or ID"]
+        c13["The student's labs<br>replace the general lab slots"]
+        c14(("Together"))
+        c15["The timetable is saved on the phone"]
+        c16["Student sees their week,<br>edits classes and adds deadlines"]
+  end
 
-    n33[("import_staging — nothing is live yet")] --> n34["REVIEW SCREEN<br>per-row accept / edit / reject<br>disputed cells surfaced first"]
-    n34 --> n62{"Document type?"}
+ subgraph D["What the server keeps"]
+        d1[("Lab rotations<br>Which group is where and when<br>No personal details")]
+        d2[("Class list groups<br>Coded keys with group and rooms<br>No names, no IDs")]
+        d3[("Class list members<br>Name or ID to coded key<br>Nobody can read this table directly")]
+        d4[("Student accounts<br>Name from the email, student ID")]
+        d5[("Flags for an admin<br>Nothing in the console shows these yet")]
+        d6[("Admin activity log")]
+  end
 
-    n62 -- "Rotation — no names" --> n63
-    n62 -- "Class list — names or IDs" --> n36["Derive allocation_key — stored as bytea<br>HMAC(secret, course_key + name_key + disambiguator)<br>per-course, so keys cannot be linked across courses"]
-    n36 --> n2 & n35
-    n36 -.->|"triggers re-resolve"| n9
+    %% ---------- 1 · Admin ----------
+    a1 --> a2 --> a3 --> a4
+    a4 -- Yes --> a5 --> a11
+    a4 -- "No, it's a PDF or photo" --> a6 --> a7
+    a4 -- "No, it's loose text" --> a7
+    a7 -- "A class list" --> a8 --> a11
+    a7 -- "A lab rotation" --> a9 --> a11
+    a7 -- "Something else" --> a10
+    a11 --> a12
+    a12 -- Yes --> a13 --> a14
+    a12 -- No --> a14
+    a15 -.-> a14
+    a14 --> a16
+    a16 -- "A rotation" --> a17 --> d1
+    a16 -- "A class list" --> a18
+    a18 --> d2 & d3
+    a18 --> a19
+    a17 & a18 --> d6
 
-    %% ---------- Account creation ----------
-    n1["User signs in with email"] --> n15{"College email?"}
-    n15 -- No --> n16["Retry college email attempt"] --> n1
-    n15 -- Yes --> n53["Enter student ID — A00000000"]
-    n53 --> n54{"Valid format?"}
-    n54 -- No --> n53
-    n54 -- Yes --> n55["Written to profiles.student_id<br>SET ONCE — admin-only to change<br>so it cannot be used to enumerate"]
-    n55 --> n11
-    n55 --> n8["User selects course"]
+    %% ---------- 2 · Student ----------
+    b1 --> b2
+    b2 -- No --> b3 --> b1
+    b2 -- Yes --> b4 --> d4
+    b2 -- Yes --> b5 --> b6
+    b6 -- No --> b5
+    b6 -- Yes --> b7 --> d4
+    b7 --> b8
 
-    %% ---------- Two independent paths ----------
-    n8 --> n18["General course timetable requested"]
-    n8 --> n37{"Roster for this course?"}
+    %% ---------- 3 · Timetable ----------
+    b8 --> c1 --> c2
+    c2 -- Yes --> c4
+    c2 -- No --> c3
+    c3 -- Yes --> c4
+    c3 -- No --> c5
+    d1 -.->|"or the copy built into the app"| c13
 
-    n18 --> n29{"Reachable?"}
-    n29 -- Yes --> n19["General course timetable"]
-    n29 -- No --> n31{"Cached snapshot?"}
-    n31 -- Yes --> n19
-    n31 -- No --> n30["Notify user of server error"]
-    n63 -.->|"rotation overlay, bundled JSON as fallback"| n19
+    b8 --> c6
+    c6 -- No --> c14
+    c6 -- Yes --> c7
+    a19 -.->|"the app looks again"| c7
+    d3 -.-> c7
+    d4 -.-> c7
+    c7 --> c8
+    c8 -- "Nobody" --> c9 --> c14
+    c8 -- "A mismatch" --> c10
+    c10 --> d5
+    c10 --> c14
+    c8 -- "More than one" --> c11 --> c14
+    c8 -- "Exactly one" --> c12
+    d2 -.-> c12
+    c12 --> c13 --> c14
 
-    %% ---------- Which key does this roster use ----------
-    n37 -- No --> n52(("JOIN"))
-    n37 -- Yes --> n56{"Which key does<br>this roster carry?"}
+    c4 --> c14
+    c14 --> c15 --> c16
 
-    n56 -- "Names" --> n50["DCUEmail: givenName + familyName<br>VERIFIED — they control the address"]
-    n56 -- "Student IDs" --> n51["profiles.student_id<br>SELF-ASSERTED — they typed it"]
-    n56 -- "Both" --> n57["Match on name,<br>require the ID to agree"]
-
-    n50 --> n9["resolve_allocation(course_key)<br>security definer — matches server-side"]
-    n51 --> n9
-    n57 --> n9
-    n35 -.-> n9
-
-    n9 --> n17{"Match?"}
-    n17 -- None --> n52
-    n17 -- "Conflict: name and ID disagree" --> n58["Flag for admin review<br>fall back to general timetable"] --> n52
-    n17 -- Several --> n38["Ask user which subgroup<br>never show other names"] --> n39
-    n17 -- One --> n39["allocation_key returned"]
-    n39 --> n20["course_allocations downloaded<br>inert: no names, no IDs"]
-    n2 -.-> n20
-    n20 --> n52
-
-    n19 --> n52
-    n52 --> n6["Timetable calculated<br>and cached on device"] --> n10["User can view and edit course"]
-
-    classDef ext     fill:#E1BEE7,stroke:#6A1B9A,color:#000
-    classDef local   fill:#FFCDD2,stroke:#C62828,color:#000
-    classDef gate    fill:#FFE0B2,stroke:#EF6C00,color:#000
+    classDef ai      fill:#E1BEE7,stroke:#6A1B9A,color:#000
+    classDef check   fill:#FFE0B2,stroke:#EF6C00,color:#000
     classDef store   fill:#C8E6C9,stroke:#2E7D32,color:#000
-    classDef compute fill:#BBDEFB,stroke:#1565C0,color:#000
-    classDef user    fill:#000000,color:#fff
+    classDef step    fill:#BBDEFB,stroke:#1565C0,color:#000
+    classDef person  fill:#000000,color:#fff
+    classDef gap     fill:#FFCDD2,stroke:#C62828,color:#000
 
-    class n61 ext
-    class n40,n42 local
-    class n43,n33,n34,n44,n59,n54,n56,n58,n62 gate
-    class n2,n35,n11,n55,n63 store
-    class n36,n60,n50,n51,n57,n18,n19,n20,n6,n9,n39,n16 compute
-    class n1,n8,n10,n38,n30,n53 user
+    class a6,a7,a8,a9,a15 ai
+    class a4,a11,a12,a14,a16,b2,b6,c2,c3,c6,c8 check
+    class d1,d2,d3,d4,d5,d6,b4,b7 store
+    class a3,a5,a13,a17,a18,a19,b3,c1,c4,c7,c9,c12,c13,c15 step
+    class a1,a2,a10,b1,b5,b8,c5,c16 person
+    class c10,c11,d5 gap
