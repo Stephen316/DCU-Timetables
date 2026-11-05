@@ -172,20 +172,34 @@ export class WeekModel extends Observable {
    */
   async refreshDeadlines(): Promise<void> {
     const request = ++this.deadlineRequest;
-    const modules = new Set([...this.moduleKeys(), ...this.events.map(DeadlineRules.moduleKey)]);
-    if (modules.size === 0) {
+    const modules = this.deadlineModules();
+    if (modules.length === 0) {
       this.deadlines = [];
       this.changed();
       return;
     }
     try {
-      const deadlines = await this.services.deadlines.deadlinesForModules([...modules]);
+      const deadlines = await this.services.deadlines.deadlinesForModules(modules);
       if (request !== this.deadlineRequest) return;
       this.deadlines = deadlines;
       this.changed();
     } catch {
       // Keep what was there.
     }
+  }
+
+  /** Reports and deadlines together: neither needs the other, so neither waits for it. */
+  refreshOverlays(): Promise<unknown> {
+    return Promise.all([this.refreshCancellations(), this.refreshDeadlines()]);
+  }
+
+  private deadlineModules(): string[] {
+    return [...new Set([...this.moduleKeys(), ...this.events.map(DeadlineRules.moduleKey)])].sort();
+  }
+
+  /** What `refreshOverlays` asks about: when a fresh copy of the week changes neither, it needn't ask again. */
+  private overlayQuestion(): string {
+    return JSON.stringify([this.events.map((e) => CancellationRules.eventKey(e)).sort(), this.deadlineModules()]);
   }
 
   /**
@@ -228,6 +242,14 @@ export class WeekModel extends Observable {
     return grouped(this.eventsByWeekNumber.get(this.weeks[resolved].number) ?? []);
   }
 
+  /**
+   * Nothing to show yet: no week has arrived, from the device or the server, and nothing has
+   * failed. The timetable shows its loading screen until then.
+   */
+  get waitingForFirstWeek(): boolean {
+    return this.rawByWeekNumber.size === 0 && !this.errorText;
+  }
+
   /** Whether a week's classes have arrived: until they have, an empty week is still loading, not free. */
   isLoadedWeekIndex(index: number): boolean {
     const resolved = PagerIndex.resolve(index, this.weeks.length);
@@ -255,14 +277,25 @@ export class WeekModel extends Observable {
     return null;
   }
 
+  /**
+   * Opens on the current week. The calendar saved last time is used at once, and checked
+   * with the server behind it, so a launch shows the saved week without waiting on DCU's
+   * server at all; only the very first launch has to wait for the calendar.
+   */
   async start(): Promise<void> {
     if (this.weeks.length === 0) {
+      const saved = await this.services.timetableCache.calendar();
+      if (saved && this.weeks.length === 0) {
+        this.useCalendar(saved);
+        this.started = true;
+        void this.checkCalendar(saved);
+        await this.loadCurrentWeek();
+        return;
+      }
       try {
         const calendar = await this.source.weekCalendar();
-        this.weeks = calendar.weeks;
-        const current = calendar.current();
-        const index = current ? calendar.weeks.findIndex((w) => w.number === current.number) : -1;
-        if (index >= 0) this.weekIndex = index;
+        this.useCalendar(calendar);
+        void this.services.timetableCache.storeCalendar(calendar);
         this.errorText = null;
       } catch (error) {
         this.errorText = errorMessage(error, "Couldn't load the calendar.");
@@ -270,6 +303,33 @@ export class WeekModel extends Observable {
       }
     }
     this.started = true;
+    await this.loadCurrentWeek();
+  }
+
+  private useCalendar(calendar: WeekCalendar): void {
+    this.weeks = calendar.weeks;
+    const current = calendar.current();
+    const index = current ? calendar.weeks.findIndex((w) => w.number === current.number) : -1;
+    if (index >= 0) this.weekIndex = index;
+  }
+
+  /**
+   * The server's calendar, after the saved one has been shown. Kept for next time; only a
+   * calendar that really differs — a new year's — moves the timetable, back to the current week.
+   */
+  private async checkCalendar(saved: WeekCalendar): Promise<void> {
+    let calendar: WeekCalendar;
+    try {
+      calendar = await this.source.weekCalendar();
+    } catch {
+      return; // The saved one is still right as far as anyone knows.
+    }
+    void this.services.timetableCache.storeCalendar(calendar);
+    const signature = (c: WeekCalendar) => JSON.stringify(c.weeks.map((w) => [w.number, w.label, w.firstDay.getTime()]));
+    if (this.disposed || signature(calendar) === signature(saved)) return;
+    this.weekStart = null;
+    this.useCalendar(calendar);
+    this.changed();
     await this.loadCurrentWeek();
   }
 
@@ -390,23 +450,27 @@ export class WeekModel extends Observable {
       this.loadingCount += 1;
       this.isLoading = true;
       this.changed();
-      await this.load(week, true);
+      const hadSaved = await this.showSaved(week);
+      // The saved copy is enough to ask for its reports and deadlines, so they arrive with
+      // it rather than after DCU's server has answered.
+      const early = hadSaved ? this.refreshOverlays() : null;
+      const asked = this.overlayQuestion();
+      await this.fetchLive(week, true);
       this.loadingCount -= 1;
       this.isLoading = this.loadingCount > 0;
       this.changed();
+      await early;
+      if (!early || this.overlayQuestion() !== asked) await this.refreshOverlays();
+    } else {
+      await this.refreshOverlays();
     }
-    await this.refreshCancellations();
-    await this.refreshDeadlines();
     this.publishWidgetSnapshot();
 
-    let loadedNeighbour = false;
-    for (const neighbour of this.neighbours(this.weekIndex)) {
-      if (this.rawByWeekNumber.has(neighbour.number)) continue;
-      await this.load(neighbour, false);
-      loadedNeighbour = true;
-    }
+    // Both at once: each is one request now the module ids and calendar are known.
+    const neighbours = this.neighbours(this.weekIndex).filter((w) => !this.rawByWeekNumber.has(w.number));
+    await Promise.all(neighbours.map((w) => this.load(w, false)));
     // Next week's Monday is what a Friday-evening widget shows, and it arrives here.
-    if (loadedNeighbour) this.publishWidgetSnapshot();
+    if (neighbours.length > 0) this.publishWidgetSnapshot();
   }
 
   /**
@@ -484,14 +548,24 @@ export class WeekModel extends Observable {
   }
 
   private async load(week: TeachingWeek, isCurrent: boolean): Promise<void> {
+    await this.showSaved(week);
+    await this.fetchLive(week, isCurrent);
+  }
+
+  /** The copy of the week kept on the device, shown while the server is asked. Whether there was one. */
+  private async showSaved(week: TeachingWeek): Promise<boolean> {
     // Only ever something to add, so a failure just means no ghosts.
     const others = await this.source.otherEvents?.(this.programme, [week]).catch(() => null);
     if (others) this.rawOthersByWeekNumber.set(week.number, others);
     const cached = await this.services.timetableCache.snapshot(this.programme.identity, week.number);
-    if (cached) {
-      this.rawByWeekNumber.set(week.number, cached.events);
-      this.applyFilter();
-    }
+    // A fresher copy may have landed while the device was read.
+    if (!cached || this.rawByWeekNumber.has(week.number)) return this.rawByWeekNumber.has(week.number);
+    this.rawByWeekNumber.set(week.number, cached.events);
+    this.applyFilter();
+    return true;
+  }
+
+  private async fetchLive(week: TeachingWeek, isCurrent: boolean): Promise<void> {
     try {
       const fetched = await this.source.events(this.programme, [week]);
       this.rawByWeekNumber.set(week.number, fetched);

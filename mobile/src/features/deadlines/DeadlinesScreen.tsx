@@ -6,7 +6,8 @@ import { deadlineSectionTitle, DeadlineRules } from '../../core/deadline';
 import { startOfWeek } from '../../core/time';
 import { useModel, useNow, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Spinner, Txt } from '../../ui/components';
+import { EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Txt } from '../../ui/components';
+import { LoadingScreen } from '../../ui/LoadingScreen';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { CardInset, Radius, Space, useTheme } from '../../ui/theme';
 import { DeadlineForm, DeadlineRow } from './DeadlineRows';
@@ -31,8 +32,9 @@ export function DeadlinesScreen() {
   // would otherwise never be fetched again.
   useFocusEffect(
     useCallback(() => {
-      void model.load(modules);
-    }, [model, modules]),
+      // What the timetable already fetched for its outlines fills the tab while this asks.
+      void model.load(modules, week.deadlines);
+    }, [model, modules, week]),
   );
   // The tutorial has the student open this tab.
   const tutorial = useTutorial();
@@ -103,7 +105,9 @@ export function DeadlinesScreen() {
     return (
       <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
         {header}
-        <Spinner />
+        <View style={styles.fill}>
+          <LoadingScreen caption="Loading deadlines…" slowCaption="Still waiting on the server…" />
+        </View>
       </View>
     );
   }

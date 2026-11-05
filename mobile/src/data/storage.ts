@@ -138,6 +138,11 @@ export const PrefKey = {
   classAlerts: 'classAlerts',
   /** The id of the "DCU Timetable" calendar made in Google, so adding again fills the same one. */
   googleCalendar: 'googleCalendar',
+  /**
+   * `SavedModuleIdentities`: each module code's id in DCU's timetable API, for the year they
+   * were looked up in, so a week's timetable doesn't have to look them all up again.
+   */
+  moduleIdentities: 'moduleIdentities',
   labRotation: (courseKey: string) => `labRotation:${courseKey}`,
   timetableChanges: (courseKey: string) => `timetableChanges:${courseKey}`,
   moduleSplits: 'moduleSplits',

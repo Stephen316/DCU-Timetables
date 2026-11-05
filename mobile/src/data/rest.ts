@@ -35,6 +35,36 @@ export function isNotSignedIn(error: unknown): boolean {
   return error instanceof Error && (error as Error & { code?: unknown }).code === 'notSignedIn';
 }
 
+/** How long any request may take before it's given up as stalled. */
+export const REQUEST_TIME_LIMIT_MS = 15_000;
+
+/**
+ * `fetchFn`, giving up on a request the server hasn't started answering within `ms`. A
+ * stalled request otherwise holds its screen on a spinner for as long as the browser cares
+ * to wait, minutes, where a message can offer to try again.
+ */
+export function withTimeLimit(fetchFn: typeof fetch, ms: number = REQUEST_TIME_LIMIT_MS): typeof fetch {
+  return (async (input: Parameters<typeof fetch>[0], init: RequestInit = {}) => {
+    const controller = new AbortController();
+    const outer = init.signal;
+    if (outer?.aborted) controller.abort();
+    else outer?.addEventListener('abort', () => controller.abort(), { once: true });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, ms);
+    try {
+      return await fetchFn(input, { ...init, signal: controller.signal });
+    } catch (error) {
+      if (timedOut) throw userFacing('The server took too long to answer. Check your connection and try again.');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }) as typeof fetch;
+}
+
 export type Query = [string, string][];
 
 /**

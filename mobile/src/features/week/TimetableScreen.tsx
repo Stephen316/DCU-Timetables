@@ -10,7 +10,8 @@ import { listenForAlertTaps } from '../../data/notifications';
 import { PrefKey } from '../../data/storage';
 import { useAppEvent, useModel, useNow, usePrefBool } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
-import { BarButton, EmptyState, IconButton, Label, PrimaryButton, Spinner, SheetAction, Txt } from '../../ui/components';
+import { BarButton, EmptyState, IconButton, Label, PrimaryButton, SheetAction, Txt } from '../../ui/components';
+import { LoadingScreen } from '../../ui/LoadingScreen';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { Space, useTheme } from '../../ui/theme';
 import { AccountSheet } from '../account/AccountSheet';
@@ -210,8 +211,8 @@ export function TimetableScreen() {
 
       <View style={styles.fill}>
         {body}
-        {model.isLoading && model.events.length === 0 && !model.errorText ? (
-          <View style={StyleSheet.absoluteFill} pointerEvents="none"><Spinner /></View>
+        {model.waitingForFirstWeek ? (
+          <LoadingScreen caption="Loading your timetable…" slowCaption="Still waiting on DCU's timetable server…" />
         ) : null}
       </View>
 

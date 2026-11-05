@@ -5,6 +5,7 @@ import {
 import { isoSeconds, parseISO, DAY } from '../core/time';
 import { uuid } from '../core/uuid';
 import { buildQuery, userFacing } from './rest';
+import { PrefKey, Prefs } from './storage';
 
 /**
  * The seam between the app and wherever timetable data comes from. The live DCU JSON API is
@@ -128,12 +129,47 @@ export const DCU_API: DCUAPIConfig = {
   institutionID: 'a1fdee6b-68eb-47b8-b2ac-a4c60c8e6177',
 };
 
+/** The module ids looked up for one academic year, kept so the next load needn't ask again. */
+export interface SavedModuleIdentities {
+  /** `academicYear` of the week calendar they were found in. */
+  year: string;
+  /** Milliseconds since 1970: they're looked up afresh once they're `MODULE_IDENTITY_MAX_AGE_MS` old. */
+  savedAt: number;
+  ids: Record<string, string>;
+}
+
+/**
+ * How long a looked-up module id is trusted. They don't change within a year, but if DCU
+ * ever remade one, a wrong id would quietly empty that module from every week, so a stale
+ * one is looked up again rather than kept for good.
+ */
+export const MODULE_IDENTITY_MAX_AGE_MS = 14 * DAY;
+
+/** How long one answer for the week calendar is reused before it's asked for again. */
+const VIEW_OPTIONS_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+/** The year a calendar is for, told by its first week's Monday: a new year means new module ids. */
+function academicYear(vo: ViewOptionsDTO): string {
+  return vo.Weeks.map((w) => w.FirstDayInWeek).sort()[0] ?? '';
+}
+
 /** Live client for DCU's public MyTimetable v4 API (anonymous guest access). */
 export class DCUAPIClient implements TimetableSource {
+  /**
+   * The week calendar, asked for once and shared: every week's events request needs it, and
+   * so does the calendar itself, so without this each week cost a request more.
+   */
+  private viewOptionsAsked: { at: number; answer: Promise<ViewOptionsDTO> } | null = null;
+
   constructor(
     private readonly config: DCUAPIConfig = DCU_API,
     private readonly fetchFn: typeof fetch = (...args) => fetch(...args),
+    /** Where looked-up module ids are kept between launches. Left out, they last the session. */
+    private readonly prefs: Prefs | null = null,
   ) {}
+
+  /** Module ids found this session, when there's nowhere to keep them. */
+  private sessionIdentities: SavedModuleIdentities | null = null;
 
   searchProgrammes(query: string, page = 1): Promise<TimetableCategory[]> {
     return this.searchCategories(CategoryType.programme, query, page);
@@ -179,12 +215,44 @@ export class DCUAPIClient implements TimetableSource {
 
   /** Combined events for a set of module codes — a cohort timetable built from modules. */
   async eventsForModuleCodes(codes: string[], weeks: TeachingWeek[]): Promise<TimetableEvent[]> {
-    const identities: string[] = [];
-    for (const code of codes) {
-      const id = await this.moduleIdentity(code);
-      if (id !== null) identities.push(id);
-    }
+    const identities = await this.moduleIdentities(codes);
     return this.fetchEvents(CategoryType.module, identities, weeks);
+  }
+
+  /**
+   * Each code's id, in the order given: the ones found before from this year's store, and
+   * any missing looked up all at once rather than one after another. A code with no match
+   * is left out, and looked up again next time.
+   */
+  private async moduleIdentities(codes: string[]): Promise<string[]> {
+    const year = academicYear(await this.viewOptions());
+    const now = Date.now();
+    const stored = this.storedIdentities();
+    const saved = stored && stored.year === year && now - stored.savedAt < MODULE_IDENTITY_MAX_AGE_MS
+      ? stored
+      : { year, savedAt: now, ids: {} };
+    const missing = codes.filter((code) => !(code in saved.ids));
+    if (missing.length > 0) {
+      const found = await Promise.all(missing.map(async (code) => [code, await this.moduleIdentity(code)] as const));
+      const ids = { ...saved.ids };
+      for (const [code, id] of found) if (id !== null) ids[code] = id;
+      this.storeIdentities({ ...saved, ids });
+      saved.ids = ids;
+    }
+    return codes.flatMap((code) => (saved.ids[code] !== undefined ? [saved.ids[code]] : []));
+  }
+
+  private storedIdentities(): SavedModuleIdentities | null {
+    if (!this.prefs) return this.sessionIdentities;
+    const value = this.prefs.getJSON<SavedModuleIdentities | null>(PrefKey.moduleIdentities, null);
+    return value && typeof value.year === 'string' && typeof value.savedAt === 'number' && typeof value.ids === 'object' && value.ids !== null
+      ? value
+      : null;
+  }
+
+  private storeIdentities(saved: SavedModuleIdentities): void {
+    if (this.prefs) this.prefs.setJSON(PrefKey.moduleIdentities, saved);
+    else this.sessionIdentities = saved;
   }
 
   /** Resolve a module code (e.g. "EEG1001") to its category identity. */
@@ -225,10 +293,20 @@ export class DCUAPIClient implements TimetableSource {
     return EventMapper.events((response ?? {}) as EventsResponseDTO);
   }
 
-  private async viewOptions(): Promise<ViewOptionsDTO> {
-    const vo = await this.send('GET', `Public/ViewOptions/${this.config.institutionID}`);
-    if (!isViewOptions(vo)) throw TimetableSourceError.decoding('Unexpected week calendar.');
-    return vo;
+  private viewOptions(): Promise<ViewOptionsDTO> {
+    const now = Date.now();
+    const asked = this.viewOptionsAsked;
+    if (asked && now - asked.at < VIEW_OPTIONS_MAX_AGE_MS) return asked.answer;
+    const answer = this.send('GET', `Public/ViewOptions/${this.config.institutionID}`).then((vo) => {
+      if (!isViewOptions(vo)) throw TimetableSourceError.decoding('Unexpected week calendar.');
+      return vo;
+    });
+    this.viewOptionsAsked = { at: now, answer };
+    // A failure isn't kept: the next request asks again.
+    answer.catch(() => {
+      if (this.viewOptionsAsked?.answer === answer) this.viewOptionsAsked = null;
+    });
+    return answer;
   }
 
   private async send(method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown> {

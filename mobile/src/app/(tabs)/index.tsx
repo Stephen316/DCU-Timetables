@@ -11,7 +11,7 @@ export default function TimetableRoute() {
   useFocusEffect(
     useCallback(() => {
       if (returning.current) {
-        void model.refreshCancellations().then(() => model.refreshDeadlines());
+        void model.refreshOverlays();
       }
       returning.current = true;
     }, [model]),

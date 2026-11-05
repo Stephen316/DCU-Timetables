@@ -11,6 +11,7 @@ import { startWebUpdateChecks } from '../data/webUpdate';
 import { ServicesContext, usePref } from '../state/hooks';
 import { TutorialProvider } from '../features/tutorial/Tutorial';
 import { RootProvider, useRoot } from '../state/root';
+import { LoadingScreen } from '../ui/LoadingScreen';
 import { dark, light, ThemeContext } from '../ui/theme';
 
 void SplashScreen.preventAutoHideAsync();
@@ -33,7 +34,9 @@ export default function RootLayout() {
     return startWebUpdateChecks();
   }, []);
 
-  if (!services) return null;
+  // Reading the device is quick, but on the web this replaces the page's own loading screen
+  // (public/index.html), so it shows the same rather than flashing an empty page between them.
+  if (!services) return <BootScreen />;
   return (
     <SafeAreaProvider>
       <ServicesContext.Provider value={services}>
@@ -46,6 +49,15 @@ export default function RootLayout() {
         </Themed>
       </ServicesContext.Provider>
     </SafeAreaProvider>
+  );
+}
+
+/** The loading screen before the saved appearance has been read: the phone's setting, as the web page's own does. */
+function BootScreen() {
+  return (
+    <ThemeContext.Provider value={useColorScheme() === 'dark' ? dark : light}>
+      <LoadingScreen />
+    </ThemeContext.Provider>
   );
 }
 

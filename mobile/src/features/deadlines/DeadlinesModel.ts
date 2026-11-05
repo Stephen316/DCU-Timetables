@@ -32,6 +32,11 @@ export class DeadlinesModel extends Observable {
   errorText: string | null = null;
 
   private modules: string[] = [];
+  /**
+   * Bumped by each load. The module list grows as the timetable's weeks arrive, so loads
+   * overlap, and an older answer landing last would put back a shorter list.
+   */
+  private loadRequest = 0;
   private all: Deadline[] = [];
   private readonly reporterID: string;
 
@@ -104,7 +109,13 @@ export class DeadlinesModel extends Observable {
     return this.standings.get(deadline.id) ?? DeadlineStanding.none;
   }
 
-  async load(modules: string[]): Promise<void> {
+  /**
+   * Fetches the deadlines for `modules`. `known` is what the timetable already fetched for
+   * them — its outlines need the same deadlines — and fills an empty tab while this asks, so
+   * the tab never sits on a spinner for a list the app already has.
+   */
+  async load(modules: string[], known: Deadline[] = []): Promise<void> {
+    const request = ++this.loadRequest;
     this.modules = modules;
     if (modules.length === 0) {
       this.all = [];
@@ -112,15 +123,26 @@ export class DeadlinesModel extends Observable {
       this.changed();
       return;
     }
+    if (this.all.length === 0 && known.length > 0) {
+      const wanted = new Set(modules);
+      this.all = known.filter((d) => wanted.has(d.moduleKey));
+      this.regroup();
+    }
     this.isLoading = true;
     this.changed();
     try {
       const all = await this.services.deadlines.deadlinesForModules(modules);
+      if (request !== this.loadRequest) return;
       this.all = all;
       this.regroup();
-      this.standings = await this.services.deadlines.standings(all.map((d) => d.id));
+      // The list is shown now; how many confirmed each one fills in when it comes.
+      this.changed();
+      const standings = await this.services.deadlines.standings(all.map((d) => d.id));
+      if (request !== this.loadRequest) return;
+      this.standings = standings;
       this.errorText = null;
     } catch (error) {
+      if (request !== this.loadRequest) return;
       // Keep whatever is on screen: a stale list beats an empty one when only the network is wrong.
       this.errorText = errorMessage(error, "Couldn't load deadlines.");
     }

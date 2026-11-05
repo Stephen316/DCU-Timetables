@@ -8,7 +8,7 @@ import {
 } from './courseData';
 import { DCU_API, DCUAPIClient, TimetableSource } from './dcuApi';
 import { GoogleCalendar } from './googleCalendar';
-import { SupabaseREST } from './rest';
+import { SupabaseREST, withTimeLimit } from './rest';
 import {
   AppEvent, CachedRole, Emitter, ReporterID, SecretStore, SignedInUser, supabaseConfigFromEnv, SupabaseConfig,
   SupabaseSession,
@@ -89,7 +89,9 @@ export async function createServices(platform: Platform): Promise<Services> {
   await prefs.hydrate();
   const events = new Emitter<AppEvent>();
   const user = new SignedInUser(prefs);
-  const fetchFn = platform.fetchFn ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  // Every request the app makes gives up after REQUEST_TIME_LIMIT_MS, rather than leave a
+  // screen loading for as long as the browser cares to wait.
+  const fetchFn = withTimeLimit(platform.fetchFn ?? ((...args: Parameters<typeof fetch>) => fetch(...args)));
   const session = new SupabaseSession(
     platform.secrets,
     () => {
@@ -143,6 +145,7 @@ export async function createServices(platform: Platform): Promise<Services> {
     dcu: new DCUAPIClient(
       platform.env.EXPO_PUBLIC_DCU_API_BASE ? { ...DCU_API, apiBase: platform.env.EXPO_PUBLIC_DCU_API_BASE.replace(/\/+$/, '') } : DCU_API,
       fetchFn,
+      prefs,
     ),
     sourceOverride: null,
     alerts,

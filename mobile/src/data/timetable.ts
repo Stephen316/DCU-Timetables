@@ -6,9 +6,9 @@ import { parseActivityCode } from '../core/activityCode';
 import {
   cohortCourseKey, labSessionID, LabRotation, LabRotations, LabSession, StudentProfile,
 } from '../core/profile';
-import { DublinTime } from '../core/time';
+import { DAY, DublinTime } from '../core/time';
 import {
-  restoreEvent, StoredEvent, storeEvent, TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar,
+  DayOption, restoreEvent, StoredEvent, storeEvent, TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar,
 } from '../core/timetableEvent';
 import { LabRotationCache } from './courseData';
 import { DCUAPIClient, TimetableSource } from './dcuApi';
@@ -157,6 +157,37 @@ export class TimetableCache {
       };
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * The week calendar last fetched, so a launch can show the saved week before DCU's server
+   * has answered. Null once the year it covers is over: next year's calendar has to come
+   * from the server.
+   */
+  async calendar(now: Date = new Date()): Promise<WeekCalendar | null> {
+    try {
+      const raw = await this.kv.getItem(`${this.prefix}calendar`);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { weeks: { number: number; label: string; firstDay: string }[]; days: DayOption[] };
+      const weeks = parsed.weeks.map((w) => ({ number: w.number, label: w.label, firstDay: new Date(w.firstDay) }));
+      if (weeks.length === 0 || weeks.some((w) => typeof w.number !== 'number' || Number.isNaN(w.firstDay.getTime()))) return null;
+      const calendar = new WeekCalendar(weeks, Array.isArray(parsed.days) ? parsed.days : []);
+      const last = calendar.weeks[calendar.weeks.length - 1];
+      return last.firstDay.getTime() + 7 * DAY > now.getTime() ? calendar : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async storeCalendar(calendar: WeekCalendar): Promise<void> {
+    try {
+      await this.kv.setItem(
+        `${this.prefix}calendar`,
+        JSON.stringify({ weeks: calendar.weeks.map((w) => ({ ...w, firstDay: w.firstDay.toISOString() })), days: calendar.days }),
+      );
+    } catch {
+      // Without it, the next launch waits for the server, as it always used to.
     }
   }
 
