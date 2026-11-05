@@ -133,7 +133,14 @@ The function's own log is under Supabase → Edge Functions → send-pushes → 
 
   It answers with the first and last 8 characters of the public key, and `pairMatches`.
   Once the keys agree and the site is rebuilt, open Notifications on the phone: a
-  subscription made with the old key is dropped, and Turn On makes a new one.
+  subscription made with the old key is dropped, from the phone and from
+  `push_subscriptions`, and Turn On makes a new one.
+
+  A row left behind by an older build of the site, which dropped the phone's copy but not
+  the server's, is cleared by the function itself: when a run has one push accepted and
+  another refused with `VapidPkHashMismatch`, the refused subscription is deleted. A run
+  where nothing is accepted deletes nothing, since then the fault may be the function's
+  own key, and deleting would take every student's subscription with it.
 
 ## Turning it off
 

@@ -17,6 +17,8 @@ export interface SavedPushSubscription {
 
 export interface PushSubscriptionStore {
   save(subscription: SavedPushSubscription): Promise<void>;
+  /** Removes the server's copy of one of this account's subscriptions, by its endpoint. */
+  delete(endpoint: string): Promise<void>;
 }
 
 export class SupabasePushSubscriptionStore implements PushSubscriptionStore {
@@ -32,6 +34,13 @@ export class SupabasePushSubscriptionStore implements PushSubscriptionStore {
         p_deadline_reminders: s.kinds.deadlineReminders, p_done_deadlines: s.targets.doneDeadlines,
         p_class_alerts: s.kinds.classAlerts, p_event_details: s.targets.eventDetails,
       },
+    });
+  }
+
+  async delete(endpoint: string): Promise<void> {
+    if (!this.rest.session.userID) throw notSignedIn();
+    await this.rest.json('POST', '/rest/v1/rpc/delete_push_subscription', (status) => `The server returned ${status}.`, {
+      body: { p_endpoint: endpoint },
     });
   }
 }
@@ -157,6 +166,8 @@ export class WebPush {
    * service worker now if the offline copy hasn't yet (it waits for the page to go quiet).
    * One made with another key is unsubscribed: the push service refuses every send to it
    * (Apple's VapidPkHashMismatch), and it can't be moved onto the new key, only replaced.
+   * The server's copy goes first: unsubscribing doesn't tell the server, and Apple answers
+   * a stale key with a 400, not the "gone" that would have the sender delete it.
    */
   private async subscription(create: boolean): Promise<PushSubscription | null> {
     const root = webAppRoot();
@@ -166,6 +177,7 @@ export class WebPush {
     const ready = await navigator.serviceWorker.ready;
     let existing = await ready.pushManager.getSubscription();
     if (existing && !sameVapidKey(existing.options.applicationServerKey, this.vapidKey)) {
+      await this.store.delete(existing.endpoint).catch(() => undefined);
       await existing.unsubscribe().catch(() => undefined);
       this.prefs.set(PrefKey.pushSent, null);
       existing = null;

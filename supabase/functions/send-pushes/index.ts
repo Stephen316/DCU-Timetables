@@ -3,8 +3,9 @@
 // Woken by that job through pg_net, with PUSH_FUNCTION_KEY as its bearer token; deployed
 // with JWT verification off, since that key isn't a JWT. Takes rows with claim_pushes(), as
 // the service role, so two runs never send one twice. A subscription the push service says
-// is gone (404, 410) is deleted, along with what was waiting for it; any other failure is
-// tried again on a later run, three times in all.
+// is gone (404, 410) is deleted, along with what was waiting for it. So is one made with an
+// older key (see `staleKey`), once the same run has shown the current key is accepted. Any
+// other failure is tried again on a later run, three times in all.
 //
 // Secrets (docs/PUSH.md): PUSH_FUNCTION_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY,
 // VAPID_SUBJECT. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the platform.
@@ -67,21 +68,41 @@ Deno.serve(async (req) => {
   const started = Date.now();
   let sent = 0;
   let failed = 0;
+  const stale = new Set<string>();
   while (Date.now() - started < BUDGET_MS) {
     const { data, error } = await db.rpc('claim_pushes', { p_limit: BATCH });
     if (error) return new Response(error.message, { status: 500 });
     const rows = (data ?? []) as Row[];
     if (rows.length === 0) break;
 
-    const results = await Promise.all(rows.map(send));
+    const results = await Promise.all(rows.map((row) => send(row, stale)));
     sent += results.filter(Boolean).length;
     failed += results.filter((ok) => !ok).length;
   }
-  console.log('send-pushes', { sent, failed });
-  return Response.json({ sent, failed });
+
+  // A key mismatch reads the same whether the subscription is old or this function's own key
+  // is wrong. A push accepted in this run settles which: the key is good, so the refused
+  // subscriptions were made with another one, and no browser can send to them again. With no
+  // push accepted, a wrong secret would otherwise delete every subscription, so they're kept.
+  let dropped = 0;
+  if (sent > 0 && stale.size > 0) {
+    const { error } = await db.from('push_subscriptions').delete().in('id', [...stale]);
+    if (!error) dropped = stale.size;
+  }
+  console.log('send-pushes', { sent, failed, dropped });
+  return Response.json({ sent, failed, dropped });
 });
 
-async function send(row: Row): Promise<boolean> {
+/**
+ * Whether the push service refused the subscription for being made with another VAPID key.
+ * Apple's answer, the one seen here; other services word it differently and fall through to
+ * the ordinary retry until one is seen.
+ */
+function staleKey(status: number | undefined, body: string | undefined): boolean {
+  return status === 400 && (body ?? '').includes('VapidPkHashMismatch');
+}
+
+async function send(row: Row, stale: Set<string>): Promise<boolean> {
   try {
     await webpush.sendNotification(
       { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
@@ -95,6 +116,7 @@ async function send(row: Row): Promise<boolean> {
     if (status === 404 || status === 410) {
       await db.from('push_subscriptions').delete().eq('id', row.subscription_id);
     } else {
+      if (staleKey(status, body)) stale.add(row.subscription_id);
       // Left claimed: a later run takes it again once the claim runs out. The push service's
       // own status and reason, not web-push's "unexpected response code", which says neither.
       const message = e instanceof Error ? e.message : String(e);
