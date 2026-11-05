@@ -142,14 +142,14 @@ async function fetchClasses(moduleCodes: string[], weekNumbers: number[]): Promi
   for (const e of (res.CategoryEvents ?? []).flatMap((g) => g.Results ?? [])) {
     if (!e.Name || !e.StartDateTime || !e.EndDateTime) continue;
     const code = activityCode(e.Name);
-    const module = code.split("[")[0];
+    const moduleCode = code.split("[")[0];
     const start = dublin(e.StartDateTime);
     // A class shared by two of the modules asked for comes back once per module.
     const key = `${code}|${e.StartDateTime}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({
-      module,
+      module: moduleCode,
       code,
       kind: e.EventType ?? "",
       title: e.ExtraProperties?.find((p) => p.Name === "Module Name")?.Value ?? null,

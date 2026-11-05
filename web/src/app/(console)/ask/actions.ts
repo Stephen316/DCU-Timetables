@@ -25,6 +25,7 @@ import { validateRotation } from "@/lib/extraction/rotation";
 import { nameKey, parseRoster, type RosterRow } from "@/lib/roster/parse";
 import { validateRoster } from "@/lib/roster/validate";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload";
+import type { Untyped } from "@/lib/untyped";
 
 export type Turn = { role: "user" | "model"; text: string };
 
@@ -203,7 +204,7 @@ async function changeContext(scope: Scope): Promise<string> {
       .eq("course_key", scope.programme).maybeSingle(),
     db.from("timetable_changes").select("*").eq("course_key", scope.programme).eq("module", scope.module),
   ]);
-  const sessions = ((rot?.lab_rotation_sessions ?? []) as Record<string, any>[])
+  const sessions = ((rot?.lab_rotation_sessions ?? []) as Untyped[])
     .filter((s) => s.module === scope.module)
     .sort((a, b) => `${a.date}${a.start_time}`.localeCompare(`${b.date}${b.start_time}`));
   if (sessions.length) {
@@ -505,17 +506,17 @@ async function correctDocument(doc: DocProposal, message: string, history: Turn[
 /// it arrived. Its findings are recomputed after correcting, and saving checks everything
 /// again, so nothing here is taken on the browser's word.
 function documentFrom(raw: string): DocProposal | null {
-  let p: Record<string, any>;
+  let p: Untyped;
   try { p = JSON.parse(raw); } catch { return null; }
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
   const scope: Scope = { programme: String(p?.scope?.programme ?? ""), module: String(p?.scope?.module ?? "") };
   const log: Finding[] = (Array.isArray(p?.log) ? p.log : [])
-    .filter((f: any) => f && ["info", "warn", "error"].includes(f.level) && typeof f.message === "string")
-    .map((f: any) => ({ level: f.level, message: f.message, ...(Number.isInteger(f.row) ? { row: f.row } : {}) }));
+    .filter((f: Untyped) => f && ["info", "warn", "error"].includes(f.level) && typeof f.message === "string")
+    .map((f: Untyped) => ({ level: f.level, message: f.message, ...(Number.isInteger(f.row) ? { row: f.row } : {}) }));
 
   if (p?.kind === "roster" && Array.isArray(p.rows)) {
     const rows: RosterRow[] = p.rows
-      .map((r: any) => ({
+      .map((r: Untyped) => ({
         row: Number(r?.row), surname: str(r?.surname), given: str(r?.given), studentId: str(r?.studentId),
         group: str(r?.group), subgroup: str(r?.subgroup), day: str(r?.day), workshop: str(r?.workshop), drawing: str(r?.drawing),
       }))
@@ -526,7 +527,7 @@ function documentFrom(raw: string): DocProposal | null {
     };
   }
   if (p?.kind === "rotation" && Array.isArray(p.sessions)) {
-    const sessions: RotationSession[] = p.sessions.map((s: any) => ({
+    const sessions: RotationSession[] = p.sessions.map((s: Untyped) => ({
       week: Number.isInteger(s?.week) ? s.week : null, date: str(s?.date), day: str(s?.day),
       start: str(s?.start), end: str(s?.end), module: str(s?.module), activity: str(s?.activity),
       groups: Array.isArray(s?.groups) ? s.groups.filter((g: unknown) => typeof g === "string") : null,

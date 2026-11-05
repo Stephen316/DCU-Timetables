@@ -7,6 +7,7 @@ import { phoneCohortProblem, resolveCourse, scopeCheck } from "@/lib/proposals/c
 import { checkProvenance, checkRule, splitSource, type SplitRule } from "@/lib/proposals/rules";
 import { validateRotation, type RotationSession } from "@/lib/extraction/rotation";
 import type { Proposal } from "@/lib/proposals/types";
+import type { Untyped } from "@/lib/untyped";
 
 /// Every table saved on any course or module, so one read for one module can be used for
 /// another without uploading or describing it again. The Saved list shows what applies to
@@ -72,11 +73,11 @@ export async function listLibrary(): Promise<{ ok: true; entries: LibraryEntry[]
     });
   }
 
-  for (const s of (splits.data ?? []) as Record<string, any>[]) {
+  for (const s of (splits.data ?? []) as Untyped[]) {
     entries.push({
       kind: "split", module: s.module_key, activity: s.activity, note: s.note, savedAt: s.created_at,
       programmes: PROGRAMMES.filter((p) => p.modules.some((m) => m.code === s.module_key)).map((p) => p.key),
-      ranges: ((s.module_split_ranges ?? []) as Record<string, any>[])
+      ranges: ((s.module_split_ranges ?? []) as Untyped[])
         .map((x) => ({ from: x.from_letter, to: x.to_letter, day: x.day, start: x.start_time, end: x.end_time, room: x.room }))
         .sort((a, b) => a.from.localeCompare(b.from)),
     });
@@ -106,7 +107,7 @@ export async function reuseRotation(from: string, scope: Scope): Promise<Reused>
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: `${from} has no saved rotation any more.` };
 
-  const sessions: RotationSession[] = ((data.lab_rotation_sessions ?? []) as Record<string, any>[])
+  const sessions: RotationSession[] = ((data.lab_rotation_sessions ?? []) as Untyped[])
     .map((s) => ({
       week: s.week, date: s.date, day: s.day,
       start: s.start_time, end: s.end_time,
@@ -152,7 +153,7 @@ export async function reuseSplit(from: { module: string; activity: string }, sco
   const rule: SplitRule = {
     moduleKey: scope.module,
     activity: from.activity,
-    ranges: ((data.module_split_ranges ?? []) as Record<string, any>[])
+    ranges: ((data.module_split_ranges ?? []) as Untyped[])
       .map((r) => ({
         from: r.from_letter, to: r.to_letter, day: r.day,
         start: r.start_time, end: r.end_time,

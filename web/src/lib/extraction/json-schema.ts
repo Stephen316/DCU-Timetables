@@ -1,18 +1,20 @@
+import type { Untyped } from "@/lib/untyped";
+
 /// Converts a schema written in Gemini's dialect (`Type.OBJECT`, `nullable: true`) into
 /// standard JSON Schema, for providers that speak the standard.
 ///
 /// Converted rather than rewritten by hand, so every provider is held to the same
 /// vocabularies. A hand-copied schema for a second provider would drift from the one the
 /// console actually uses, and from then on the harness would be measuring the copy.
-export function toJsonSchema(s: Record<string, any>): Record<string, any> {
+export function toJsonSchema(s: Untyped): Untyped {
   const kind = String(s.type).toLowerCase();
-  const out: Record<string, any> = {};
+  const out: Untyped = {};
   if (s.description) out.description = s.description;
 
   if (kind === "object") {
     out.type = "object";
     out.properties = Object.fromEntries(
-      Object.entries(s.properties ?? {}).map(([k, v]) => [k, toJsonSchema(v as Record<string, any>)]),
+      Object.entries(s.properties ?? {}).map(([k, v]) => [k, toJsonSchema(v as Untyped)]),
     );
     out.required = s.required ?? Object.keys(s.properties ?? {});
     // Strict modes reject unlisted keys only if told to; without this a model can pad a

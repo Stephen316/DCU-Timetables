@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { consoleOpen } from "@/lib/auth/gate";
 import { supabaseServer } from "@/lib/supabase/server";
 import { fromRow, type SavedChange } from "@/lib/changes/change";
+import type { Untyped } from "@/lib/untyped";
 
 /// What applies to one programme and module — the "Saved" list under the chat. Nothing
 /// without both: every table for every module is offered by the reuse dropdown instead
@@ -114,9 +115,9 @@ export async function listSaved(programme: string, module: string):
     ok: true,
     view: {
       rotation,
-      splits: (splits.data ?? []).map((s: Record<string, any>) => ({
+      splits: (splits.data ?? []).map((s: Untyped) => ({
         module: s.module_key, activity: s.activity, note: s.note, savedAt: s.created_at,
-        ranges: ((s.module_split_ranges ?? []) as Record<string, any>[])
+        ranges: ((s.module_split_ranges ?? []) as Untyped[])
           .map((r) => ({ from: r.from_letter, to: r.to_letter, day: r.day, start: r.start_time, end: r.end_time, room: r.room, label: r.label }))
           .sort((a, b) => a.from.localeCompare(b.from)),
       })),

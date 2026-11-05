@@ -8,6 +8,7 @@
 
 import type { Finding } from "@/lib/extraction/rotation";
 import { PROGRAMME_CODE, programmeFor, type Programme } from "@/lib/proposals/courses";
+import type { Untyped } from "@/lib/untyped";
 
 export type TimetableChange = {
   courseKey: string;
@@ -120,7 +121,7 @@ export function toRow(c: TimetableChange) {
   };
 }
 
-export function fromRow(r: Record<string, any>): SavedChange {
+export function fromRow(r: Untyped): SavedChange {
   return {
     id: r.id, createdAt: r.created_at, courseKey: r.course_key, group: r.grp, kind: r.kind,
     module: r.module, activityCode: r.activity_code, title: r.title, dates: r.dates ?? [],

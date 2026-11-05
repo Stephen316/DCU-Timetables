@@ -4,7 +4,7 @@
 # the same commands pass there.
 #
 #   scripts/ci.sh          # web, then mobile
-#   scripts/ci.sh web      # production build of the console (type-checks every file)
+#   scripts/ci.sh web      # the console: lint, then a production build (type-checks every file)
 #   scripts/ci.sh mobile   # the Expo app: type-check, lint, unit tests, and a full bundle
 set -euo pipefail
 
@@ -20,6 +20,7 @@ web() {
     echo "web: stop the dev server on :3100 first — it shares web/.next with next build" >&2
     return 1
   fi
+  npm run lint
   npm run build
 }
 
