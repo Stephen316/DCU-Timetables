@@ -4,6 +4,24 @@ import { locationDisplay } from './roomLocation';
 import { eventTypeLabel, shortTitleOf, staffText, TimetableEvent, titleOf } from './timetableEvent';
 
 /**
+ * One class as a calendar has it, whichever way it gets there: the .ics file or Google.
+ * Both are built from these, so the two can never word a class differently.
+ */
+export interface CalendarEntry {
+  /** Stable across exports, so adding the year again updates a class rather than doubling it. */
+  uid: string;
+  start: Date;
+  end: Date;
+  title: string;
+  /** Room and delivery, "" when there's neither. */
+  place: string;
+  /** The module's full title, the activity and the staff, one to a line; "" when there's none. */
+  notes: string;
+  /** Minutes before the start for each alert, fewest first; 0 is at the start. */
+  alerts: number[];
+}
+
+/**
  * The timetable as an iCalendar file (RFC 5545), for Calendar, Google or Outlook to import.
  * Each class carries the student's alert times, so the calendar alerts for it — the way a
  * browser, which can't fire a notification itself, still gets class alerts. Imported, not
@@ -11,39 +29,54 @@ import { eventTypeLabel, shortTitleOf, staffText, TimetableEvent, titleOf } from
  */
 export const CalendarExport = {
   fileName: 'DCU Timetable.ics',
+  /** The calendar's name, in the file and as the calendar the app makes in Google. */
+  calendarName: 'DCU Timetable',
 
-  ics(events: TimetableEvent[], alerts: AlertSettings, now: Date): string {
+  /** Each class once, soonest first, with the student's alert times. */
+  entries(events: TimetableEvent[], alerts: AlertSettings): CalendarEntry[] {
     const offsets = [...new Set([alerts.first, alerts.second].filter((o): o is number => o !== null))].sort((a, b) => a - b);
     const seen = new Set<string>();
+    const entries: CalendarEntry[] = [];
+    for (const event of [...events].sort((a, b) => a.start.getTime() - b.start.getTime())) {
+      if (seen.has(event.id)) continue;
+      seen.add(event.id);
+      const room = locationDisplay(event) === '—' ? null : locationDisplay(event);
+      const delivery = event.type === 'onCampus' ? null : eventTypeLabel(event.type);
+      entries.push({
+        uid: `${event.id}@dcu-timetable`,
+        start: event.start,
+        end: event.end,
+        title: shortTitleOf(event),
+        place: [room, delivery].filter((p): p is string => p !== null).join(', '),
+        notes: [titleOf(event), activitySummary(event.activity), staffText(event)].filter((p): p is string => !!p).join('\n'),
+        alerts: offsets,
+      });
+    }
+    return entries;
+  },
+
+  ics(events: TimetableEvent[], alerts: AlertSettings, now: Date): string {
     const lines = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//DCU Timetable//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      'X-WR-CALNAME:DCU Timetable',
+      `X-WR-CALNAME:${CalendarExport.calendarName}`,
     ];
-    for (const event of [...events].sort((a, b) => a.start.getTime() - b.start.getTime())) {
-      if (seen.has(event.id)) continue;
-      seen.add(event.id);
-      const title = shortTitleOf(event);
-      const room = locationDisplay(event) === '—' ? null : locationDisplay(event);
-      const delivery = event.type === 'onCampus' ? null : eventTypeLabel(event.type);
-      const place = [room, delivery].filter((p): p is string => p !== null).join(', ');
-      const notes = [titleOf(event), activitySummary(event.activity), staffText(event)].filter((p): p is string => !!p);
+    for (const entry of CalendarExport.entries(events, alerts)) {
       lines.push(
         'BEGIN:VEVENT',
-        // Stable across exports, so importing again updates a class rather than doubling it.
-        `UID:${text(event.id)}@dcu-timetable`,
+        `UID:${text(entry.uid)}`,
         `DTSTAMP:${utc(now)}`,
-        `DTSTART:${utc(event.start)}`,
-        `DTEND:${utc(event.end)}`,
-        `SUMMARY:${text(title)}`,
+        `DTSTART:${utc(entry.start)}`,
+        `DTEND:${utc(entry.end)}`,
+        `SUMMARY:${text(entry.title)}`,
       );
-      if (place) lines.push(`LOCATION:${text(place)}`);
-      if (notes.length > 0) lines.push(`DESCRIPTION:${text(notes.join('\n'))}`);
-      for (const offset of offsets) {
-        lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${text(title)}`, `TRIGGER:${trigger(offset)}`, 'END:VALARM');
+      if (entry.place) lines.push(`LOCATION:${text(entry.place)}`);
+      if (entry.notes) lines.push(`DESCRIPTION:${text(entry.notes)}`);
+      for (const offset of entry.alerts) {
+        lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${text(entry.title)}`, `TRIGGER:${trigger(offset)}`, 'END:VALARM');
       }
       lines.push('END:VEVENT');
     }

@@ -7,6 +7,7 @@ import {
   SupabaseModuleTitleStore, SupabaseTimetableChangeStore, TimetableChangeCache, TimetableChangeStore,
 } from './courseData';
 import { DCU_API, DCUAPIClient, TimetableSource } from './dcuApi';
+import { GoogleCalendar } from './googleCalendar';
 import { SupabaseREST } from './rest';
 import {
   AppEvent, CachedRole, Emitter, ReporterID, SecretStore, SignedInUser, supabaseConfigFromEnv, SupabaseConfig,
@@ -61,6 +62,8 @@ export interface Services {
   alerts: AlertScheduler | null;
   /** Notifications pushed by the server, in the web build. Null everywhere else, and until Supabase is configured. */
   webPush: WebPush | null;
+  /** Add to Google Calendar, in the web build in a browser once a Google client id is set. Null everywhere else. */
+  googleCalendar: GoogleCalendar | null;
   /**
    * Everything this student left on the device goes, not just their credentials: the next
    * person to sign in here is a different person.
@@ -77,6 +80,8 @@ export interface Platform {
   alerts?: AlertScheduler | null;
   /** The web build in a browser, where the server pushes notifications instead. */
   webPush?: boolean;
+  /** A browser, where Google's sign-in can open its window. */
+  googleCalendar?: boolean;
 }
 
 export async function createServices(platform: Platform): Promise<Services> {
@@ -105,6 +110,9 @@ export async function createServices(platform: Platform): Promise<Services> {
   const webPush = platform.webPush && rest
     ? new WebPush(new SupabasePushSubscriptionStore(rest), prefs, platform.env.EXPO_PUBLIC_VAPID_PUBLIC_KEY?.trim() || null)
     : null;
+
+  const googleClientId = platform.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID?.trim();
+  const googleCalendar = platform.googleCalendar && googleClientId ? new GoogleCalendar(googleClientId, prefs, fetchFn) : null;
 
   const services: Services = {
     prefs,
@@ -139,6 +147,7 @@ export async function createServices(platform: Platform): Promise<Services> {
     sourceOverride: null,
     alerts,
     webPush,
+    googleCalendar,
     signOut() {
       // First, while who's signed in is still known: nothing more reaches this browser.
       webPush?.forget();

@@ -4,7 +4,9 @@
 # repository variables EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (both are
 # public by design; without them the app runs with sign-in switched off), and
 # EXPO_PUBLIC_VAPID_PUBLIC_KEY for notifications (public too; without it the Notifications
-# sheet says the browser can't have them). See docs/PUSH.md.
+# sheet says the browser can't have them). See docs/PUSH.md. EXPO_PUBLIC_GOOGLE_CLIENT_ID turns
+# on Add to Google Calendar (public too; without it Export to Calendar offers only the file).
+# See docs/GOOGLE_CALENDAR.md.
 name: Pages
 
 on:
@@ -47,6 +49,7 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           EXPO_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.EXPO_PUBLIC_VAPID_PUBLIC_KEY }}
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
       - run: cp -R site/. _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
