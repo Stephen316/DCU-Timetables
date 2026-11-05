@@ -1,5 +1,5 @@
 import { ReactNode, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
   ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DeadlineFields, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
   DeadlinePlacement, DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, DETAILS_LIMIT, detailsEditedLabel,
@@ -7,7 +7,7 @@ import {
 } from '../../core/deadline';
 import { addDays, formatAbbreviated, formatTime, formatWeekdayDayMonthTime } from '../../core/time';
 import {
-  ActionRow, ActionSheet, AdaptiveStack, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
+  ActionRow, ActionSheet, AdaptiveStack, AppSwitch, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
   useLargeText, useReduceMotion,
 } from '../../ui/components';
 import { DropdownMenu } from '../../ui/DropdownMenu';
@@ -765,15 +765,7 @@ export function DeadlineForm({
             <Row>
               <View style={styles.dueRow}>
                 <Txt type="footnote" color={theme.inkSecondary} style={styles.text}>Only visible to me</Txt>
-                <Switch
-                  value={isPrivate}
-                  onValueChange={setIsPrivate}
-                  trackColor={{ true: theme.accent, false: theme.raised }}
-                  thumbColor={theme.onAccent}
-                  // The browser's switch takes the on colour of its knob separately.
-                  {...{ activeThumbColor: theme.onAccent }}
-                  accessibilityLabel="Only visible to me"
-                />
+                <AppSwitch value={isPrivate} onValueChange={setIsPrivate} accessibilityLabel="Only visible to me" />
               </View>
               <Txt type="caption" color={theme.inkTertiary}>
                 {"Kept on this device and never shared, so classmates can't see or confirm it."}
