@@ -96,6 +96,17 @@ export async function setBan(id: string, days: number | null, reason: string) {
   return {};
 }
 
+/// Closes one allocation flag. If the name and ID still disagree, the student's next check
+/// raises a new one.
+export async function resolveFlag(id: number) {
+  if (!(await consoleOpen())) return { error: LOCKED };
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("resolve_allocation_flag", { p_id: id });
+  if (error) return { error: error.message };
+  revalidatePath("/flags");
+  return {};
+}
+
 export async function findByPI(pi: string) {
   if (!(await consoleOpen())) return { error: LOCKED };
   const supabase = await supabaseServer();

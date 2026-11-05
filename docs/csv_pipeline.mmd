@@ -46,7 +46,7 @@ flowchart TB
         c7["The server looks for the student<br>on the class list, by name and student ID<br>Checked on opening the app, and again whenever the list changes"]
         c8{"What did it find?"}
         c9["Not on the list<br>The student keeps the programme's timetable"]
-        c10["The name and the ID don't agree<br>An admin flag is written down<br>The student keeps the programme's timetable"]
+        c10["The name and the ID don't agree<br>A flag goes to the console's Flags page<br>The student keeps the programme's timetable"]
         c11["Two students share the name<br>The student keeps the programme's timetable<br>There's no screen to ask which one they are yet"]
         c12["Found them<br>The phone downloads their group and rooms<br>but never anyone's name or ID"]
         c13["The student's labs<br>replace the general lab slots"]
@@ -60,7 +60,7 @@ flowchart TB
         d2[("Class list groups<br>Coded keys with group and rooms<br>No names, no IDs")]
         d3[("Class list members<br>Name or ID to coded key<br>Nobody can read this table directly")]
         d4[("Student accounts<br>Name from the email, student ID")]
-        d5[("Flags for an admin<br>Nothing in the console shows these yet")]
+        d5[("Flags for an admin<br>Shown on the Flags page by account ID, never by name")]
         d6[("Admin activity log")]
   end
 
@@ -129,6 +129,6 @@ flowchart TB
     class a6,a7,a8,a9,a15 ai
     class a4,a11,a12,a14,a16,b2,b6,c2,c3,c6,c8 check
     class d1,d2,d3,d4,d5,d6,b4,b7 store
-    class a3,a5,a13,a17,a18,a19,b3,c1,c4,c7,c9,c12,c13,c15 step
+    class a3,a5,a13,a17,a18,a19,b3,c1,c4,c7,c9,c10,c12,c13,c15 step
     class a1,a2,a10,b1,b5,b8,c5,c16 person
-    class c10,c11,d5 gap
+    class c11 gap
