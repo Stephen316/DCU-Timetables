@@ -14,3 +14,11 @@ local-data/
 # Local secrets and settings (Supabase keys for the app go in mobile/.env.local)
 .env.local
 graphify-out/
+
+# Left at the root by the Swift app before the React Native port: an XcodeGen project and
+# the personal signing file holding a Team ID
+/*.xcodeproj/
+/Local.xcconfig
+
+# Supabase CLI state (linked project, CLI version), written on login and deploy
+supabase/.temp/
