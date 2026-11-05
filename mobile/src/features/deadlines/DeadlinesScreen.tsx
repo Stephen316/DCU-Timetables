@@ -1,12 +1,12 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { deadlineSectionTitle, DeadlineRules } from '../../core/deadline';
+import { deadlineSectionTitle, DeadlineRules, DeadlineSection } from '../../core/deadline';
 import { startOfWeek } from '../../core/time';
 import { useModel, useNow, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Txt } from '../../ui/components';
+import { EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Txt, useReduceMotion } from '../../ui/components';
 import { LoadingScreen } from '../../ui/LoadingScreen';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { CardInset, Radius, Space, useTheme } from '../../ui/theme';
@@ -55,6 +55,43 @@ export function DeadlinesScreen() {
   // The timetable's week may have been moved on; its label is only this week's when it hasn't.
   const now = useNow();
   const showsThisWeek = !!week.weekLabel && week.weekStart?.getTime() === startOfWeek(now).getTime();
+
+  // A new deadline is brought into view and ringed for a moment: further down a long list,
+  // closing the form would otherwise leave the screen as it was, as if adding had failed.
+  // Each layout is relative to its parent, so a row's place in the list is the sum of three.
+  const reduceMotion = useReduceMotion();
+  const scroll = useRef<ScrollView>(null);
+  const viewport = useRef({ offsetY: 0, height: 0 });
+  const cardY = useRef(0);
+  const sectionY = useRef(new Map<DeadlineSection, number>());
+  const rowLayout = useRef(new Map<string, { y: number; height: number }>());
+  const toReveal = useRef<string | null>(null);
+  // The ring shows round the newest addition until its fade has run once.
+  const [ringDone, setRingDone] = useState<string | null>(null);
+  const ringed = model.justAdded !== ringDone ? model.justAdded : null;
+  const clearRing = useCallback(() => setRingDone(model.justAdded), [model.justAdded]);
+  const reveal = () => {
+    const id = toReveal.current;
+    const group = id ? model.sections.find((g) => g.deadlines.some((d) => d.id === id)) : undefined;
+    const row = id ? rowLayout.current.get(id) : undefined;
+    const top = group ? sectionY.current.get(group.section) : undefined;
+    if (!row || top === undefined) return; // Not laid out yet: the layout that is still to come calls this again.
+    toReveal.current = null;
+    const y = cardY.current + top + row.y;
+    const { offsetY, height } = viewport.current;
+    if (y >= offsetY && y + row.height <= offsetY + height) return;
+    scroll.current?.scrollTo({ y: Math.max(0, y - Space.l), animated: !reduceMotion });
+  };
+  useEffect(() => {
+    const id = model.justAdded;
+    if (!id) return;
+    toReveal.current = id;
+    const added = model.sections.flatMap((g) => g.deadlines).find((d) => d.id === id);
+    if (added) AccessibilityInfo.announceForAccessibility(`Added ${added.title}`);
+    reveal();
+    // Only a new id is a new arrival; the sections it reads are as they were when it was added.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.justAdded]);
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + Space.s, borderBottomColor: theme.separator }]}>
@@ -147,6 +184,10 @@ export function DeadlinesScreen() {
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       {header}
       <ListScroll
+        scrollRef={scroll}
+        onViewport={(offsetY, height) => {
+          viewport.current = { offsetY, height };
+        }}
         refreshing={model.isLoading}
         onRefresh={() => void model.reload()}
         // The count is the point of the tab, so it stays on screen while the list scrolls.
@@ -163,11 +204,21 @@ export function DeadlinesScreen() {
           </Section>
         ) : null}
         {/* One card, a section each, split by hairlines — the same panel as the desktop rail's. */}
-        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
+        <View
+          style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}
+          onLayout={(e) => {
+            cardY.current = e.nativeEvent.layout.y;
+            reveal();
+          }}
+        >
           {model.sections.map((group, i) => (
             <View
               key={group.section}
               style={[styles.sectionBox, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator }]}
+              onLayout={(e) => {
+                sectionY.current.set(group.section, e.nativeEvent.layout.y);
+                reveal();
+              }}
             >
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitle}>
@@ -186,8 +237,15 @@ export function DeadlinesScreen() {
                 </Txt>
               </View>
               {group.deadlines.map((d) => (
-                <DeadlineRow
+                <View
                   key={d.id}
+                  onLayout={(e) => {
+                    const { y, height } = e.nativeEvent.layout;
+                    rowLayout.current.set(d.id, { y, height });
+                    reveal();
+                  }}
+                >
+                <DeadlineRow
                   deadline={d}
                   moduleName={week.moduleName(d.moduleKey)}
                   standing={model.standing(d)}
@@ -212,6 +270,8 @@ export function DeadlinesScreen() {
                   moderation={model.moderation}
                   completed={model.isCompleted(d)}
                 />
+                {ringed === d.id ? <NewRowRing onDone={clearRing} /> : null}
+                </View>
               ))}
             </View>
           ))}
@@ -221,8 +281,34 @@ export function DeadlinesScreen() {
   );
 }
 
+/**
+ * A ring that lights round a just-added row and fades, once the list has had a moment to
+ * scroll it into view. A fade rather than movement, so it stays with Reduce Motion on.
+ */
+function NewRowRing({ onDone }: { onDone: () => void }) {
+  const theme = useTheme();
+  const [opacity] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const ring = Animated.sequence([
+      Animated.delay(250),
+      Animated.timing(opacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      Animated.delay(1200),
+      Animated.timing(opacity, { toValue: 0, duration: 800, easing: Easing.in(Easing.quad), useNativeDriver: false }),
+    ]);
+    ring.start(({ finished }) => finished && onDone());
+    return () => ring.stop();
+  }, [opacity, onDone]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.ring, { borderColor: theme.accent, opacity }]}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  ring: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: Radius.control, borderWidth: 2 },
   header: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   filter: { maxWidth: '80%' },
   // Level with the title, as ⋯ is on the timetable.

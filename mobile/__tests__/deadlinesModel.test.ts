@@ -120,6 +120,30 @@ describe('Adding a deadline from the Deadlines tab', () => {
     expect(model.isMine(saved)).toBe(true);
     expect(model.standing(saved).confirmedByMe).toBe(true);
     expect(model.errorText).toBeNull();
+    // Marked for the list to bring into view, so a row added below the fold is still seen.
+    expect(model.justAdded).toBe(saved.id);
+  });
+
+  test("one that couldn't be shared isn't marked to be brought into view", async () => {
+    const services = await createServices({ kv: new MemoryKV(), secrets: noSecrets, env: {}, alerts: null });
+    services.deadlines.submit = () => Promise.reject(new Error('offline'));
+    const model = new DeadlinesModel(services);
+    await model.load(['CA116']);
+    await model.add({ title: 'Lab 2', kind: 'labReport', due: inDays(5), gradeWeight: 0 }, { moduleKey: 'CA116', atGroupKey: null, label: '' });
+    expect(model.justAdded).toBeNull();
+    // Still said once the reload after it has worked, rather than wiped by it.
+    expect(model.errorText).toBe("Couldn't share that deadline.");
+    expect(model.sections).toEqual([]);
+  });
+
+  test("shared, but a name that didn't save is still said after the reload", async () => {
+    const services = await createServices({ kv: new MemoryKV(), secrets: noSecrets, env: {}, alerts: null });
+    services.deadlines.setLabel = () => Promise.reject(new Error('label refused'));
+    const model = new DeadlinesModel(services);
+    await model.load(['CA116']);
+    await model.add({ title: 'Lab 2', kind: 'labReport', due: inDays(5), gradeWeight: 0 }, { moduleKey: 'CA116', atGroupKey: null, label: 'Sorting lab' });
+    expect(model.sections.flatMap((s) => s.deadlines).map((d) => d.title)).toEqual(['Lab 2']);
+    expect(model.errorText).toBe("Shared, but your name for it or the details didn't save.");
   });
 
   test('details written on the form go up with the new deadline', async () => {

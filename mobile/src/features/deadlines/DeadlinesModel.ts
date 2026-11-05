@@ -30,6 +30,11 @@ export class DeadlinesModel extends Observable {
   standings = new Map<string, DeadlineStanding>();
   isLoading = false;
   errorText: string | null = null;
+  /**
+   * The deadline this student added last, for the list to bring into view: a long list
+   * would otherwise take it in below the fold, and closing the form looks like nothing happened.
+   */
+  justAdded: string | null = null;
 
   private modules: string[] = [];
   /**
@@ -155,13 +160,26 @@ export class DeadlinesModel extends Observable {
   }
 
   private async act(work: () => Promise<void>, fallback: string): Promise<void> {
+    let failure: string | null = null;
     try {
       await work();
     } catch (error) {
-      this.errorText = errorMessage(error, fallback);
+      failure = errorMessage(error, fallback);
+      this.errorText = failure;
       this.changed();
     }
     await this.reload();
+    this.keepError(failure);
+  }
+
+  /**
+   * Puts back what went wrong once the reload after it is in. A reload that works clears
+   * the message, which would otherwise wipe it the moment it appeared.
+   */
+  private keepError(failure: string | null): void {
+    if (!failure || this.errorText) return;
+    this.errorText = failure;
+    this.changed();
   }
 
   toggleConfirmation(deadline: Deadline): Promise<void> {
@@ -193,13 +211,17 @@ export class DeadlinesModel extends Observable {
     this.all = DeadlineRules.upcoming([...this.all, deadline]);
     // Showing another module would save it out of sight, as if adding it had failed.
     if (this.moduleFilter && this.moduleFilter !== deadline.moduleKey) this.moduleFilter = null;
+    this.justAdded = deadline.id;
     this.regroup();
     this.changed();
     try {
       await shareDeadline(this.services, deadline, this.reporterID);
     } catch (error) {
-      this.errorText = errorMessage(error, "Couldn't share that deadline.");
+      this.justAdded = null;
+      const failure = errorMessage(error, "Couldn't share that deadline.");
+      this.errorText = failure;
       await this.reload();
+      this.keepError(failure);
       return;
     }
     const label = DeadlineRules.labelToSave(deadline, placement.label);

@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, createContext, isValidElement, ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { Children, createContext, isValidElement, ReactNode, Ref, useContext, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo, ActivityIndicator, Animated, ColorValue, Easing, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
@@ -133,7 +133,7 @@ export function AdaptiveStack({ children, gap = Space.s, style }: { children: Re
 
 /** A grouped list on the app's canvas. */
 export function ListScroll({
-  children, refreshing, onRefresh, contentStyle, footer, onDragChange,
+  children, refreshing, onRefresh, contentStyle, footer, onDragChange, scrollRef, onViewport,
 }: {
   children: ReactNode;
   refreshing?: boolean;
@@ -143,12 +143,27 @@ export function ListScroll({
   footer?: ReactNode;
   /** A finger on the list and off it again — the tutorial hides its card meanwhile. */
   onDragChange?: (dragging: boolean) => void;
+  /** For scrolling the list to a row of its own accord. */
+  scrollRef?: Ref<ScrollView>;
+  /** The part of the list on screen — how far it's scrolled, and how tall the view is. */
+  onViewport?: (offsetY: number, height: number) => void;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const viewport = useRef({ offsetY: 0, height: 0 });
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       <ScrollView
+        ref={scrollRef}
+        onLayout={onViewport && ((e) => {
+          viewport.current.height = e.nativeEvent.layout.height;
+          onViewport(viewport.current.offsetY, viewport.current.height);
+        })}
+        onScroll={onViewport && ((e) => {
+          viewport.current.offsetY = e.nativeEvent.contentOffset.y;
+          onViewport(viewport.current.offsetY, viewport.current.height);
+        })}
+        scrollEventThrottle={onViewport ? 32 : undefined}
         style={styles.fill}
         contentContainerStyle={[styles.listContent, styles.readable, { paddingBottom: Space.xxl + (footer ? 0 : insets.bottom) }, contentStyle]}
         keyboardShouldPersistTaps="handled"
@@ -264,22 +279,69 @@ export function LabeledRow({ label, value }: { label: string; value: string }) {
 }
 
 export function ToggleRow({ value, onChange, children }: { value: boolean; onChange: (value: boolean) => void; children: ReactNode }) {
-  const theme = useTheme();
   return (
     <Row>
       <View style={styles.rowLine}>
         <View style={styles.fill}>{children}</View>
-        <Switch
-          value={value}
-          onValueChange={onChange}
-          // Accent, not system green: green means "confirmed" everywhere else in the app.
-          trackColor={{ true: theme.accent, false: theme.raised }}
-          // White thumbs everywhere, as iOS draws them; Android and the web tint theirs otherwise.
-          thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
-          {...(Platform.OS === 'web' ? { activeThumbColor: '#FFFFFF' } : {})}
-        />
+        <AppSwitch value={value} onValueChange={onChange} />
       </View>
     </Row>
+  );
+}
+
+const SWITCH = { width: 51, height: 31, thumb: 27 };
+const SWITCH_INSET = (SWITCH.height - SWITCH.thumb) / 2;
+
+/**
+ * The app's on/off switch: accent when on — not system green, which means "confirmed"
+ * everywhere else here — with a white knob, as iOS draws it. The browser's own switch is a
+ * thin Material track with the knob hanging over its ends, so the web build draws this one
+ * itself; the phone keeps its native switch.
+ */
+export function AppSwitch({
+  value, onValueChange, accessibilityLabel,
+}: { value: boolean; onValueChange: (value: boolean) => void; accessibilityLabel?: string }) {
+  const theme = useTheme();
+  const reduceMotion = useReduceMotion();
+  const [on] = useState(() => new Animated.Value(value ? 1 : 0));
+  useEffect(() => {
+    Animated.timing(on, {
+      toValue: value ? 1 : 0, duration: reduceMotion ? 0 : 180, easing: Easing.out(Easing.quad), useNativeDriver: false,
+    }).start();
+  }, [on, value, reduceMotion]);
+  if (Platform.OS !== 'web') {
+    return (
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        accessibilityLabel={accessibilityLabel}
+        trackColor={{ true: theme.accent, false: theme.raised }}
+        thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
+      />
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => onValueChange(!value)}
+      accessibilityRole="switch"
+      aria-checked={value}
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+    >
+      <Animated.View
+        style={[
+          styles.switchTrack,
+          { backgroundColor: on.interpolate({ inputRange: [0, 1], outputRange: [theme.raised, theme.accent] }) },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.switchThumb,
+            { transform: [{ translateX: on.interpolate({ inputRange: [0, 1], outputRange: [0, SWITCH.width - SWITCH.thumb - 2 * SWITCH_INSET] }) }] },
+          ]}
+        />
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -779,6 +841,11 @@ export const styles = StyleSheet.create({
   hairline: { height: StyleSheet.hairlineWidth, marginLeft: CardInset.x },
   row: { minHeight: MIN_TARGET, paddingHorizontal: CardInset.x, paddingVertical: CardInset.y, justifyContent: 'center' },
   rowLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
+  switchTrack: { width: SWITCH.width, height: SWITCH.height, borderRadius: SWITCH.height / 2, padding: SWITCH_INSET },
+  switchThumb: {
+    width: SWITCH.thumb, height: SWITCH.thumb, borderRadius: SWITCH.thumb / 2, backgroundColor: '#FFFFFF',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+  },
   labeled: { flexDirection: 'row', justifyContent: 'space-between', gap: Space.m, flexWrap: 'wrap' },
   labeledValue: { flexShrink: 1, textAlign: 'right' },
   disabled: { opacity: 0.4 },
