@@ -126,6 +126,8 @@ export const PrefKey = {
    */
   tutorialOfferedToExisting: 'tutorialOfferedToExisting',
   allocationTried: 'allocationTried',
+  /** `SubgroupQuestion`: a class list where this student's name is shared, waiting for their subgroup. */
+  subgroupQuestion: 'subgroupQuestion',
   weekShowsCalendar: 'weekShowsCalendar',
   /** `CompletedDeadlines`: the ids this student has ticked off, as a JSON array. */
   completedDeadlines: 'completedDeadlines',

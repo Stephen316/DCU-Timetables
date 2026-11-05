@@ -268,6 +268,13 @@ describe('Supabase requests', () => {
     expect(query(calls[1].url).allocation_key).toBe('eq.\\xab12');
   });
 
+  test("a course's subgroups are read without names or keys", async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: [{ subgroup: 'B.1' }, { subgroup: 'A.2' }, { subgroup: 'A.2' }, { subgroup: null }] }));
+    const store = new SupabaseAllocationStore(await signedInREST(fn));
+    expect(await store.subgroups('EEG1')).toEqual(['A.2', 'B.1']);
+    expect(query(calls[0].url)).toMatchObject({ select: 'subgroup', course_key: 'eq.EEG1' });
+  });
+
   test('rotation and changes are read signed in or not at all', async () => {
     const { calls, fn } = fakeFetch();
     const anon = await anonREST(fn);

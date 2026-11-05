@@ -18,6 +18,16 @@ export interface RosterSummary {
   version: number;
 }
 
+/**
+ * A class list on which the student's name belongs to more than one student, waiting for
+ * them to say which lab subgroup they're in. Kept until they answer or skip, or the list
+ * changes.
+ */
+export interface SubgroupQuestion {
+  courseKey: string;
+  version: number;
+}
+
 /** What `resolve_allocation` said about the signed-in student. */
 export type AllocationResolution =
   /** Exactly one row. `key` is hex, as the RPC returns it. */
@@ -56,6 +66,14 @@ export interface AllocationStore {
   resolve(courseKey: string, subgroup: string | null): Promise<AllocationResolution>;
   /** The one allocation row for a resolved key. */
   allocation(courseKey: string, key: string): Promise<Allocation | null>;
+  /** Every subgroup on a course's class list, for a student to say which is theirs. No names. */
+  subgroups(courseKey: string): Promise<string[]>;
+}
+
+/** Distinct, non-empty, in reading order: "A.2" before "A.10", "A.4" before "B.1". */
+export function sortedSubgroups(labels: readonly (string | null)[]): string[] {
+  const distinct = [...new Set(labels.flatMap((l) => (l && l.trim() ? [l.trim()] : [])))];
+  return distinct.sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
 }
 
 export class SupabaseAllocationStore implements AllocationStore {
@@ -89,6 +107,13 @@ export class SupabaseAllocationStore implements AllocationStore {
     });
     const row = rows(json)[0];
     return row ? allocationFromRow(row) : null;
+  }
+
+  async subgroups(courseKey: string): Promise<string[]> {
+    const json = await this.rest.json('GET', '/rest/v1/course_allocations', describe, {
+      query: [['select', 'subgroup'], ['course_key', `eq.${courseKey}`]],
+    });
+    return sortedSubgroups(rows(json).map((r) => (typeof r.subgroup === 'string' ? r.subgroup : null)));
   }
 }
 
@@ -126,7 +151,8 @@ export const AllocationRefresh = {
    * For a student on the programme they picked: if the class list for that programme's
    * course has them, they move onto their lab group; if not, they stay as they are. Each list
    * is asked about once per version: a conflict files a flag for an admin on every call. A
-   * shared name comes back ambiguous and stays on the programme.
+   * shared name comes back as a question for the student — which subgroup they're in — and
+   * stays on the programme until `answer` settles it.
    *
    * `courseKey` limits the lookup to one course's list, so picking a programme only ever
    * matches against that programme's students.
@@ -136,7 +162,11 @@ export const AllocationRefresh = {
     tried: Record<string, number>,
     store: AllocationStore,
     courseKey?: string,
-  ): Promise<{ kind: 'adopted'; profile: StudentProfile } | { kind: 'stay'; tried: Record<string, number> }> {
+  ): Promise<
+    | { kind: 'adopted'; profile: StudentProfile }
+    | { kind: 'ask'; question: SubgroupQuestion; tried: Record<string, number> }
+    | { kind: 'stay'; tried: Record<string, number> }
+  > {
     const next = { ...tried };
     try {
       const fresh = (await store.rosters())
@@ -147,6 +177,11 @@ export const AllocationRefresh = {
         const cohort = cohortForCourseKey(roster.courseKey);
         if (cohort === null) continue;
         const resolution = await store.resolve(roster.courseKey, null);
+        if (resolution.kind === 'ambiguous') {
+          // Asked once per version, like the rest: skipping holds until the list changes.
+          next[roster.courseKey] = roster.version;
+          return { kind: 'ask', question: { courseKey: roster.courseKey, version: roster.version }, tried: next };
+        }
         if (resolution.kind === 'matched') {
           const allocation = await store.allocation(roster.courseKey, resolution.key);
           if (allocation) {
@@ -162,6 +197,27 @@ export const AllocationRefresh = {
       // Offline: whatever was asked about before the failure stays asked; the rest next time.
     }
     return { kind: 'stay', tried: next };
+  },
+
+  /**
+   * The student's answer to a `SubgroupQuestion`: resolves again with the subgroup they
+   * picked, which the server uses only to choose between the rows that share their name. A
+   * subgroup none of them is in matches nobody, and they stay on the programme. Throws when
+   * the server can't be reached, so the card can say so and let them try again.
+   */
+  async answer(
+    name: string,
+    question: SubgroupQuestion,
+    subgroup: string,
+    store: AllocationStore,
+  ): Promise<{ kind: 'adopted'; profile: StudentProfile } | { kind: 'noMatch' }> {
+    const cohort = cohortForCourseKey(question.courseKey);
+    if (cohort === null) return { kind: 'noMatch' };
+    const resolution = await store.resolve(question.courseKey, subgroup);
+    if (resolution.kind !== 'matched') return { kind: 'noMatch' };
+    const allocation = await store.allocation(question.courseKey, resolution.key);
+    if (!allocation) return { kind: 'noMatch' };
+    return { kind: 'adopted', profile: profileFromAllocation(name, cohort, allocation, resolution.key, resolution.version) };
   },
 };
 

@@ -47,7 +47,7 @@ flowchart TB
         c8{"What did it find?"}
         c9["Not on the list<br>The student keeps the programme's timetable"]
         c10["The name and the ID don't agree<br>A flag goes to the console's Flags page<br>The student keeps the programme's timetable"]
-        c11["Two students share the name<br>The student keeps the programme's timetable<br>There's no screen to ask which one they are yet"]
+        c11["Two students share the name<br>The timetable asks which lab subgroup is theirs<br>Until they answer, they keep the programme's timetable"]
         c12["Found them<br>The phone downloads their group and rooms<br>but never anyone's name or ID"]
         c13["The student's labs<br>replace the general lab slots"]
         c14(("Together"))
@@ -112,6 +112,7 @@ flowchart TB
     c10 --> d5
     c10 --> c14
     c8 -- "More than one" --> c11 --> c14
+    c11 -- "They pick their subgroup" --> c12
     c8 -- "Exactly one" --> c12
     d2 -.-> c12
     c12 --> c13 --> c14
@@ -124,11 +125,9 @@ flowchart TB
     classDef store   fill:#C8E6C9,stroke:#2E7D32,color:#000
     classDef step    fill:#BBDEFB,stroke:#1565C0,color:#000
     classDef person  fill:#000000,color:#fff
-    classDef gap     fill:#FFCDD2,stroke:#C62828,color:#000
 
     class a6,a7,a8,a9,a15 ai
     class a4,a11,a12,a14,a16,b2,b6,c2,c3,c6,c8 check
     class d1,d2,d3,d4,d5,d6,b4,b7 store
-    class a3,a5,a13,a17,a18,a19,b3,c1,c4,c7,c9,c10,c12,c13,c15 step
+    class a3,a5,a13,a17,a18,a19,b3,c1,c4,c7,c9,c10,c11,c12,c13,c15 step
     class a1,a2,a10,b1,b5,b8,c5,c16 person
-    class c11 gap

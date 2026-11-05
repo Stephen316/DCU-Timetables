@@ -7,7 +7,7 @@ import {
 } from '../src/core/profile';
 import { DublinTime } from '../src/core/time';
 import {
-  AllocationRefresh, AllocationResolution, AllocationStore, decodeResolution, decodeSavedRotation, LabRotationCache,
+  AllocationRefresh, AllocationResolution, AllocationStore, decodeResolution, sortedSubgroups, decodeSavedRotation, LabRotationCache,
   LabRotationRefresh, LabRotationStore, RosterSummary, SavedLabRotation, TimetableChangeCache, TimetableChangeRefresh,
   TimetableChangeStore,
 } from '../src/data/courseData';
@@ -70,11 +70,16 @@ class FakeAllocationStore implements AllocationStore {
     if (this.failing) throw new Error('offline');
     return this.rosterList;
   }
-  async resolve() {
+  subgroupsAsked: (string | null)[] = [];
+  /** What `resolve` answers for a call with one of these subgroups, in place of `resolution`. */
+  bySubgroup: Record<string, AllocationResolution> = {};
+  async resolve(_courseKey: string, subgroup: string | null) {
     this.resolveCalls++;
-    return this.resolution;
+    this.subgroupsAsked.push(subgroup);
+    return (subgroup !== null ? this.bySubgroup[subgroup] : undefined) ?? this.resolution;
   }
   async allocation() { return this.row; }
+  async subgroups() { return ['A.1', 'A.2']; }
 }
 
 describe('Allocation refresh', () => {
@@ -138,8 +143,48 @@ describe('Allocation refresh', () => {
     expect(store.resolveCalls).toBe(1);
   });
 
-  test('a shared name stays on the picked programme', async () => {
-    expect(await AllocationRefresh.adopt('', {}, new FakeAllocationStore(1, { kind: 'ambiguous' }))).toEqual({ kind: 'stay', tried: { EEG1: 1 } });
+  test('a shared name asks which subgroup, once per version', async () => {
+    const store = new FakeAllocationStore(1, { kind: 'ambiguous' });
+    expect(await AllocationRefresh.adopt('', {}, store)).toEqual({
+      kind: 'ask', question: { courseKey: 'EEG1', version: 1 }, tried: { EEG1: 1 },
+    });
+    expect(await AllocationRefresh.adopt('', { EEG1: 1 }, store)).toEqual({ kind: 'stay', tried: { EEG1: 1 } });
+    expect(store.resolveCalls).toBe(1);
+  });
+
+  test('the subgroup a student picks settles a shared name', async () => {
+    const store = new FakeAllocationStore(1, { kind: 'ambiguous' }, alloc('A', 'A.2', 'SG23', 'SB39'));
+    store.bySubgroup = { 'A.2': { kind: 'matched', key: 'ee', version: 1 } };
+    const result = await AllocationRefresh.answer('Student Example', { courseKey: 'EEG1', version: 1 }, 'A.2', store);
+    if (result.kind !== 'adopted') throw new Error('expected adoption');
+    expect(result.profile).toMatchObject({ group: 'A', subgroup: 'A.2', courseKey: 'EEG1', rosterVersion: 1, name: 'Student Example' });
+    expect(store.subgroupsAsked).toEqual(['A.2']);
+  });
+
+  test("a subgroup none of the same-named students is in matches nobody", async () => {
+    const store = new FakeAllocationStore(1, { kind: 'ambiguous' }, alloc('A', 'A.2', 'SG23', 'SB39'));
+    store.bySubgroup = { 'A.1': { kind: 'ambiguous' } };
+    expect(await AllocationRefresh.answer('', { courseKey: 'EEG1', version: 1 }, 'A.1', store)).toEqual({ kind: 'noMatch' });
+    expect(await AllocationRefresh.answer('', { courseKey: 'EEG1', version: 1 }, 'B.4', store)).toEqual({ kind: 'noMatch' });
+  });
+
+  test("a question for a course the app can't show is never sent", async () => {
+    const store = new FakeAllocationStore(1, { kind: 'matched', key: 'dd', version: 1 });
+    expect(await AllocationRefresh.answer('', { courseKey: 'CASE3', version: 1 }, 'A.1', store)).toEqual({ kind: 'noMatch' });
+    expect(store.resolveCalls).toBe(0);
+  });
+
+  test('a re-uploaded list re-checks with the subgroup the student picked', async () => {
+    const picked = profileFromAllocation('Student Example', 'engineeringYear1', alloc('A', 'A.2', 'SG23', 'SB39'), 'ee', 1);
+    const store = new FakeAllocationStore(2, { kind: 'ambiguous' }, alloc('A', 'A.2', 'SG24', 'SB39'));
+    store.bySubgroup = { 'A.2': { kind: 'matched', key: 'ee', version: 2 } };
+    const result = await AllocationRefresh.check(picked, store);
+    expect(result.kind).toBe('updated');
+    expect(store.subgroupsAsked).toEqual(['A.2']);
+  });
+
+  test('subgroups are listed once each, in reading order', () => {
+    expect(sortedSubgroups(['B.1', 'A.10', null, 'A.2', ' A.2 ', '', 'A.1'])).toEqual(['A.1', 'A.2', 'A.10', 'B.1']);
   });
 
   test('offline leaves the list to be asked about later', async () => {

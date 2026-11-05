@@ -13,9 +13,11 @@ right; this fills in what it leaves open and sequences the build.
 >   until Accept, which saves it through `save_roster` or `save_lab_rotation`.
 > - **The app asks for the student ID** at sign-up (`StudentID.tsx`), so a class list with
 >   IDs is matched on name and ID together.
-> - **The app has no subgroup question.** The SwiftUI app asked which subgroup when two
->   students share a name; the React Native port did not carry it over, so such a student
->   keeps the programme's general timetable.
+> - **The subgroup question is a card on the timetable.** When two students on a list share
+>   a name, the student sees the general timetable and a card asking which lab subgroup
+>   they're in (`SubgroupCard.tsx`); their answer goes to `resolve_allocation` as
+>   `p_subgroup`. The SwiftUI app asked during setup; the React Native port lost it until
+>   5 Nov 2026.
 > - **Conflicts reach the console**, on its Flags page (`supabase/phase41_allocation_flags.sql`).
 >
 > Sections 4 and 5, and steps 3 and 4 of §6, are the September plan, kept for the reasoning.
@@ -475,7 +477,7 @@ Three caveats:
    5 Nov 2026: the console's Flags page.)*
 7. **App reader** — *built*: the profile screen offers the uploaded class lists the app can
    build a timetable for, resolves on the server, asks the subgroup when names collide *(lost
-   in the React Native port; see the status note at the top)*, and
+   in the React Native port, and back since 5 Nov 2026 as a card on the timetable)*, and
    re-resolves when an upload bumps the version. `EngGroupDirectory` — the on-phone matcher
    and its class-list import — is deleted. Profiles made before this keep working and never
    refresh. *(Approved and built 23 Sep 2026.)*

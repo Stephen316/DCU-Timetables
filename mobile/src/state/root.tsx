@@ -3,7 +3,9 @@ import { AppState } from 'react-native';
 import { cohortForCourseKey, decodeProfile, StudentProfile, TimetableAudience } from '../core/profile';
 import { localDateString } from '../core/time';
 import { categoryCode, TimetableCategory } from '../core/timetableEvent';
-import { AllocationRefresh, LabRotationRefresh, ModuleSplitRefresh, ModuleTitleRefresh, TimetableChangeRefresh } from '../data/courseData';
+import {
+  AllocationRefresh, LabRotationRefresh, ModuleSplitRefresh, ModuleTitleRefresh, SubgroupQuestion, TimetableChangeRefresh,
+} from '../data/courseData';
 import { ModuleAbbreviationRefresh } from '../data/abbreviations';
 import { TimetableSource } from '../data/dcuApi';
 import { takeAuthLink } from '../data/authLink';
@@ -39,6 +41,13 @@ interface RootState {
   signOut(): void;
   /** Leaves the reset screen a recovery link opened, changed password or not. */
   passwordResetDone(): void;
+  /**
+   * Set when the class list for the picked programme has more than one student with this
+   * student's name: the timetable asks which lab subgroup is theirs.
+   */
+  subgroupQuestion: SubgroupQuestion | null;
+  /** Their answer. `noMatch` leaves the question open, to pick again now or on a later launch. */
+  answerSubgroup(subgroup: string): Promise<'adopted' | 'noMatch'>;
 }
 
 const RootContext = createContext<RootState | null>(null);
@@ -68,6 +77,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
   const [profileRaw, setProfileRaw] = usePrefJSON<unknown>(PrefKey.profile, null);
   const [programme] = usePrefJSON<TimetableCategory | null>(PrefKey.selectedProgramme, null);
   const [triedRaw, setTried] = usePrefJSON<Record<string, number>>(PrefKey.allocationTried, {});
+  const [question, setQuestion] = usePrefJSON<SubgroupQuestion | null>(PrefKey.subgroupQuestion, null);
   const [programmeSaved, setProgrammeSaved] = usePref(PrefKey.programmeSaved);
   const [lastSeenSent, setLastSeenSent] = usePref(PrefKey.lastSeenSent);
   const profile = useMemo(() => decodeProfile(profileRaw), [profileRaw]);
@@ -200,10 +210,10 @@ export function RootProvider({ children }: { children: ReactNode }) {
 
   const refreshing = useRef(false);
   /** What the refresh reads when it runs — it outlives the render that started it. */
-  const latest = useRef({ user, profile, programme, triedRaw });
+  const latest = useRef({ user, profile, programme, triedRaw, question });
   // Declared before the effects that refresh, so it has run by the time they do.
   useEffect(() => {
-    latest.current = { user, profile, programme, triedRaw };
+    latest.current = { user, profile, programme, triedRaw, question };
   });
 
   /**
@@ -213,7 +223,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
    * version fetch when nothing has changed.
    */
   const refreshAllocation = useCallback(async () => {
-    const { user: current, profile: savedProfile, programme: picked, triedRaw: tried } = latest.current;
+    const { user: current, profile: savedProfile, programme: picked, triedRaw: tried, question: asked } = latest.current;
     const store = services.allocations;
     if (refreshing.current || !current || !store) return;
     refreshing.current = true;
@@ -248,8 +258,14 @@ export function RootProvider({ children }: { children: ReactNode }) {
           // list falls back to it rather than to an empty picker.
           setProfileRaw(outcome.profile as StudentProfile);
           setTried(null);
+          setQuestion(null);
+        } else if (outcome.kind === 'ask') {
+          setTried(outcome.tried);
+          setQuestion(outcome.question);
         } else {
           setTried(outcome.tried);
+          // A list corrected since the question was asked has answered it some other way.
+          if (asked && outcome.tried[asked.courseKey] !== asked.version) setQuestion(null);
         }
         return;
       }
@@ -261,7 +277,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
     } finally {
       refreshing.current = false;
     }
-  }, [services, setProfileRaw, setTried]);
+  }, [services, setProfileRaw, setTried, setQuestion]);
 
   // Also on picking a programme, which is when its class list is first worth asking about.
   useEffect(() => {
@@ -310,9 +326,26 @@ export function RootProvider({ children }: { children: ReactNode }) {
 
   const passwordResetDone = useCallback(() => setResetting(false), []);
 
+  // Only while the student is on the programme whose list asked: a profile, or another
+  // programme picked since, makes the question moot.
+  const pickedCourse = programme ? TimetableAudience.forProgramme(categoryCode(programme))?.courseKey : undefined;
+  const subgroupQuestion = flow === 'shell' && !profile && question && question.courseKey === pickedCourse ? question : null;
+
+  const answerSubgroup = useCallback(async (subgroup: string): Promise<'adopted' | 'noMatch'> => {
+    const store = services.allocations;
+    if (!user || !store || !subgroupQuestion) return 'noMatch';
+    const outcome = await AllocationRefresh.answer(userEmail(user)?.displayName ?? '', subgroupQuestion, subgroup, store);
+    if (outcome.kind === 'adopted') {
+      setProfileRaw(outcome.profile);
+      setTried(null);
+      setQuestion(null);
+    }
+    return outcome.kind;
+  }, [services, user, subgroupQuestion, setProfileRaw, setTried, setQuestion]);
+
   const value = useMemo<RootState>(
-    () => ({ flow, user, shell, model, notice, signedIn, signOut, passwordResetDone }),
-    [flow, user, shell, model, notice, signedIn, signOut, passwordResetDone],
+    () => ({ flow, user, shell, model, notice, signedIn, signOut, passwordResetDone, subgroupQuestion, answerSubgroup }),
+    [flow, user, shell, model, notice, signedIn, signOut, passwordResetDone, subgroupQuestion, answerSubgroup],
   );
   return <RootContext.Provider value={value}>{children}</RootContext.Provider>;
 }

@@ -21,6 +21,7 @@ import { DayPage } from './DayPage';
 import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
 import { ContributionCard } from './ContributionCard';
 import { ExportCalendarCard } from './ExportCalendarCard';
+import { SubgroupCard } from './SubgroupCard';
 import { Pager, PagerControl } from './Pager';
 import { WeekGridView } from './WeekGrid';
 
@@ -28,7 +29,7 @@ import { WeekGridView } from './WeekGrid';
 export function TimetableScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { signOut } = useRoot();
+  const { signOut, subgroupQuestion } = useRoot();
   const model = useModel(useWeekModel());
   const now = useNow();
   // Said relative to today, so it moves on by itself when Monday comes.
@@ -229,7 +230,9 @@ export function TimetableScreen() {
       <AccountSheet visible={sheet === 'account'} onClose={() => setSheet(null)} />
       <NotificationsSheet visible={sheet === 'alerts'} onClose={() => setSheet(null)} />
       <ExportCalendarCard visible={sheet === 'export'} onClose={() => setSheet(null)} />
-      <ContributionCard ready={hasWeek && sheet === null && !editing} />
+      {/* The subgroup question first: it changes the timetable itself, so it waits on nothing else. */}
+      <SubgroupCard ready={hasWeek && sheet === null && !editing} />
+      <ContributionCard ready={hasWeek && sheet === null && !editing && !subgroupQuestion} />
       <EditChoiceSheet
         pending={pendingEdit}
         onChoose={({ event, kind }, repeat) => model.edit(kind, repeat, event)}
