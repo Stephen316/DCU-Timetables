@@ -75,7 +75,7 @@ In a Safari tab the sheet says how to add it.
    `PUSH_FUNCTION_KEY`, not a JWT):
 
    ```bash
-   supabase functions deploy send-pushes --no-verify-jwt --project-ref pkytnujhwjxudtrudihu
+   supabase functions deploy send-pushes --no-verify-jwt --remote=pkytnujhwjxudtrudihu
    ```
 
 6. **Vault secrets** (SQL editor), so the cron job can find and wake the function:

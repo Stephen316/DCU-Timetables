@@ -3,6 +3,23 @@
 Working from `CSV Conversion Pipeline` (Mermaid, 21 Sep 2026). That diagram gets the shape
 right; this fills in what it leaves open and sequences the build.
 
+> **Status, 5 Nov 2026: built, but not as planned below.** `csv_pipeline.mmd` draws what
+> exists. The differences from this plan:
+>
+> - **Mistral reads uploads, not Gemini.** Mistral OCR for PDFs and photos, then a Mistral
+>   model classifies and transcribes (§6 step 2 has the measurements). There is no
+>   PaddleOCR cross-check; a rotation that fails the checks is read a second time instead.
+> - **There is no `import_staging` table.** A proposal is held in the console's browser tab
+>   until Accept, which saves it through `save_roster` or `save_lab_rotation`.
+> - **The app asks for the student ID** at sign-up (`StudentID.tsx`), so a class list with
+>   IDs is matched on name and ID together.
+> - **The app has no subgroup question.** The SwiftUI app asked which subgroup when two
+>   students share a name; the React Native port did not carry it over, so such a student
+>   keeps the programme's general timetable.
+> - **Conflicts reach the console**, on its Flags page (`supabase/phase41_allocation_flags.sql`).
+>
+> Sections 4 and 5, and steps 3 and 4 of §6, are the September plan, kept for the reasoning.
+
 **Decisions taken (21 Sep 2026):**
 
 1. **Option C** — pseudonymised roster on the device, opaque `allocation_key`, name→key map
@@ -421,7 +438,8 @@ Three caveats:
 
    **Student ID is open on the server, not in the app.** `profiles.student_id` and
    `set_student_id` exist and `resolve_allocation` uses the ID when present, but the app
-   does not ask for one yet — every roster so far is keyed by name. A caller with no ID
+   does not ask for one yet — every roster so far is keyed by name. *(Since built: the app
+   asks at sign-up.)* A caller with no ID
    matches a name-and-ID row on the name alone: the name is the verified key (§2.1).
 6. **Console upload** — *built*, following the diagram's ingestion path. Any file goes into
    the Ask tab:
@@ -453,9 +471,11 @@ Three caveats:
    reads the address. Tested by changing a test account's address after sign-up: it still
    matched on the stored name. Because a single name column leaves the model to decide
    which part is the surname, the match accepts the stored name in either order. Not built: PaddleOCR
-   cross-check (§4.1), per-row edit, and a screen for `allocation_flags`.
+   cross-check (§4.1) and per-row edit. *(The screen for `allocation_flags` was built on
+   5 Nov 2026: the console's Flags page.)*
 7. **App reader** — *built*: the profile screen offers the uploaded class lists the app can
-   build a timetable for, resolves on the server, asks the subgroup when names collide, and
+   build a timetable for, resolves on the server, asks the subgroup when names collide *(lost
+   in the React Native port; see the status note at the top)*, and
    re-resolves when an upload bumps the version. `EngGroupDirectory` — the on-phone matcher
    and its class-list import — is deleted. Profiles made before this keep working and never
    refresh. *(Approved and built 23 Sep 2026.)*
