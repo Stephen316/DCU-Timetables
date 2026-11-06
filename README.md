@@ -49,8 +49,8 @@ The Mac app, a native window around the web build, is in [`mac/`](mac).
 - **Your own timetable**: Year-1 Engineering students are matched to their lab group on the
   server; anyone else searches for their programme and turns off the groups they're not in.
 - **Day and week views**, clash detection, and a "next class" highlight.
-- **Cancellation reports and verdicts**, shared **deadlines** with confirmations.
-- **Deadlines**, in their own tab, soonest first and filterable by module:
+- **Cancellation reports and verdicts**.
+- **Shared deadlines**, in their own tab, soonest first and filterable by module:
   - Anyone on a module can add an assignment, lab report, quiz, exam, presentation or
     anything else, with its due time and how much of the grade it's worth. Classmates
     confirm it's right, and trusted students and admins verify it.
