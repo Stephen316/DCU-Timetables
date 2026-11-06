@@ -155,7 +155,7 @@ edit them by hand.
 
 ```bash
 scripts/ci.sh          # both
-scripts/ci.sh web      # console production build (type-checks every file)
+scripts/ci.sh web      # console: lint, then a production build (type-checks every file)
 scripts/ci.sh mobile   # app: type-check, lint, 278 unit tests, and a full bundle
 ```
 

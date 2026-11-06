@@ -42,7 +42,7 @@ Run the same checks CI runs:
 
 ```bash
 scripts/ci.sh mobile   # type-check, lint, unit tests, full bundle
-scripts/ci.sh web      # console production build
+scripts/ci.sh web      # console lint and production build
 ```
 
 - **Keep each pull request to one change.** A fix and an unrelated refactor are two PRs.
