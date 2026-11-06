@@ -50,6 +50,17 @@ The Mac app, a native window around the web build, is in [`mac/`](mac).
   server; anyone else searches for their programme and turns off the groups they're not in.
 - **Day and week views**, clash detection, and a "next class" highlight.
 - **Cancellation reports and verdicts**, shared **deadlines** with confirmations.
+- **Deadlines**, in their own tab, soonest first and filterable by module:
+  - Anyone on a module can add an assignment, lab report, quiz, exam, presentation or
+    anything else, with its due time and how much of the grade it's worth. Classmates
+    confirm it's right, and trusted students and admins verify it.
+  - **Only visible to me** keeps a deadline private.
+  - A shared **Details** box for what the brief leaves out, editable by anyone on the
+    module, with earlier versions kept for moderators.
+  - Your own name for a deadline, seen only by you, and a tick when it's done.
+  - Shown on the class they belong to and marked on the day and week views.
+  - **Report** a wrong or offensive deadline, and hide posts from someone.
+  - Notifications when a deadline is added, the day before it's due and 3 hours before.
 - **Offline** — the last copy of each week opens with no signal.
 - **Home-screen widgets** for today's classes and upcoming deadlines.
 
