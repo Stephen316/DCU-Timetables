@@ -1,9 +1,10 @@
 import { Tabs } from 'expo-router';
 import { ComponentProps, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, LayoutChangeEvent, PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, LayoutChangeEvent, PanResponder, Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import { Txt } from '../../ui/components';
 import { useTutorialTarget } from '../tutorial/Tutorial';
-import { concentric, Desktop, homeScreenCorner, MIN_TARGET, Radius, screenCorner, Space, useTheme } from '../../ui/theme';
+import { FloatingBar, floatingBarMargin } from '../../ui/floatingBar';
+import { concentric, Desktop, MIN_TARGET, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -83,16 +84,17 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
 
   const deadlinesTab = useTutorialTarget('deadlinesTab');
   const selected = hovered ?? state.index;
-  // In the screen's rounded bottom corners, the outline curves round the same centre they
-  // do, `Space.l` in from the edge — as far as its height allows, which makes it a capsule.
-  // A square-cornered screen has nothing to follow.
-  const corner = screenCorner(insets.bottom) || homeScreenCorner();
-  const outlineRadius = corner > 0 ? Math.min(concentric(corner, Space.l), height / 2 || Radius.control) : Radius.control;
+  // The pill is a capsule, and the outline inside it curves round the same centre, one
+  // padding in from its edge — a capsule again, as far as the outline's own height allows.
+  const outlineRadius = Math.min(concentric(FloatingBar.height / 2, FloatingBar.padding), height / 2 || Radius.control);
   // Filled like the app's other selected chips, so the tab under it takes their text colour.
   const selectedInk = theme.onAccent;
 
   return (
-    <View style={[styles.bar, { backgroundColor: theme.canvas, paddingBottom: Math.max(insets.bottom, Space.s) }]}>
+    // Laid over the screens, not under them: the lists pad their ends by `useTabBarClearance`.
+    // `box-none` keeps the strip either side of the pill from swallowing touches meant for them.
+    <View style={[styles.bar, { paddingBottom: floatingBarMargin(insets.bottom) }]} pointerEvents="box-none">
+      <View style={[styles.pill, glass(theme.scheme, theme.surface, theme.separator)]}>
       <View
         style={styles.slider}
         onLayout={(e: LayoutChangeEvent) => {
@@ -129,14 +131,39 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
           );
         })}
       </View>
+      </View>
     </View>
   );
 }
 
+/**
+ * Frosted glass, as the Figma design draws it: the surface colour only about a third opaque
+ * (the glass supplies the body), whatever scrolls beneath blurred and a touch more saturated,
+ * and a faint light along the top edge where the glass catches the light. The blur is the
+ * browser's `backdrop-filter`; the native build has no blur module, so there it's the tint
+ * alone — which is why it keeps a little more of it.
+ */
+function glass(scheme: 'light' | 'dark', surface: string, edge: string): ViewStyle {
+  const web = Platform.OS === 'web';
+  const filter = 'blur(16px) saturate(1.6)';
+  const highlight = scheme === 'dark' ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.6)';
+  const style = {
+    backgroundColor: withAlpha(surface, web ? (scheme === 'dark' ? 0.4 : 0.45) : 0.72),
+    borderColor: withAlpha(edge, 0.9),
+    ...(web ? { backdropFilter: filter, WebkitBackdropFilter: filter } : null),
+    boxShadow: `inset 0 1px 0 ${highlight}, 0 8px 24px rgba(0, 0, 0, 0.14)`,
+  };
+  return style as unknown as ViewStyle;
+}
+
 const styles = StyleSheet.create({
-  bar: { paddingHorizontal: Space.l, paddingTop: Space.xs },
+  bar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: Space.l, alignItems: 'center' },
   // Across a desktop window the two tabs would sit a screen apart; keep them together.
-  slider: { flexDirection: 'row', width: '100%', maxWidth: Desktop.dialog, alignSelf: 'center' },
+  pill: {
+    width: '100%', maxWidth: Desktop.dialog, padding: FloatingBar.padding,
+    borderRadius: FloatingBar.height / 2, borderWidth: StyleSheet.hairlineWidth,
+  },
+  slider: { flexDirection: 'row', width: '100%' },
   outline: { position: 'absolute', top: 0, bottom: 0, left: 0 },
   tab: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xs, gap: Space.xxs },
   semibold: { fontWeight: '600' },

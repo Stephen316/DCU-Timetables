@@ -8,6 +8,7 @@ import { formatDayMonth, formatTime, isToday, isTomorrow, weekdayName } from '..
 import { eventTypeLabel, isOnline, shortTitleOf, staffText, TimetableEvent } from '../../core/timetableEvent';
 import { DeadlineMark, Icon, Label, Txt } from '../../ui/components';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
+import { useTabBarClearance } from '../../ui/floatingBar';
 import { Desktop, Space, useTheme } from '../../ui/theme';
 import { usePagerDrag } from './Pager';
 import { EditKind } from './editing';
@@ -39,6 +40,7 @@ export function DayPage({
   onEdit: (event: TimetableEvent, kind: EditKind) => void;
 }) {
   const theme = useTheme();
+  const clearance = useTabBarClearance();
   const slots = DaySchedule.slots(events);
   // While editing, the day is every class it could hold, the student's and the course's
   // others in time order, with no free time between: what's free depends on the edit.
@@ -64,7 +66,7 @@ export function DayPage({
   };
 
   return (
-    <ScrollView style={{ backgroundColor: theme.canvas }} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ backgroundColor: theme.canvas }} contentContainerStyle={[styles.content, { paddingBottom: clearance }]} showsVerticalScrollIndicator={false}>
       <DayHeading day={day} slots={slots} now={now} />
       {editing ? (
         editRows.length === 0 ? (

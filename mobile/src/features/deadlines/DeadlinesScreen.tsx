@@ -9,7 +9,13 @@ import { useWeekModel } from '../../state/root';
 import { EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Txt, useReduceMotion } from '../../ui/components';
 import { LoadingScreen } from '../../ui/LoadingScreen';
 import { DropdownMenu } from '../../ui/DropdownMenu';
-import { CardInset, Radius, Space, useTheme } from '../../ui/theme';
+import { useTabBarClearance } from '../../ui/floatingBar';
+import { isNewUI } from '../../ui/newUI';
+import { CardSwap } from '../../ui/CardSwap';
+import { ContextMeter } from '../../ui/ContextMeter';
+import { RollingCounter } from '../../ui/RollingCounter';
+import { Slingshot } from '../../ui/Slingshot';
+import { CardInset, Radius, Space, Type, useTheme } from '../../ui/theme';
 import { DeadlineForm, DeadlineRow } from './DeadlineRows';
 import { DeadlinesModel } from './DeadlinesModel';
 import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
@@ -21,6 +27,7 @@ import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
 export function DeadlinesScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const clearance = useTabBarClearance();
   const services = useServices();
   const week = useModel(useWeekModel());
   const model = useModel(useMemo(() => new DeadlinesModel(services), [services]));
@@ -192,18 +199,35 @@ export function DeadlinesScreen() {
         onRefresh={() => void model.reload()}
         // The count is the point of the tab, so it stays on screen while the list scrolls.
         footer={
-          <View style={[styles.summary, { backgroundColor: theme.surface, borderTopColor: theme.separator }]}>
-            <Txt type="caption" color={theme.inkSecondary}>{model.total} upcoming</Txt>
+          <View style={[styles.summary, { backgroundColor: theme.surface, borderTopColor: theme.separator, paddingBottom: Space.s + clearance }]}>
+            {isNewUI() ? (
+              <View style={styles.upcoming} accessible accessibilityLabel={`${model.total} upcoming`}>
+                <RollingCounter value={model.total} color={theme.ink} style={[Type.caption, styles.count]} />
+                <Txt type="caption" color={theme.inkSecondary}>upcoming</Txt>
+              </View>
+            ) : (
+              <Txt type="caption" color={theme.inkSecondary}>{model.total} upcoming</Txt>
+            )}
+            {isNewUI() && model.total > 0 ? (
+              <ContextMeter
+                label="Done"
+                value={model.sections.reduce((n, g) => n + g.deadlines.filter((d) => model.isCompleted(d)).length, 0)}
+                total={model.total}
+                color={theme.tint.confirmed}
+              />
+            ) : null}
             {model.testCount > 0 ? <Label icon="test" text={`${model.testCount} sat in class`} type="caption" color={theme.tint.test} /> : null}
           </View>
         }
       >
+        {isNewUI() ? <Slingshot onRelease={() => void model.reload()} busy={model.isLoading} /> : null}
         {model.errorText ? (
           <Section>
             <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.inkSecondary} /></Row>
           </Section>
         ) : null}
         {/* One card, a section each, split by hairlines — the same panel as the desktop rail's. */}
+        <CardSwap swapKey={model.moduleFilter ?? 'all'}>
         <View
           style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}
           onLayout={(e) => {
@@ -227,14 +251,23 @@ export function DeadlinesScreen() {
                     <Txt type="footnote" color={theme.inkSecondary}>({week.weekLabel})</Txt>
                   ) : null}
                 </View>
-                <Txt
-                  type="subheadline"
-                  color={group.section === 'today' ? theme.tint.due : theme.accent}
-                  style={styles.count}
-                  accessibilityLabel={`${group.deadlines.length} due`}
-                >
-                  {group.deadlines.length}
-                </Txt>
+                {isNewUI() ? (
+                  <RollingCounter
+                    value={group.deadlines.length}
+                    color={group.section === 'today' ? theme.tint.due : theme.accent}
+                    style={[Type.subheadline, styles.count]}
+                    accessibilityLabel={`${group.deadlines.length} due`}
+                  />
+                ) : (
+                  <Txt
+                    type="subheadline"
+                    color={group.section === 'today' ? theme.tint.due : theme.accent}
+                    style={styles.count}
+                    accessibilityLabel={`${group.deadlines.length} due`}
+                  >
+                    {group.deadlines.length}
+                  </Txt>
+                )}
               </View>
               {group.deadlines.map((d) => (
                 <View
@@ -276,6 +309,7 @@ export function DeadlinesScreen() {
             </View>
           ))}
         </View>
+        </CardSwap>
       </ListScroll>
     </View>
   );
@@ -318,6 +352,7 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
   sectionTitle: { flexDirection: 'row', alignItems: 'baseline', gap: Space.xs, flexShrink: 1 },
   count: { fontWeight: '600', fontVariant: ['tabular-nums'] },
+  upcoming: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   filterLabel: { flexDirection: 'row', alignItems: 'center', gap: Space.xxs },
   shrink: { flexShrink: 1 },
   summary: { flexDirection: 'row', justifyContent: 'center', gap: Space.l, paddingVertical: Space.s, borderTopWidth: StyleSheet.hairlineWidth },

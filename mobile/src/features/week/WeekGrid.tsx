@@ -8,6 +8,7 @@ import { compactTitleOf, isOnline, TimetableEvent, titleOf } from '../../core/ti
 import { DeadlineMark, Hatch, Icon, Txt } from '../../ui/components';
 import { MacShell } from '../../data/macShell';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
+import { useTabBarClearance } from '../../ui/floatingBar';
 import { concentric, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
 import { usePagerDrag } from './Pager';
@@ -130,6 +131,7 @@ function GridBody({
   renderColumn: (day: Date, width: number) => React.ReactNode;
 }) {
   const theme = useTheme();
+  const clearance = useTabBarClearance();
   const [width, setWidth] = React.useState(0);
   const columns = Math.max(days.length, 1);
   const dayWidth = Math.max(58, (width - GUTTER - 8) / columns);
@@ -148,7 +150,7 @@ function GridBody({
           );
         })}
       </View>
-      <ScrollView contentContainerStyle={styles.gridScroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.gridScroll, { paddingBottom: clearance }]} showsVerticalScrollIndicator={false}>
         <View style={styles.gridRow}>
           <View style={{ width: GUTTER, height: gridHeight }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
             {hours.map((hour) => (
