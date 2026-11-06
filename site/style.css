@@ -17,6 +17,7 @@ p, li { margin: 8px 0; }
 ul { padding-left: 20px; }
 a { color: var(--link); }
 .updated, .note { color: var(--muted); font-size: 14px; }
+.seo-keywords { font-size: 11px; opacity: 0.6; margin-top: 32px; }
 table { border-collapse: collapse; width: 100%; font-size: 15px; }
 th, td { text-align: left; vertical-align: top; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--rule); }
 th { font-weight: 600; }
