@@ -32,8 +32,12 @@ export async function middleware(request: NextRequest) {
 /// `getUser()` revalidates the token rather than trusting it. Fonts and images do not need
 /// a session, and in development each reload was spending three of these where one would
 /// do — two of them on woff2 files.
+///
+/// `monitoring` is Sentry's tunnel route (see next.config.ts). It carries error reports from
+/// the browser and needs no session, and Sentry warns that a middleware matching it can make
+/// client-side reporting fail.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|__nextjs_font|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)",
+    "/((?!_next/static|_next/image|__nextjs_font|monitoring|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)",
   ],
 };
