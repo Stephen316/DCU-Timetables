@@ -16,9 +16,11 @@ the [terms of use](https://stephen316.github.io/DCU-Timetables/terms.html), not 
 - Posting anyone's personal information — including student numbers, emails or
   timetables — without their permission.
 - Spam, or repeatedly pushing a point after a decision has been made.
+- Abusing community features, such as false reports, false cancellations or falsely editing assignments (we understand and tolerate a level of mistakes)
 
 ## Enforcement
 
 Report problems to **stephenharcourt6@gmail.com**. Reports are kept confidential.
-Depending on how serious it is, the maintainer may edit or delete comments, lock threads,
+Organisers also review student contributions regularly, and can restrict a user from submitting reports or permanently suspend their account.
+Depending on how serious it is, the organiser may edit or delete comments, lock threads,
 or block someone from the repository.
