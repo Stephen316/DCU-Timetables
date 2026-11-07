@@ -32,21 +32,6 @@ img { max-width: 100%; display: block; }
 .wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* ── Aurora background ───────────────────────────────────────────── */
-.aurora { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.aurora i { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .38; will-change: transform; }
-.aurora i:nth-child(1) { width: 52vw; height: 52vw; left: -12vw; top: -14vw; background: var(--blob-a); animation: drift 22s ease-in-out infinite alternate; }
-.aurora i:nth-child(2) { width: 42vw; height: 42vw; right: -10vw; top: 8vw; background: var(--blob-b); opacity: .26; animation: drift 28s ease-in-out infinite alternate-reverse; }
-.aurora i:nth-child(3) { width: 38vw; height: 38vw; left: 28vw; top: 42vw; background: var(--blob-c); opacity: .2; animation: drift 32s ease-in-out infinite alternate; }
-@keyframes drift { to { transform: translate3d(6vw, 5vw, 0) scale(1.12); } }
-.grid-bg {
-  position: absolute; inset: 0;
-  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 56px 56px; opacity: .5;
-  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 20%, transparent 75%);
-  mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 20%, transparent 75%);
-}
-
 /* ── Nav ─────────────────────────────────────────────────────────── */
 .top {
   position: sticky; top: 0; z-index: 20; background: var(--nav-bg);
@@ -100,12 +85,6 @@ h1 em {
 .cta:hover svg { transform: translateX(5px); }
 .cta:active { transform: translateY(0) scale(.99); }
 .cta:focus-visible, .btn:focus-visible, .chip-btn:focus-visible { outline: 3px solid var(--text); outline-offset: 4px; }
-.cta-wrap::before, .cta-wrap::after {
-  content: ""; position: absolute; inset: 0; border-radius: 22px; border: 2px solid var(--accent);
-  opacity: 0; animation: ring 3s ease-out infinite;
-}
-.cta-wrap::after { animation-delay: 1.5s; }
-@keyframes ring { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(1.28, 1.7); opacity: 0; } }
 .cta-note { margin: 18px 0 0; font-size: 14px; color: var(--muted); }
 .cta-note b { color: var(--text); font-weight: 600; }
 .sub-links { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
@@ -116,37 +95,42 @@ h1 em {
   .cta { width: 100%; padding: 0 24px; min-height: 72px; }
 }
 
-/* ── Phones ──────────────────────────────────────────────────────── */
+/* Device previews: screenshots retain their native aspect ratio between safe areas. */
 .stage {
-  position: relative; display: flex; justify-content: center; align-items: flex-start; gap: clamp(8px, 3vw, 40px);
-  margin-top: clamp(40px, 6vw, 72px); height: clamp(380px, 52vw, 560px); overflow: hidden;
-  -webkit-mask-image: linear-gradient(#000 62%, transparent 100%); mask-image: linear-gradient(#000 62%, transparent 100%);
-  perspective: 1400px;
-}
-.stage::before {
-  content: ""; position: absolute; left: 50%; top: 10%; width: min(720px, 90%); height: 70%; translate: -50% 0;
-  background: radial-gradient(closest-side, var(--glow), transparent); filter: blur(30px); opacity: .55; z-index: 0;
+  display: flex; justify-content: center; align-items: center; gap: clamp(12px, 3vw, 36px);
+  margin-top: clamp(36px, 6vw, 64px); padding: 8px 4px;
 }
 .phone {
-  position: relative; z-index: 1; flex: none; width: clamp(200px, 25vw, 290px); aspect-ratio: 390 / 844;
-  border-radius: clamp(32px, 4.4vw, 46px); padding: clamp(6px, .9vw, 9px);
-  background: linear-gradient(160deg, #3a3a48, #101017 40%, #2a2a36);
-  box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,.12) inset;
-  transition: transform .5s cubic-bezier(.2,.8,.2,1);
+  --screen-bg: #212129;
+  position: relative; flex: 0 0 auto; width: clamp(180px, 24vw, 280px);
+  container-type: inline-size; border-radius: 18% / 8.4%; padding: 6px;
+  background: #151518; border: 1px solid #65656d;
+  box-shadow: 0 2px 8px #0003;
 }
-.phone .screen { width: 100%; height: 100%; border-radius: clamp(26px, 3.6vw, 38px); overflow: hidden; background: var(--bg); position: relative; }
-.phone .screen img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
-.phone.side { margin-top: 56px; opacity: .96; }
-.phone.left { transform: rotateY(14deg) rotateZ(-3deg); }
-.phone.right { transform: rotateY(-14deg) rotateZ(3deg); }
-.phone.mid { margin-top: 0; z-index: 2; }
-.stage:hover .phone.left { transform: rotateY(6deg) rotateZ(-1deg) translateY(-6px); }
-.stage:hover .phone.right { transform: rotateY(-6deg) rotateZ(1deg) translateY(-6px); }
-.stage:hover .phone.mid { transform: translateY(-10px); }
-@media (max-width: 760px) {
-  .phone { width: 62vw; max-width: 260px; }
-  .phone.side { width: 52vw; max-width: 220px; margin-inline: -9vw; }
-  .stage { gap: 0; height: clamp(380px, 110vw, 480px); }
+.phone .screen {
+  position: relative; overflow: hidden; border-radius: 16% / 7.4%;
+  background: var(--screen-bg); color: #f1f1f6;
+}
+.phone picture { display: block; }
+.phone .screen img { width: 100%; height: auto; }
+.status-bar {
+  position: relative; height: 15cqw; display: flex; align-items: center;
+  justify-content: space-between; padding: 0 7cqw; font-size: 4cqw;
+  line-height: 1; font-weight: 600;
+}
+.status-bar svg { width: 17cqw; height: 4.5cqw; }
+.island { position: absolute; width: 30cqw; height: 8cqw; border-radius: 5cqw; background: #000; left: 50%; top: 3cqw; transform: translateX(-50%); }
+.home-indicator { height: 8cqw; position: relative; }
+.home-indicator::after { content: ""; position: absolute; width: 35%; height: 1.2cqw; border-radius: 1cqw; bottom: 2cqw; left: 32.5%; background: currentColor; }
+.phone.side { width: clamp(170px, 22vw, 256px); }
+@media (prefers-color-scheme: light) {
+  .phone { --screen-bg: #fdf6e3; }
+  .phone .screen { color: #073642; }
+}
+@media (max-width: 640px) {
+  /* Let each view remain readable and fully visible instead of clipping side phones. */
+  .stage { justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; padding: 8px 12px 16px; gap: 20px; }
+  .phone, .phone.side { width: min(72vw, 280px); scroll-snap-align: center; }
 }
 
 /* ── Sections ────────────────────────────────────────────────────── */
@@ -257,4 +241,39 @@ footer { padding: 56px 0 56px; color: var(--muted); font-size: 14px; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .js .rv { opacity: 1; transform: none; }
   html { scroll-behavior: auto; }
+}
+
+/* Keep previews, card content and navigation clear at narrow widths. */
+section[id] { scroll-margin-top: 80px; }
+.top .wrap { min-height: 60px; height: auto; padding-block: 8px; }
+.brand { min-width: 0; }
+.top .brand { line-height: 1.25; }
+.top nav, .brand img, .row .bar, .row .t, .btn svg { flex-shrink: 0; }
+.bento { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.tile, .way, .viz, .row > span { min-width: 0; }
+.tile { justify-content: flex-start; }
+.tile h3 { margin-top: auto; }
+.row { flex-wrap: wrap; gap: 8px; padding: 10px; border-radius: 8px; }
+.row > span:has(b) { flex: 1 1 100px; overflow-wrap: anywhere; }
+.badge { max-width: 100%; border-radius: 6px; }
+.scan { flex-wrap: wrap; }
+.scan p { flex: 1 1 150px; }
+.tile, .way, .final { border-radius: 10px; background: var(--card); }
+.way.main { background: var(--card); }
+h1 em { background: none; color: var(--accent); }
+.cta, .btn.primary { background: var(--accent); box-shadow: none; }
+.cta { min-height: 60px; border-radius: 10px; font-size: 21px; }
+.btn, .chip-btn { border-radius: 8px; }
+.cta:hover, .cta:active, .cta:hover svg, .btn:hover, .tile:hover, .chip-btn:hover { transform: none; box-shadow: none; }
+.pill { border: 0; padding: 0; background: none; border-radius: 0; }
+.pill .dot { animation: none; box-shadow: none; }
+.final .cta-wrap { margin-top: 0; }
+.js .rv { opacity: 1; transform: none; }
+@media (max-width: 920px) { .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .bento { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 360px) { .top .brand { font-size: 14px; gap: 6px; } .chip-btn { padding-inline: 12px; } }
+@media (max-width: 640px) { .phone.mid { order: -1; } }
+@media (max-width: 360px) {
+  .way { padding: 24px; }
+  .btn.primary { font-size: 16px; padding-inline: 14px; }
 }
