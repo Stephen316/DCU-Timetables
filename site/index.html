@@ -26,7 +26,7 @@
   "url": "https://info.dcutimetables.app/"
 }
 </script>
-<link rel="stylesheet" href="landing.css?v=7">
+<link rel="stylesheet" href="landing.css?v=8">
 <script>
   document.documentElement.className = 'js';
 
@@ -254,6 +254,10 @@
     var distance = 0;
     var previousScroll = window.scrollY;
     var wasFocused = false;
+    var nextSwapAt = 0;
+    var furthestScroll = window.scrollY;
+    phones.forEach(function (phone, index) { phone.setAttribute('data-slot', index); });
+    stage.setAttribute('data-ready', 'true');
     function update() {
       queued = false;
       var rect = stage.getBoundingClientRect();
@@ -261,22 +265,29 @@
       var centre = rect.top + rect.height / 2;
       var focused = rect.top >= 72 && rect.bottom <= viewport - 16 &&
         centre >= viewport * .35 && centre <= viewport * .65;
-      var delta = window.scrollY - previousScroll;
+      var delta = Math.max(0, window.scrollY - Math.max(previousScroll, furthestScroll));
+      furthestScroll = Math.max(furthestScroll, window.scrollY);
       previousScroll = window.scrollY;
       if (!reducedMotion.matches && focused && wasFocused && phase < 2) {
         // Scale the scroll distance to the space available on shorter screens.
         var focusTravel = Math.min(viewport * .3, viewport - 88 - rect.height);
         var step = Math.max(16, Math.min(80, focusTravel / 3));
         distance += Math.max(0, delta);
-        if (distance >= step) {
+        if (distance >= step && Date.now() >= nextSwapAt) {
+          // The left phone returns behind the stack instead of crossing the front.
+          var returning = stage.querySelector('[data-slot="0"]');
+          returning.classList.add('is-wrapping');
           phase += 1;
+          phones.forEach(function (phone, index) {
+            phone.setAttribute('data-slot', (index - phase + 3) % 3);
+          });
+          window.setTimeout(function () { returning.classList.remove('is-wrapping'); }, 240);
+          nextSwapAt = Date.now() + 850;
+          window.setTimeout(schedule, 850);
           distance = 0;
         }
       }
       wasFocused = focused;
-      phones.forEach(function (phone, index) {
-        phone.setAttribute('data-slot', (index - phase + 3) % 3);
-      });
     }
     function schedule() {
       if (!queued) { queued = true; window.requestAnimationFrame(update); }

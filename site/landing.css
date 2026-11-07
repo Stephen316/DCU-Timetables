@@ -137,21 +137,24 @@ h1 em {
   position: absolute; left: 50%; top: 0; margin: 0;
   transition: transform 220ms cubic-bezier(.2,.8,.2,1), opacity 220ms ease;
 }
-.stage .phone.left, .stage .phone[data-slot="0"] {
-  z-index: 1; opacity: .96;
+.stage .phone.left:not([data-slot]), .stage .phone[data-slot="0"] {
+  z-index: 2; opacity: .96;
   transform: translateX(-50%) translate3d(calc(-1 * var(--phone-step)), 56px, -50px) rotateY(14deg) rotateZ(-3deg) scale(.9);
 }
-.stage .phone.mid, .stage .phone[data-slot="1"] {
+.stage .phone.mid:not([data-slot]), .stage .phone[data-slot="1"] {
   z-index: 3; opacity: 1; transform: translateX(-50%) translate3d(0, 0, 0);
 }
-.stage .phone.right, .stage .phone[data-slot="2"] {
+.stage .phone.right:not([data-slot]), .stage .phone[data-slot="2"] {
   z-index: 1; opacity: .96;
   transform: translateX(-50%) translate3d(var(--phone-step), 56px, -50px) rotateY(-14deg) rotateZ(3deg) scale(.9);
 }
-/* Attribute slots take precedence over the original, no-JavaScript positions. */
-.stage .phone[data-slot="0"] { z-index: 1; transform: translateX(-50%) translate3d(calc(-1 * var(--phone-step)), 56px, -50px) rotateY(14deg) rotateZ(-3deg) scale(.9); }
-.stage .phone[data-slot="1"] { z-index: 3; transform: translateX(-50%) translate3d(0, 0, 0); opacity: 1; }
-.stage .phone[data-slot="2"] { z-index: 1; transform: translateX(-50%) translate3d(var(--phone-step), 56px, -50px) rotateY(-14deg) rotateZ(3deg) scale(.9); }
+.stage:not([data-ready]) .phone { transition: none; }
+.stage .phone.is-wrapping { z-index: 0; animation: return-behind 240ms ease-out both; }
+@keyframes return-behind {
+  from { transform: translateX(-50%) translate3d(calc(-1 * var(--phone-step)), 56px, -50px) rotateY(14deg) rotateZ(-3deg) scale(.9); }
+  50% { transform: translateX(-50%) translate3d(0, 100px, -240px) rotateY(0deg) rotateZ(0deg) scale(.65); }
+  to { transform: translateX(-50%) translate3d(var(--phone-step), 56px, -50px) rotateY(-14deg) rotateZ(3deg) scale(.9); }
+}
 @media (max-width: 760px) {
   .stage .phone { width: 62vw; max-width: 260px; }
   .stage { --phone-step: 66%; gap: 0; height: clamp(380px, 110vw, 480px); }
