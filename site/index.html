@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DCU Timetables App – your DCU timetable, deadlines and class alerts</title>
 <meta name="description" content="DCU Timetable is a free app for your DCU timetable on your phone and your Mac, with deadlines, cancelled classes and class alerts shared by your classmates. For anyone with a DCU email.">
-<meta name="keywords" content="DCU timetable, DCU timetables app, Dublin City University timetable, DCU class schedule, DCU deadlines, DCU cancelled classes, DCU class alerts, DCU student app">
+<meta name="keywords" content="DCU timetable, DCU timetables app, Dublin City University timetable, DCU class schedule, DCU deadlines, DCU cancelled classes, DCU class alerts, DCU student app, Rubric, Redbrick Timetable, Redbrick, Loop Timetable">
 <link rel="canonical" href="https://info.dcutimetables.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="DCU Timetable">
@@ -26,7 +26,7 @@
 <script>
   // Supabase sends confirmation and password-reset links back to this address, with the
   // session in the URL fragment (#access_token=…) or a failure in its place. A fragment
-  // never reaches a server, so it is handed to the app, under app/, which reads it and
+  // never reaches a server, so it is handed to the app, at dcutimetables.app, which reads it and
   // carries on with signing up — the student shouldn't have to find their way there.
   // Everything else — anyone simply visiting the site — falls through to the page below.
   (function () {
@@ -34,7 +34,7 @@
     var search = window.location.search || '';
     var carriesAuth = /[#&](access_token|error|error_code)=/.test('#' + hash.replace(/^#/, '')) ||
       /[?&](error|error_code)=/.test(search);
-    if (carriesAuth) window.location.replace('app/' + search + hash);
+    if (carriesAuth) window.location.replace('https://dcutimetables.app/' + search + hash);
   })();
 
   // Which way in suits this device: its card goes first and only its steps show. iPadOS asks
@@ -58,7 +58,7 @@
   <section class="get-card get-phone" aria-labelledby="get-phone">
     <h3 id="get-phone">On your phone</h3>
     <p class="note">iPhone or Android. It goes on your Home Screen like any other app; there&rsquo;s no app store to search.</p>
-    <p><a class="button" href="app/">Open DCU Timetable</a></p>
+    <p><a class="button" href="https://dcutimetables.app/">Open DCU Timetable</a></p>
     <div class="only-ios">
       <p>Then put it on your Home Screen, in Safari:</p>
       <ol>
@@ -79,7 +79,7 @@
       <img src="app-qr.svg" width="148" height="148" alt="QR code that opens DCU Timetable on a phone">
       <div>
         <p>On a computer now? Point your phone&rsquo;s camera at the code to open it there, then add it to your Home Screen from Safari&rsquo;s Share menu, or Chrome&rsquo;s &#8942; menu.</p>
-        <p class="note">Or use it right here in your browser: <a href="app/">open DCU Timetable</a>.</p>
+        <p class="note">Or use it right here in your browser: <a href="https://dcutimetables.app/">open DCU Timetable</a>.</p>
       </div>
     </div>
   </section>
