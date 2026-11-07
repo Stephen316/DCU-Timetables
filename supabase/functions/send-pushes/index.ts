@@ -102,7 +102,35 @@ function staleKey(status: number | undefined, body: string | undefined): boolean
   return status === 400 && (body ?? '').includes('VapidPkHashMismatch');
 }
 
+/**
+ * Whether `endpoint` is a browser vendor's push service (phase 42 checks the same list when
+ * a subscription is saved). Anything else is not a browser's endpoint, and this function
+ * must not send requests to it: the host is the student's to choose, not ours to trust.
+ */
+function isPushServiceEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) return false;
+  const host = url.hostname.toLowerCase();
+  return (
+    host === 'fcm.googleapis.com' ||
+    host === 'updates.push.services.mozilla.com' ||
+    host === 'web.push.apple.com' ||
+    host.endsWith('.notify.windows.com')
+  );
+}
+
 async function send(row: Row, stale: Set<string>): Promise<boolean> {
+  if (!isPushServiceEndpoint(row.endpoint)) {
+    // Not from any browser. Removed rather than retried, with what was waiting for it.
+    console.warn('send-pushes: refused an endpoint outside the push services', { subscription: row.subscription_id });
+    await db.from('push_subscriptions').delete().eq('id', row.subscription_id);
+    return false;
+  }
   try {
     await webpush.sendNotification(
       { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },

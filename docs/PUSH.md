@@ -27,7 +27,9 @@ sw.js `notificationclick` → opens the app (the Deadlines tab for a deadline)
   current), `mobile/src/core/webPush.ts` (the pure rules), the Notifications sheet, and the
   `push` and `notificationclick` handlers at the end of `mobile/public/sw.js`.
 - **Database**: `supabase/phase37_web_push.sql`, `phase38_deadline_reminders.sql` for the
-  reminders and `phase39_class_alerts.sql` for the class alerts.
+  reminders and `phase39_class_alerts.sql` for the class alerts. `phase42_push_endpoint_allowlist.sql`
+  then limits a subscription's endpoint to the browsers' push services (Chrome, Firefox,
+  Safari, Windows); deploy `send-pushes` again afterwards, since it checks the same list.
 - **Sender**: `supabase/functions/send-pushes/index.ts`.
 
 What each kind sends, and to whom:
