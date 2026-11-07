@@ -127,7 +127,7 @@ function RootStack() {
         <Stack.Screen name="class/[id]" options={{ headerShown: true, title: 'Class', headerBackTitle: 'Back' }} />
       </Stack.Protected>
       <Stack.Protected guard={!inShell}>
-        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="login" />
       </Stack.Protected>
     </Stack>
   );

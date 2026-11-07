@@ -12,7 +12,7 @@ import { useRoot } from '../state/root';
  * Everything before the timetable: sign in, the new password a reset link asks for, the
  * student number, and which programme.
  */
-export default function OnboardingRoute() {
+export default function LoginRoute() {
   const { prefs } = useServices();
   const { flow, user, notice, signedIn, signOut, passwordResetDone } = useRoot();
   const onSaved = useCallback((number: string) => prefs.set(PrefKey.studentID, number), [prefs]);
