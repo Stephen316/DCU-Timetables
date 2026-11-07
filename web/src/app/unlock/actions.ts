@@ -8,7 +8,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 
 /// `email` comes back so a wrong password doesn't also clear the address: React resets a form
 /// after its action runs.
-export type UnlockState = { error?: string; attemptsLeft?: number; email?: string } | null;
+export type UnlockState = { error?: string; attemptsLeft?: number; email?: string; needsTotp?: boolean } | null;
 
 type Cookie = { name: string; value: string; options?: Record<string, unknown> };
 
@@ -91,7 +91,10 @@ export async function signInWithEmail(_prev: UnlockState, form: FormData): Promi
   const twoStep = await completeTwoStep(db, String(form.get("totp") ?? ""));
   if (twoStep) {
     await db.auth.signOut({ scope: "local" });
-    return { error: twoStep, email };
+    // The form moves to its second screen, which asks only for the code. It keeps the email
+    // and password itself and sends them again with the code, so nothing is stored between
+    // the two steps. A first pass without a code is not an error to show.
+    return { needsTotp: true, email, error: twoStep.error };
   }
 
   const { data: opened, error } = await db.rpc("open_console_session");
@@ -116,25 +119,32 @@ export async function signInWithEmail(_prev: UnlockState, form: FormData): Promi
 }
 
 /// Null when the session is at full strength: the account has no two-step sign-in, or the
-/// authenticator's code was right. Otherwise what to tell the person. A check that couldn't
-/// be made counts as a failure, never as a pass.
-async function completeTwoStep(db: ReturnType<typeof createServerClient>, entered: string): Promise<string | null> {
+/// authenticator's code was right. Otherwise `{}` when the code is simply still to be asked
+/// for, or `{ error }` with what to tell the person. A check that couldn't be made counts as
+/// a failure, never as a pass.
+async function completeTwoStep(
+  db: ReturnType<typeof createServerClient>,
+  entered: string,
+): Promise<{ error?: string } | null> {
   const { data: level, error } = await db.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (error || !level) return `Couldn't check two-step sign-in (${error?.message ?? "try again"}).`;
+  if (error || !level) return { error: `Couldn't check two-step sign-in (${error?.message ?? "try again"}).` };
   if (level.nextLevel !== "aal2" || level.currentLevel === "aal2") return null;
 
   const code = entered.replace(/\s/g, "");
-  if (!/^[0-9]{6}$/.test(code)) return "Enter the six-digit code from your authenticator app.";
+  if (code === "") return {};
+  if (!/^[0-9]{6}$/.test(code)) return { error: "Enter the six digits from your authenticator app." };
 
   const { data: factors, error: factorError } = await db.auth.mfa.listFactors();
   const factor = factors?.totp[0];
-  if (factorError || !factor) return `Couldn't find your authenticator (${factorError?.message ?? "none set up"}).`;
+  if (factorError || !factor) return { error: `Couldn't find your authenticator (${factorError?.message ?? "none set up"}).` };
 
   const { error: verifyError } = await db.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
   if (verifyError) {
-    return verifyError.code === "over_request_rate_limit"
-      ? "Too many tries. Wait a few minutes, then try again."
-      : "That code didn't work. Check the time on your phone and use the newest code.";
+    return {
+      error: verifyError.code === "over_request_rate_limit"
+        ? "Too many tries. Wait a few minutes, then try again."
+        : "That code didn't work. Check the time on your phone and use the newest code.",
+    };
   }
   return null;
 }
