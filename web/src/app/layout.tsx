@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { TabSync } from "./tab-sync";
 
 export const metadata: Metadata = {
   title: "DCU Timetable — console",
@@ -10,7 +11,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <TabSync />
+        {children}
+      </body>
     </html>
   );
 }
