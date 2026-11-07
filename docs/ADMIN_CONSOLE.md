@@ -74,9 +74,9 @@ app, everything else in the console.
 
 **Three things worth doing anyway:**
 
-1. **Enable TOTP on the account**, then uncomment the MFA line in `is_admin()`
-   (`supabase/phase0_identity.sql` §4). Not before — enabling it first locks you out of your own
-   database. This defends against the likelier threat: a reused or phished password.
+1. **Enable TOTP on the account** (console → Security → Two-step sign-in), then run
+   `supabase/phase44_admin_mfa.sql`. Not before — running it first locks you out of your own
+   console. This defends against the likelier threat: a reused or phished password.
 2. **Don't stay signed into the console in your phone's browser.** It's the one thing that would
    reintroduce the risk the architecture just removed.
 3. **The audit log (§2.6) is your real safety net.** One person with full rights and no
@@ -880,7 +880,7 @@ Each phase is independently useful and independently shippable.
 | **2** | Next.js shell on Vercel + the review queue; verdict/crowd distinction in the app | First web surface, and the queue is the job a phone does worst. |
 | **3** | Contributors by PI, ban enforcement, `cancellation_tallies` + `module_deadlines_public` | Moderation, plus the anonymity fix of §4.1 — which is a coordinated app+DB release, so don't bundle it with anything else risky. |
 | **4** | People, Grant-trust-by-PI, Audit viewer | Granting authority to others is only safe once §3's RLS, bans and the audit log exist. |
-| **4.5** | TOTP on your account, then uncomment the MFA line in `is_admin()` | In this order. The reverse locks you out of your own database. |
+| **4.5** | TOTP on your account (Security page), then run `phase44_admin_mfa.sql` | In this order. The reverse locks you out of your own console. `phase43_console_unlock_enforced.sql` first: it makes the four-digit code a database rule, not just a lock on the pages. |
 | **5** | Courses screen, split rules, deterministic import (xlsx/csv) | The bulk of real data value, with no model involved. |
 | **5.5** | Rule-based screening (§8.2) + risk column in the review queue | Pure SQL, no model, no API key — and it catches most of what you're worried about. Do this before any AI screening. |
 | **6** | Claude-assisted import (PDF, email, photo) + staging/review; model screening (§8.3) on the same plumbing | The messy tail, once the boring path is proven. Both share one Edge Function and one API key. |

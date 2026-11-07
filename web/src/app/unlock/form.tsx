@@ -57,6 +57,11 @@ export function EmailForm({ codeInstead }: { codeInstead: boolean }) {
         <input id="password" name="password" type="password" autoComplete="current-password" required
                autoFocus={!!state?.email} disabled={pending} />
       </div>
+      <div className="field">
+        <label htmlFor="totp">Authenticator code <span className="dim">(if two-step sign-in is on)</span></label>
+        <input id="totp" name="totp" type="text" inputMode="numeric" pattern="[0-9 ]{6,7}" maxLength={7}
+               autoComplete="one-time-code" disabled={pending} />
+      </div>
       <button className="primary unlock-btn" type="submit" disabled={pending}>
         {pending ? <><Spinner /> Signing in</> : "Sign in"}
       </button>

@@ -1,12 +1,15 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { CodeForm } from "./code-form";
 import { signOutEverywhere } from "./actions";
+import { TwoStepForm } from "./two-step";
 
 export default async function SecurityPage() {
   const db = await supabaseServer();
   const { data } = await db.rpc("console_code_status").maybeSingle<{
     has_code: boolean; wrong_today: number;
   }>();
+  const { data: factors } = await db.auth.mfa.listFactors();
+  const twoStepOn = (factors?.totp.length ?? 0) > 0;
 
   return (
     <>
@@ -25,6 +28,15 @@ export default async function SecurityPage() {
 
       <h2 style={{ marginTop: 8 }}>{data?.has_code === false ? "Set the code" : "Change the code"}</h2>
       <CodeForm />
+
+      <h2 style={{ marginTop: 28 }}>Two-step sign-in</h2>
+      <p className="dim" style={{ marginBottom: 12 }}>
+        Email and password alone are all that guards this account. With an authenticator app
+        added, signing in also needs the six-digit code it shows. Once every admin has set this
+        up, run <span className="mono">supabase/phase44_admin_mfa.sql</span> and the database
+        stops treating a password-only session as an admin&apos;s.
+      </p>
+      <TwoStepForm enabled={twoStepOn} />
 
       <h2 style={{ marginTop: 28 }}>Sign out every browser</h2>
       <p className="dim" style={{ marginBottom: 12 }}>
@@ -49,8 +61,9 @@ export default async function SecurityPage() {
         </li>
         <li>Forgotten the code? Sign in with email, then change it here.</li>
         <li>
-          The code locks these pages, not the account. Anyone who can copy this browser&apos;s
-          cookies doesn&apos;t need it, so sign out on a computer that isn&apos;t yours.
+          The database enforces the lock: while a browser is locked, every admin action is
+          refused for it, even one sent straight to the API. Still, sign out on a computer that
+          isn&apos;t yours.
         </li>
       </ul>
     </>

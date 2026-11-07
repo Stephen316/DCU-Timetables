@@ -84,6 +84,16 @@ export async function signInWithEmail(_prev: UnlockState, form: FormData): Promi
   const { error: signInError } = await db.auth.signInWithPassword({ email, password });
   if (signInError) return { error: signInMessage(signInError), email };
 
+  // An account with two-step sign-in on holds only a password-level session until the
+  // authenticator's code is verified, and the database (phase 44) treats that session as a
+  // student's. The code is checked before the console is opened, and a session that fails
+  // it is ended rather than left in the jar.
+  const twoStep = await completeTwoStep(db, String(form.get("totp") ?? ""));
+  if (twoStep) {
+    await db.auth.signOut({ scope: "local" });
+    return { error: twoStep, email };
+  }
+
   const { data: opened, error } = await db.rpc("open_console_session");
   if (error || opened !== true) {
     await db.auth.signOut({ scope: "local" });
@@ -103,6 +113,30 @@ export async function signInWithEmail(_prev: UnlockState, form: FormData): Promi
   const store = await cookies();
   for (const c of jar.values()) store.set(c.name, c.value, c.options);
   redirect("/review");
+}
+
+/// Null when the session is at full strength: the account has no two-step sign-in, or the
+/// authenticator's code was right. Otherwise what to tell the person. A check that couldn't
+/// be made counts as a failure, never as a pass.
+async function completeTwoStep(db: ReturnType<typeof createServerClient>, entered: string): Promise<string | null> {
+  const { data: level, error } = await db.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error || !level) return `Couldn't check two-step sign-in (${error?.message ?? "try again"}).`;
+  if (level.nextLevel !== "aal2" || level.currentLevel === "aal2") return null;
+
+  const code = entered.replace(/\s/g, "");
+  if (!/^[0-9]{6}$/.test(code)) return "Enter the six-digit code from your authenticator app.";
+
+  const { data: factors, error: factorError } = await db.auth.mfa.listFactors();
+  const factor = factors?.totp[0];
+  if (factorError || !factor) return `Couldn't find your authenticator (${factorError?.message ?? "none set up"}).`;
+
+  const { error: verifyError } = await db.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+  if (verifyError) {
+    return verifyError.code === "over_request_rate_limit"
+      ? "Too many tries. Wait a few minutes, then try again."
+      : "That code didn't work. Check the time on your phone and use the newest code.";
+  }
+  return null;
 }
 
 function signInMessage(error: AuthError): string {
