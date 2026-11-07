@@ -1,6 +1,6 @@
 import { DCUEmail } from '../core/identity';
 import { EmailLinkTokens, sessionFromLink } from './authLink';
-import { AuthenticatedUser, parseAuthSession, SupabaseConfig, SupabaseSession } from './session';
+import { AuthenticatedUser, isCleanServerAddress, noAnswerMessage, parseAuthSession, SupabaseConfig, SupabaseSession } from './session';
 
 /** Why sign-in failed, in words for the student. */
 export class AuthError extends Error {
@@ -12,9 +12,21 @@ export class AuthError extends Error {
     this.name = 'UserFacingError';
   }
 
-  /** No answer at all — offline, or the address can't be found. */
+  /**
+   * No answer at all. Only where the device might really be offline does it say so; a browser
+   * that reports itself online gets the plainer "server" wording.
+   */
   static unreachable(): AuthError {
-    return new AuthError('offline', "Couldn't reach the server. Check your internet connection and try again.");
+    const online = typeof navigator !== 'undefined' && navigator.onLine === true;
+    return new AuthError(online ? 'server' : 'offline', noAnswerMessage());
+  }
+
+  /** The build was given a server address that can't be right — the app's fault, not the network's. */
+  static badServerAddress(): AuthError {
+    return new AuthError(
+      'notConfigured',
+      "Sign-in is set up with an invalid server address (EXPO_PUBLIC_SUPABASE_URL). That's a problem with the app, not your connection.",
+    );
   }
 
   static notConfigured(): AuthError {
@@ -164,26 +176,7 @@ export class SupabaseAuthService implements AuthService {
   }
 
   private async post(path: string, body: Record<string, string>): Promise<unknown> {
-    let response: Response;
-    try {
-      response = await this.fetchFn(this.config.url + path, {
-        method: 'POST',
-        headers: { apikey: this.config.anonKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      // Said plainly, so it isn't mistaken for a wrong password.
-      throw AuthError.unreachable();
-    }
-    const text = await response.text();
-    let json: unknown = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
-    }
-    if (!response.ok) throw new AuthError('server', serverMessage(json, response.status));
-    return json;
+    return this.request('POST', path, undefined, body);
   }
 
   /** The same handling as {@link post}, for the calls that act as a signed-in student. */
@@ -193,18 +186,30 @@ export class SupabaseAuthService implements AuthService {
     token: string,
     body?: Record<string, string>,
   ): Promise<unknown> {
+    return this.request(method, path, token, body);
+  }
+
+  private async request(
+    method: 'GET' | 'POST' | 'PUT',
+    path: string,
+    token: string | undefined,
+    body?: Record<string, string>,
+  ): Promise<unknown> {
+    // Checked first: a malformed address fails in fetch exactly as a dead connection does.
+    if (!isCleanServerAddress(this.config.url)) throw AuthError.badServerAddress();
     let response: Response;
     try {
       response = await this.fetchFn(this.config.url + path, {
         method,
         headers: {
           apikey: this.config.anonKey,
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(body ? { 'Content-Type': 'application/json' } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
       });
     } catch {
+      // Said plainly, so it isn't mistaken for a wrong password.
       throw AuthError.unreachable();
     }
     const text = await response.text();

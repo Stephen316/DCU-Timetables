@@ -336,6 +336,16 @@ describe('Auth requests', () => {
     await expect(service.signIn(email, 'x')).rejects.toThrow('Too many attempts — wait a minute and try again.');
   });
 
+  test('a malformed server address is reported as such, not as being offline', async () => {
+    // A whole pasted .env in the URL once made every sign-in say "check your internet".
+    const bad = { url: 'https://proj.supabase.co\nEXPO_PUBLIC_SUPABASE_ANON_KEY=abc', anonKey: 'anon-key' };
+    const { calls, fn } = fakeFetch(() => ({ body: {} }));
+    const service = new SupabaseAuthService(bad, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
+    await expect(service.signIn(email, 'x')).rejects.toMatchObject({ kind: 'notConfigured' });
+    await expect(service.sendPasswordReset(email)).rejects.toThrow('invalid server address');
+    expect(calls).toHaveLength(0);
+  });
+
   test('signing up an address that already has an account says so instead of waiting for an email', async () => {
     // The live project's answer for a confirmed address: a stand-in user, no identities.
     const { fn } = fakeFetch(() => ({ body: { id: 'x', email: 'aoife.murphy5@mail.dcu.ie', identities: [] } }));

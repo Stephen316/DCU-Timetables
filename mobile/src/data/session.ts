@@ -22,6 +22,36 @@ export function supabaseConfigFromEnv(env: Record<string, string | undefined>): 
   return { url: url.replace(/\/+$/, ''), anonKey };
 }
 
+/**
+ * What to tell the student when a request got no answer at all. A browser that reports itself
+ * online wasn't stopped by the student's connection, so it isn't told to check it; where
+ * connectivity can't be known (the native app) the connection is still the likeliest cause.
+ */
+export function noAnswerMessage(): string {
+  const online = typeof navigator !== 'undefined' ? navigator.onLine : undefined;
+  return online === true
+    ? "Couldn't reach the server. It may be down for a moment — try again shortly."
+    : "Couldn't reach the server. Check your internet connection and try again.";
+}
+
+/**
+ * Whether the configured server address is a bare origin like `https://xyz.supabase.co`.
+ * A stray newline or pasted text makes every request fail with the same error an offline
+ * phone gets, so it is caught before any request is made.
+ */
+export function isCleanServerAddress(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
+      parsed.pathname === '/' && !parsed.search && !parsed.hash &&
+      parsed.origin.toLowerCase() === url.replace(/\/+$/, '').toLowerCase()
+    );
+  } catch {
+    return false;
+  }
+}
+
 // MARK: - Events
 
 type Handler = () => void;
@@ -167,7 +197,7 @@ export class SupabaseSession {
 
   /** 'refused' only when Supabase answered that the refresh token is no good. */
   private async refresh(current: AuthSession, config: SupabaseConfig): Promise<AuthSession | 'refused'> {
-    const unreachable = () => userFacing("Couldn't reach the server. Check your internet connection and try again.");
+    const unreachable = () => userFacing(noAnswerMessage());
     let response: Response;
     try {
       response = await this.fetchFn(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
