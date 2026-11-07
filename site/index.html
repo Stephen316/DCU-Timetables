@@ -26,7 +26,7 @@
   "url": "https://info.dcutimetables.app/"
 }
 </script>
-<link rel="stylesheet" href="landing.css?v=6">
+<link rel="stylesheet" href="landing.css?v=7">
 <script>
   document.documentElement.className = 'js';
 
@@ -244,16 +244,36 @@
 </footer>
 
 <script>
-  // Advance one slot per short scroll segment while the stack crosses the viewport.
+  // Show each phone at the front once, only while the stack is in primary focus.
   (function () {
     var stage = document.querySelector('.stage');
     var phones = stage.querySelectorAll('.phone');
     var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     var queued = false;
+    var phase = 0;
+    var distance = 0;
+    var previousScroll = window.scrollY;
+    var wasFocused = false;
     function update() {
       queued = false;
-      var start = Math.max(0, stage.getBoundingClientRect().top + window.scrollY - window.innerHeight * .8);
-      var phase = reducedMotion.matches ? 0 : Math.floor(Math.max(0, window.scrollY - start) / 110) % 3;
+      var rect = stage.getBoundingClientRect();
+      var viewport = window.innerHeight;
+      var centre = rect.top + rect.height / 2;
+      var focused = rect.top >= 72 && rect.bottom <= viewport - 16 &&
+        centre >= viewport * .35 && centre <= viewport * .65;
+      var delta = window.scrollY - previousScroll;
+      previousScroll = window.scrollY;
+      if (!reducedMotion.matches && focused && wasFocused && phase < 2) {
+        // Scale the scroll distance to the space available on shorter screens.
+        var focusTravel = Math.min(viewport * .3, viewport - 88 - rect.height);
+        var step = Math.max(16, Math.min(80, focusTravel / 3));
+        distance += Math.max(0, delta);
+        if (distance >= step) {
+          phase += 1;
+          distance = 0;
+        }
+      }
+      wasFocused = focused;
       phones.forEach(function (phone, index) {
         phone.setAttribute('data-slot', (index - phase + 3) % 3);
       });
@@ -262,8 +282,8 @@
       if (!queued) { queued = true; window.requestAnimationFrame(update); }
     }
     window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    reducedMotion.addEventListener('change', schedule);
+    window.addEventListener('resize', function () { wasFocused = false; schedule(); });
+    reducedMotion.addEventListener('change', function () { wasFocused = false; schedule(); });
     update();
   })();
 
