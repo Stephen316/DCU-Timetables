@@ -26,7 +26,7 @@
   "url": "https://info.dcutimetables.app/"
 }
 </script>
-<link rel="stylesheet" href="landing.css?v=5">
+<link rel="stylesheet" href="landing.css?v=6">
 <script>
   document.documentElement.className = 'js';
 
@@ -244,6 +244,29 @@
 </footer>
 
 <script>
+  // Advance one slot per short scroll segment while the stack crosses the viewport.
+  (function () {
+    var stage = document.querySelector('.stage');
+    var phones = stage.querySelectorAll('.phone');
+    var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var queued = false;
+    function update() {
+      queued = false;
+      var start = Math.max(0, stage.getBoundingClientRect().top + window.scrollY - window.innerHeight * .8);
+      var phase = reducedMotion.matches ? 0 : Math.floor(Math.max(0, window.scrollY - start) / 110) % 3;
+      phones.forEach(function (phone, index) {
+        phone.setAttribute('data-slot', (index - phase + 3) % 3);
+      });
+    }
+    function schedule() {
+      if (!queued) { queued = true; window.requestAnimationFrame(update); }
+    }
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    reducedMotion.addEventListener('change', schedule);
+    update();
+  })();
+
   // Copy where it can be, a selected link where it can't, so the link can be copied by hand.
   (function () {
     var button = document.getElementById('copy-link');

@@ -131,19 +131,31 @@ h1 em {
 .island { position: absolute; width: 30cqw; height: 8cqw; border-radius: 5cqw; background: #000; left: 50%; top: 3cqw; transform: translateX(-50%); }
 .home-indicator { height: 8cqw; position: relative; }
 .home-indicator::after { content: ""; position: absolute; width: 35%; height: 1.2cqw; border-radius: 1cqw; bottom: 2cqw; left: 32.5%; background: currentColor; }
-.phone.side { margin-top: 56px; opacity: .96; }
-.phone.left { transform: rotateY(14deg) rotateZ(-3deg); }
-.phone.right { transform: rotateY(-14deg) rotateZ(3deg); }
-.phone.mid { margin-top: 0; z-index: 2; }
-.stage:hover .phone.left { transform: rotateY(6deg) rotateZ(-1deg) translateY(-6px); }
-.stage:hover .phone.right { transform: rotateY(-6deg) rotateZ(1deg) translateY(-6px); }
-.stage:hover .phone.mid { transform: translateY(-10px); }
-@media (max-width: 760px) {
-  .phone { width: 62vw; max-width: 260px; }
-  .phone.side { width: 52vw; max-width: 220px; margin-inline: -9vw; }
-  .stage { gap: 0; height: clamp(380px, 110vw, 480px); }
+/* Three fixed slots let each screen travel around the stack without reordering the DOM. */
+.stage { --phone-step: calc(100% + clamp(8px, 3vw, 40px)); }
+.stage .phone {
+  position: absolute; left: 50%; top: 0; margin: 0;
+  transition: transform 220ms cubic-bezier(.2,.8,.2,1), opacity 220ms ease;
 }
-
+.stage .phone.left, .stage .phone[data-slot="0"] {
+  z-index: 1; opacity: .96;
+  transform: translateX(-50%) translate3d(calc(-1 * var(--phone-step)), 56px, -50px) rotateY(14deg) rotateZ(-3deg) scale(.9);
+}
+.stage .phone.mid, .stage .phone[data-slot="1"] {
+  z-index: 3; opacity: 1; transform: translateX(-50%) translate3d(0, 0, 0);
+}
+.stage .phone.right, .stage .phone[data-slot="2"] {
+  z-index: 1; opacity: .96;
+  transform: translateX(-50%) translate3d(var(--phone-step), 56px, -50px) rotateY(-14deg) rotateZ(3deg) scale(.9);
+}
+/* Attribute slots take precedence over the original, no-JavaScript positions. */
+.stage .phone[data-slot="0"] { z-index: 1; transform: translateX(-50%) translate3d(calc(-1 * var(--phone-step)), 56px, -50px) rotateY(14deg) rotateZ(-3deg) scale(.9); }
+.stage .phone[data-slot="1"] { z-index: 3; transform: translateX(-50%) translate3d(0, 0, 0); opacity: 1; }
+.stage .phone[data-slot="2"] { z-index: 1; transform: translateX(-50%) translate3d(var(--phone-step), 56px, -50px) rotateY(-14deg) rotateZ(3deg) scale(.9); }
+@media (max-width: 760px) {
+  .stage .phone { width: 62vw; max-width: 260px; }
+  .stage { --phone-step: 66%; gap: 0; height: clamp(380px, 110vw, 480px); }
+}
 
 @media (prefers-color-scheme: light) {
   .phone { --screen-bg: #fdf6e3; }
