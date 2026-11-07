@@ -97,22 +97,31 @@ h1 em {
 
 /* Device previews: screenshots retain their native aspect ratio between safe areas. */
 .stage {
-  display: flex; justify-content: center; align-items: center; gap: clamp(12px, 3vw, 36px);
-  margin-top: clamp(36px, 6vw, 64px); padding: 8px 4px;
+  position: relative; display: flex; justify-content: center; align-items: flex-start; gap: clamp(8px, 3vw, 40px);
+  margin-top: clamp(40px, 6vw, 72px); height: clamp(380px, 52vw, 560px); overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 62%, transparent 100%); mask-image: linear-gradient(#000 62%, transparent 100%);
+  perspective: 1400px;
+}
+.stage::before {
+  content: ""; position: absolute; left: 50%; top: 10%; width: min(720px, 90%); height: 70%; translate: -50% 0;
+  background: radial-gradient(closest-side, var(--glow), transparent); filter: blur(30px); opacity: .55; z-index: 0;
 }
 .phone {
   --screen-bg: #212129;
-  position: relative; flex: 0 0 auto; width: clamp(180px, 24vw, 280px);
+  position: relative; z-index: 1; flex: none; width: clamp(200px, 25vw, 290px);
+  aspect-ratio: 390 / 844; transition: transform .5s cubic-bezier(.2,.8,.2,1);
   container-type: inline-size; border-radius: 18% / 8.4%; padding: 6px;
   background: #151518; border: 1px solid #65656d;
   box-shadow: 0 2px 8px #0003;
 }
 .phone .screen {
   position: relative; overflow: hidden; border-radius: 16% / 7.4%;
+  height: 100%; display: flex; flex-direction: column;
   background: var(--screen-bg); color: #f1f1f6;
 }
-.phone picture { display: block; }
-.phone .screen img { width: 100%; height: auto; }
+.phone picture { display: block; flex: 1; min-height: 0; }
+.phone .screen img { width: 100%; height: 100%; object-fit: contain; object-position: top; }
+.status-bar, .home-indicator { flex-shrink: 0; }
 .status-bar {
   position: relative; height: 15cqw; display: flex; align-items: center;
   justify-content: space-between; padding: 0 7cqw; font-size: 4cqw;
@@ -122,17 +131,24 @@ h1 em {
 .island { position: absolute; width: 30cqw; height: 8cqw; border-radius: 5cqw; background: #000; left: 50%; top: 3cqw; transform: translateX(-50%); }
 .home-indicator { height: 8cqw; position: relative; }
 .home-indicator::after { content: ""; position: absolute; width: 35%; height: 1.2cqw; border-radius: 1cqw; bottom: 2cqw; left: 32.5%; background: currentColor; }
-.phone.side { width: clamp(170px, 22vw, 256px); }
+.phone.side { margin-top: 56px; opacity: .96; }
+.phone.left { transform: rotateY(14deg) rotateZ(-3deg); }
+.phone.right { transform: rotateY(-14deg) rotateZ(3deg); }
+.phone.mid { margin-top: 0; z-index: 2; }
+.stage:hover .phone.left { transform: rotateY(6deg) rotateZ(-1deg) translateY(-6px); }
+.stage:hover .phone.right { transform: rotateY(-6deg) rotateZ(1deg) translateY(-6px); }
+.stage:hover .phone.mid { transform: translateY(-10px); }
+@media (max-width: 760px) {
+  .phone { width: 62vw; max-width: 260px; }
+  .phone.side { width: 52vw; max-width: 220px; margin-inline: -9vw; }
+  .stage { gap: 0; height: clamp(380px, 110vw, 480px); }
+}
+
+
 @media (prefers-color-scheme: light) {
   .phone { --screen-bg: #fdf6e3; }
   .phone .screen { color: #073642; }
 }
-@media (max-width: 640px) {
-  /* Let each view remain readable and fully visible instead of clipping side phones. */
-  .stage { justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; padding: 8px 12px 16px; gap: 20px; }
-  .phone, .phone.side { width: min(72vw, 280px); scroll-snap-align: center; }
-}
-
 /* ── Sections ────────────────────────────────────────────────────── */
 section { position: relative; }
 .sec { padding: clamp(64px, 10vw, 120px) 0 0; }
@@ -272,7 +288,6 @@ h1 em { background: none; color: var(--accent); }
 @media (max-width: 920px) { .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .bento { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 360px) { .top .brand { font-size: 14px; gap: 6px; } .chip-btn { padding-inline: 12px; } }
-@media (max-width: 640px) { .phone.mid { order: -1; } }
 @media (max-width: 360px) {
   .way { padding: 24px; }
   .btn.primary { font-size: 16px; padding-inline: 14px; }
