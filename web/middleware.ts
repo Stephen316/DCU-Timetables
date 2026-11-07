@@ -7,6 +7,21 @@ import { NextResponse, type NextRequest } from "next/server";
 /// This does NOT enforce access — the layout and RLS do that. Treating middleware as the
 /// gate is a common way to ship an admin console that anyone can read.
 export async function middleware(request: NextRequest) {
+  // A browser keeps its sign-in cookies per address. Every deploy also has an address of its
+  // own (dcu-timetables-<hash>-….vercel.app), which the Vercel dashboard links to, and a tab
+  // opened there has none of the sign-in held at the project's real address. Production is
+  // sent to that one address, so every tab shares one sign-in and a deploy doesn't lose it.
+  // Previews are left where they are, and so is local development: the variable is only
+  // set on Vercel.
+  const home = process.env.VERCEL_ENV === "production" ? process.env.VERCEL_PROJECT_PRODUCTION_URL : undefined;
+  if (home && request.nextUrl.host !== home) {
+    const url = request.nextUrl.clone();
+    url.protocol = "https";
+    url.host = home;
+    url.port = "";
+    return NextResponse.redirect(url, 308);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
