@@ -17,8 +17,6 @@ import { DeadlineForm, DeadlineRow } from './DeadlineRows';
 import { canEdit } from './Moderation';
 import { DeadlinesModel } from './DeadlinesModel';
 import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
-import { PlusPrompt } from '../payment/PlusPrompt';
-import { plusModel } from '../payment/PlusModel';
 
 /**
  * Every assignment, quiz and exam the student's modules have, soonest first. The timetable
@@ -31,7 +29,6 @@ export function DeadlinesScreen() {
   const services = useServices();
   const week = useModel(useWeekModel());
   const model = useModel(useMemo(() => new DeadlinesModel(services), [services]));
-  const plus = useModel(plusModel(services));
   /** Modules to ask about, from the timetable that's already loaded. */
   const modules = week.loadedModuleKeys;
 
@@ -161,16 +158,13 @@ export function DeadlinesScreen() {
     return (
       <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
         {header}
-        <PlusPrompt modules={modules} />
         <EmptyState
           icon="running"
           title="Nothing due"
           message={
-            plus.locked
-              ? 'Deadlines you add appear here. Plus shows the ones your classmates share.'
-              : modules.length === 0
-                ? 'Once your timetable loads, deadlines your classmates share will appear here.'
-                : 'Nobody has shared an assignment, quiz or exam for your modules yet. Tap + to add the first one.'
+            modules.length === 0
+              ? 'Once your timetable loads, deadlines your classmates share will appear here.'
+              : 'Nobody has shared an assignment, quiz or exam for your modules yet. Tap + to add the first one.'
           }
         />
       </View>
@@ -206,7 +200,6 @@ export function DeadlinesScreen() {
         onRefresh={() => void model.reload()}
         contentStyle={{ paddingBottom: clearance }}
       >
-        <PlusPrompt modules={modules} />
         {model.errorText ? (
           <Section>
             <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.inkSecondary} /></Row>
