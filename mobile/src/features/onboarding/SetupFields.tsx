@@ -7,16 +7,16 @@ import type { SetupPlanProps, StudentNumberFieldProps } from './SetupFields.type
 export function SetupPlan({ title, description, selected, onExplore }: SetupPlanProps) {
   const theme = useTheme();
   return (
-    <View style={[styles.plan, { backgroundColor: theme.canvas, borderColor: selected ? theme.accent : theme.separator }]}>
+    <Pressable accessibilityRole={onExplore ? 'button' : undefined} accessibilityLabel={onExplore ? 'Explore Plus' : undefined} disabled={!onExplore} onPress={onExplore} style={[styles.plan, { backgroundColor: theme.canvas, borderColor: selected ? theme.accent : theme.separator }]}>
       <View style={styles.planText}>
         <View style={styles.planHeading}>
           <Txt type="headline">{selected ? `${title} · Selected` : title}</Txt>
-          {onExplore ? <Pressable accessibilityRole="button" onPress={onExplore} hitSlop={8}><Txt type="subheadline" color={theme.inkSecondary}>› Explore plus</Txt></Pressable> : null}
+          {onExplore ? <Txt type="subheadline" color={theme.inkSecondary}>› Explore plus</Txt> : null}
         </View>
         <Txt color={theme.inkSecondary}>{description}</Txt>
       </View>
       {selected ? <Icon name="check" color={theme.accent} /> : null}
-    </View>
+    </Pressable>
   );
 }
 

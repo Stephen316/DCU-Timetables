@@ -69,10 +69,10 @@
   font-weight: 400;
   cursor: pointer;
 }
-.account-setup-explore:hover {
+.account-setup-plan[role="button"]:hover .account-setup-explore {
   text-decoration: underline;
 }
-.account-setup-explore:focus-visible {
+.account-setup-plan[role="button"]:focus-visible {
   outline: 2px solid var(--notra-ring);
   outline-offset: 4px;
 }
@@ -82,4 +82,8 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
+}
+
+.account-setup-plan[role="button"] {
+  cursor: pointer;
 }

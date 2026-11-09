@@ -6,11 +6,25 @@ import { Input } from './notra/shadcn-input';
 
 export function SetupPlan({ title, description, selected, onExplore }: SetupPlanProps) {
   return (
-    <Card className="account-setup-plan" data-selected={selected || undefined} size="sm">
+    <Card
+      className="account-setup-plan"
+      data-selected={selected || undefined}
+      size="sm"
+      role={onExplore ? 'button' : undefined}
+      tabIndex={onExplore ? 0 : undefined}
+      aria-label={onExplore ? 'Explore Plus' : undefined}
+      onClick={onExplore}
+      onKeyDown={onExplore ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onExplore();
+        }
+      } : undefined}
+    >
       <CardHeader>
         <CardTitle>
           {title}
-          {onExplore ? <button type="button" className="account-setup-explore" onClick={onExplore}>› Explore plus</button> : null}
+          {onExplore ? <span className="account-setup-explore">› Explore plus</span> : null}
           {selected ? <span className="account-setup-selected"><HugeiconsIcon icon={Tick02Icon} size={14} /> Selected</span> : null}
         </CardTitle>
         <CardDescription>{description}</CardDescription>
