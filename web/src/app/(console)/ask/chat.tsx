@@ -11,6 +11,7 @@ import { csvField, extraKeysOf, extraLabel, rosterHeader } from "@/lib/roster/pa
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/upload";
 import { Spinner } from "../spinner";
 import { SavedPanel } from "./saved-panel";
+import { FilePreview } from "./preview";
 import { LibraryPanel } from "./library-panel";
 import type { Reused } from "./library";
 import { audience, describeChange, weekday } from "@/lib/changes/change";
@@ -88,6 +89,7 @@ export function Ask() {
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   // What is being waited on, and since when — drives the progress line in the transcript.
@@ -143,6 +145,7 @@ export function Ask() {
   /// that seemed to do nothing.
   function choose(next: File | null) {
     setFileError(null);
+    setPreviewing(false);
     if (fileInput.current) fileInput.current.value = "";
     if (!next) { setFile(null); return; }
     if (next.size > MAX_UPLOAD_BYTES) {
@@ -408,8 +411,13 @@ export function Ask() {
                 <>
                   <span className="mono">{file.name}</span>
                   <span className="dim">{formatBytes(file.size)} · ready to send</span>
-                  <button type="button" className="link" onClick={() => choose(null)} disabled={busy}
-                    aria-label={`Remove ${file.name}`}>Remove</button>
+                  <span className="attach-actions">
+                    <button type="button" className="link" onClick={() => setPreviewing(true)}
+                      aria-label={`Preview ${file.name}`}>Preview</button>
+                    <button type="button" className="link" onClick={() => choose(null)} disabled={busy}
+                      aria-label={`Remove ${file.name}`}>Remove</button>
+                  </span>
+                  {previewing && <FilePreview file={file} onClose={() => setPreviewing(false)} />}
                 </>
               ) : (
                 <span>{fileError}</span>
