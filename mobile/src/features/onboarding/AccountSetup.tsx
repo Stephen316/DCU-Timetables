@@ -156,10 +156,21 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
           )}
         </Step>
         <Step title="Review">
-          <Txt type="title3" accessibilityRole="header">Looking good</Txt>
-          <Txt color={theme.inkSecondary}>{hasPlus ? 'Plus plan' : plan === 'standard' ? 'Standard plan' : 'Plan unavailable'}</Txt>
-          <Txt color={theme.inkSecondary}>Student number {number}. Complete setup to choose your programme.</Txt>
-          {saveError ? <Txt accessibilityLiveRegion="polite">{saveError}</Txt> : null}
+          <View style={styles.cameraStep}>
+            <Txt type="title3" accessibilityRole="header" style={styles.cameraTitle}>Looking good</Txt>
+            <View style={styles.reviewDetails}>
+              <View style={styles.reviewRow}>
+                <Txt type="subheadline" color={theme.inkSecondary}>Plan</Txt>
+                <Txt type="headline">{hasPlus ? 'Plus' : plan === 'standard' ? 'Standard' : 'Unavailable'}</Txt>
+              </View>
+              <View style={[styles.reviewRow, styles.reviewDivider, { borderTopColor: theme.separator }]}>
+                <Txt type="subheadline" color={theme.inkSecondary}>Student number</Txt>
+                <Txt type="headline" style={styles.studentNumber}>{number}</Txt>
+              </View>
+            </View>
+            <Txt type="footnote" color={theme.inkSecondary} style={styles.entryHelp}>Complete setup to choose your programme.</Txt>
+            {saveError ? <Txt accessibilityLiveRegion="polite" style={styles.entryHelp}>{saveError}</Txt> : null}
+          </View>
         </Step>
       </Stepper>
       <View style={styles.signOut}>
@@ -170,6 +181,10 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
 }
 
 const styles = StyleSheet.create({
+  reviewDetails: { width: '100%', maxWidth: 300 },
+  reviewRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: Space.s, paddingVertical: Space.m },
+  reviewDivider: { borderTopWidth: StyleSheet.hairlineWidth },
+  studentNumber: { fontVariant: ['tabular-nums'] },
   numberEntry: { width: '100%', maxWidth: 300, gap: Space.s },
   entryHelp: { textAlign: 'center' },
   cameraStep: { alignItems: 'center', gap: Space.l, paddingVertical: Space.s },
