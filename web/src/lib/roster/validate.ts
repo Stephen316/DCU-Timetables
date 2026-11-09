@@ -69,7 +69,7 @@ export function validateRoster(rows: RosterRow[]): Finding[] {
   }
   const noGroup = rows.filter((r) => !r.group).length;
   if (groups.size && noGroup) {
-    out.push({ level: "warn", message: `${noGroup} student${noGroup === 1 ? " has" : "s have"} no lab group, so they get no lab timetable.` });
+    out.push({ level: "warn", message: `${noGroup} student${noGroup === 1 ? " has" : "s have"} no lab group, so on a phone they are asked to choose their own group.` });
   }
   for (const key of extraKeysOf(rows)) {
     const sizes = new Map<string, number>();

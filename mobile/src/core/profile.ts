@@ -17,14 +17,15 @@ export interface Allocation {
 }
 
 /**
- * Reads a `course_allocations` row, whose group column is `grp`. A student on a team-only
- * list has no lab group: `grp` comes back null and they get an empty group, which matches
- * no lab rotation and no group-addressed change — only changes for everyone.
+ * Reads a `course_allocations` row, whose group column is `grp`. A row with no lab group —
+ * a late joiner a team list added, or a student on a team-only list — is not an allocation:
+ * `null` here means "not listed", and the student is left to say which group they are in
+ * themselves rather than being given a profile with no labs in it.
  */
 export function allocationFromRow(row: Record<string, unknown>): Allocation | null {
-  if (typeof row.grp !== 'string' && row.grp !== null) return null;
+  if (typeof row.grp !== 'string') return null;
   const text = (v: unknown) => (typeof v === 'string' ? v : null);
-  return { group: row.grp ?? '', subgroup: text(row.subgroup), day: text(row.day), workshop: text(row.workshop), drawing: text(row.drawing) };
+  return { group: row.grp, subgroup: text(row.subgroup), day: text(row.day), workshop: text(row.workshop), drawing: text(row.drawing) };
 }
 
 // MARK: - Student profile

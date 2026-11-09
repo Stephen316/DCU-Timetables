@@ -326,8 +326,9 @@ only thing standing between a misread cell and 200 students in the wrong room.
 A class list can carry groupings beside the lab group — a project team, a studio. They are
 stored per student in `course_allocations.extra` (`jsonb`), e.g. `{"team": "17"}`; a new kind
 of grouping is a new key, never a new column. `grp` is nullable, so a list of teams alone is
-valid. Phones still read only `grp`; a null one reads as "no lab group" (empty string) and
-matches no rotation, only changes addressed to everyone.
+valid. Phones still read only `grp`; a row with a null one is not an allocation (`allocationFromRow`
+returns null), so that student is "not listed" and is left to choose their own group — as a late
+joiner who isn't on the lab list should be.
 
 On the way in, `parseRoster` keeps a column only if its heading says it is a grouping — `Team`,
 `Project Team ID` (both `team`), or "<kind> Team/Group" (`studio_group`). Anything else (Email,
