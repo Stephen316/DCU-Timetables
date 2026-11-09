@@ -1,22 +1,22 @@
 /* Home page only. The other pages (privacy, terms, support, 404) keep using style.css. */
 :root {
-  --bg: #0e0e13; --bg-2: #15151c; --card: #1a1a23; --card-2: #212130;
-  --line: rgba(255,255,255,.09); --text: #f1f1f6; --muted: #a6a9bb;
-  --accent: #afb8f2; --accent-2: #8b95e8; --on-accent: #14141c;
-  --glow: rgba(139,149,232,.55); --blob-a: #5b5fc7; --blob-b: #c1437f; --blob-c: #1f8a9e;
+  --bg: #131316; --bg-2: #18181d; --card: #1c1c21; --card-2: #26252d;
+  --line: rgba(255,255,255,.09); --text: #fafafa; --muted: #b4b1c7;
+  --accent: #a78bfa; --accent-2: #8b5cf6; --on-accent: #131316;
+  --glow: rgba(139,92,246,.55); --blob-a: #7c4dff; --blob-b: #ec4899; --blob-c: #06b6d4;
   --due: #fbbf24; --off: #fb923c; --ok: #34d399; --test: #60a5fa;
   --shadow: 0 30px 80px -20px rgba(0,0,0,.7);
-  --nav-bg: rgba(14,14,19,.72);
+  --nav-bg: rgba(19,19,22,.72);
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #fdf6e3; --bg-2: #f5eed9; --card: #fffaf0; --card-2: #eee8d5;
-    --line: rgba(7,54,66,.12); --text: #073642; --muted: #586e75;
-    --accent: #6c71c4; --accent-2: #5a5fb4; --on-accent: #fdf6e3;
-    --glow: rgba(108,113,196,.45); --blob-a: #b4b8ee; --blob-b: #f0b4cf; --blob-c: #a6e0d9;
-    --due: #b58900; --off: #cb4b16; --ok: #6f8000; --test: #268bd2;
-    --shadow: 0 30px 70px -25px rgba(7,54,66,.35);
-    --nav-bg: rgba(253,246,227,.78);
+    --bg: #f6f5fb; --bg-2: #efedf9; --card: #ffffff; --card-2: #efedf9;
+    --line: rgba(23,23,40,.10); --text: #171717; --muted: #55526b;
+    --accent: #7c4dff; --accent-2: #6a3af0; --on-accent: #ffffff;
+    --glow: rgba(124,77,255,.4); --blob-a: #c4b5fd; --blob-b: #f9a8d4; --blob-c: #67e8f9;
+    --due: #b45309; --off: #ea580c; --ok: #059669; --test: #2563eb;
+    --shadow: 0 30px 70px -25px rgba(60,40,140,.35);
+    --nav-bg: rgba(246,245,251,.78);
   }
 }
 * { box-sizing: border-box; }
@@ -24,7 +24,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-x: clip
 main, footer { overflow-x: clip; }
 body {
   margin: 0; background: var(--bg); color: var(--text); overflow-x: clip;
-  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  font: 16px/1.6 "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 a { color: inherit; }
@@ -65,7 +65,7 @@ h1 {
   margin: 0 auto; max-width: 14ch; font-size: clamp(44px, 9vw, 92px); line-height: .98; letter-spacing: -.045em; font-weight: 800;
 }
 h1 em {
-  font-style: normal; background: linear-gradient(100deg, var(--accent) 0%, #e58fc0 55%, var(--due) 100%);
+  font-style: normal; background: linear-gradient(100deg, var(--accent) 0%, #ec4899 55%, var(--due) 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .lede { margin: 22px auto 0; max-width: 52ch; font-size: clamp(17px, 2.4vw, 21px); line-height: 1.5; color: var(--muted); }
@@ -107,7 +107,7 @@ h1 em {
   background: radial-gradient(closest-side, var(--glow), transparent); filter: blur(30px); opacity: .55; z-index: 0;
 }
 .phone {
-  --screen-bg: #212129;
+  --screen-bg: #131316;
   position: relative; z-index: 1; flex: none; width: clamp(200px, 25vw, 290px);
   aspect-ratio: 390 / 844; transition: transform .5s cubic-bezier(.2,.8,.2,1);
   container-type: inline-size; border-radius: 18% / 8.4%; padding: 6px;
@@ -117,7 +117,7 @@ h1 em {
 .phone .screen {
   position: relative; overflow: hidden; border-radius: 16% / 7.4%;
   height: 100%; display: flex; flex-direction: column;
-  background: var(--screen-bg); color: #f1f1f6;
+  background: var(--screen-bg); color: #fafafa;
 }
 .phone picture { display: block; flex: 1; min-height: 0; }
 .phone .screen img { width: 100%; height: 100%; object-fit: contain; object-position: top; }
@@ -161,8 +161,8 @@ h1 em {
 }
 
 @media (prefers-color-scheme: light) {
-  .phone { --screen-bg: #fdf6e3; }
-  .phone .screen { color: #073642; }
+  .phone { --screen-bg: #f6f5fb; }
+  .phone .screen { color: #171717; }
 }
 /* ── Sections ────────────────────────────────────────────────────── */
 section { position: relative; }
@@ -210,8 +210,8 @@ h2 { margin: 0; font-size: clamp(32px, 5.4vw, 56px); line-height: 1.04; letter-s
 .row.cancelled .t, .row.cancelled b { text-decoration: line-through; text-decoration-color: var(--off); opacity: .75; }
 .swatches { display: flex; gap: 10px; }
 .sw { flex: 1; height: 86px; border-radius: 16px; border: 1px solid var(--line); padding: 12px; font-size: 12px; font-weight: 600; display: flex; align-items: flex-end; }
-.sw.d { background: #212129; color: #ecedf3; }
-.sw.l { background: #fdf6e3; color: #073642; }
+.sw.d { background: #131316; color: #fafafa; }
+.sw.l { background: #f6f5fb; color: #171717; }
 
 /* ── Ways in ─────────────────────────────────────────────────────── */
 .ways { display: grid; gap: 16px; grid-template-columns: 1.35fr 1fr 1fr; align-items: stretch; }
