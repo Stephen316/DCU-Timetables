@@ -24,12 +24,12 @@ type Chat = {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 };
 
-export type DocumentKind = "class_list" | "rotation" | "other";
+export type DocumentKind = "class_list" | "rotation" | "schedule" | "other";
 
 const KIND_SCHEMA = {
   type: "OBJECT",
   properties: {
-    kind: { type: "STRING", enum: ["class_list", "rotation", "other"] },
+    kind: { type: "STRING", enum: ["class_list", "rotation", "schedule", "other"] },
     reason: { type: "STRING" },
   },
   required: ["kind", "reason"],
@@ -54,7 +54,11 @@ export async function classifyDocument(opts: { key: string; text: string; model?
           "- class_list: a list of students — by name or by student number — with the lab " +
           "group each is in. May also give subgroup, day and rooms.\n" +
           "- rotation: a schedule of which groups attend which lab in which week, usually a " +
-          "grid of weeks or dates against modules or activities. It lists groups, not students.\n" +
+          "grid of weeks or dates against modules or activities. It repeats over many weeks. " +
+          "It lists groups, not students.\n" +
+          "- schedule: one-off dated events for teams or groups — presentation, assessment or " +
+          "exam slots — usually one row per team with a date and a time, and perhaps a room. " +
+          "No grid of weeks, and not a repeating pattern.\n" +
           "- other: anything else.",
       },
       { role: "user", content: withNote(note, text.slice(0, SAMPLE)) },
@@ -65,7 +69,7 @@ export async function classifyDocument(opts: { key: string; text: string; model?
     },
   }));
   const out = JSON.parse(textOf(chat.choices?.[0]?.message?.content) || "{}");
-  const kind: DocumentKind = ["class_list", "rotation", "other"].includes(out.kind) ? out.kind : "other";
+  const kind: DocumentKind = ["class_list", "rotation", "schedule", "other"].includes(out.kind) ? out.kind : "other";
   return {
     kind,
     reason: String(out.reason ?? ""),

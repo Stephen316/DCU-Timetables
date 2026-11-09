@@ -14,6 +14,8 @@ export interface Allocation {
   day: string | null;
   workshop: string | null;
   drawing: string | null;
+  /** The project team on the class list ("A1.a"), if it carries one. Beside the lab group, never instead of it. */
+  team?: string | null;
 }
 
 /**
@@ -25,7 +27,12 @@ export interface Allocation {
 export function allocationFromRow(row: Record<string, unknown>): Allocation | null {
   if (typeof row.grp !== 'string') return null;
   const text = (v: unknown) => (typeof v === 'string' ? v : null);
-  return { group: row.grp, subgroup: text(row.subgroup), day: text(row.day), workshop: text(row.workshop), drawing: text(row.drawing) };
+  // `extra` holds the further groupings a class list carries, keyed by kind: {"team": "A1.a"}.
+  const extra = typeof row.extra === 'object' && row.extra !== null ? (row.extra as Record<string, unknown>) : {};
+  return {
+    group: row.grp, subgroup: text(row.subgroup), day: text(row.day), workshop: text(row.workshop), drawing: text(row.drawing),
+    team: text(extra.team),
+  };
 }
 
 // MARK: - Student profile
@@ -60,6 +67,8 @@ export interface StudentProfile {
   workshop: string;
   /** Room, e.g. "SB39" */
   drawing: string;
+  /** Project team, e.g. "A1.a". Empty when the class list has none for them. */
+  team: string;
   /** Where the allocation came from, so a re-imported class list can be noticed. */
   courseKey: string | null;
   allocationKey: string | null;
@@ -74,6 +83,7 @@ export function makeProfile(fields: Partial<StudentProfile> & { name: string; gr
     subgroup: fields.subgroup ?? '',
     workshop: fields.workshop ?? '',
     drawing: fields.drawing ?? '',
+    team: fields.team ?? '',
     courseKey: fields.courseKey ?? null,
     allocationKey: fields.allocationKey ?? null,
     rosterVersion: fields.rosterVersion ?? null,
@@ -98,6 +108,7 @@ export function profileFromAllocation(
     subgroup: allocation.subgroup ?? '',
     workshop: allocation.workshop ?? '',
     drawing: allocation.drawing ?? '',
+    team: allocation.team ?? '',
     courseKey: cohortCourseKey(cohort),
     allocationKey,
     rosterVersion,
@@ -119,6 +130,7 @@ export function decodeProfile(value: unknown): StudentProfile | null {
     subgroup: text(v.subgroup),
     workshop: text(v.workshop),
     drawing: text(v.drawing),
+    team: text(v.team),
     courseKey: opt(v.courseKey),
     allocationKey: opt(v.allocationKey),
     rosterVersion: typeof v.rosterVersion === 'number' ? v.rosterVersion : null,
@@ -291,16 +303,20 @@ export class TimetableAudience {
   readonly subgroup: string | null;
   /** The DCU programme the student picked, "CE1". A change for it reaches them whatever their lab group. */
   readonly programme: string | null;
+  /** The student's project team in capitals, "A1.A". A change for `TEAM:A1.A` reaches them. */
+  readonly team: string | null;
 
   constructor(
     readonly courseKey: string,
     group: string | null = null,
     subgroup: string | null = null,
     programme: string | null = null,
+    team: string | null = null,
   ) {
     this.group = group === '' ? null : group;
     this.subgroup = subgroup === '' ? null : subgroup;
     this.programme = programme?.trim().toUpperCase() || null;
+    this.team = team?.replace(/\s+/g, '').toUpperCase() || null;
   }
 
   /**
@@ -331,7 +347,7 @@ export class TimetableAudience {
     const course = profile.courseKey ?? cohortCourseKey(profile.cohort);
     const code = programme?.trim().toUpperCase() ?? '';
     return new TimetableAudience(course, profile.group, profile.subgroup,
-      TimetableAudience.programmeCourses[code] === course ? code : null);
+      TimetableAudience.programmeCourses[code] === course ? code : null, profile.team);
   }
 
   static forCategory(category: TimetableCategory): TimetableAudience | null {
@@ -341,6 +357,11 @@ export class TimetableAudience {
   includes(change: TimetableChange): boolean {
     if (change.courseKey !== this.courseKey) return false;
     if (change.group === null) return true;
+    // A change for one team (supabase/phase48) reaches that team's students and no one else —
+    // never matched as a lab group, so a team called "C.2" can't be mistaken for subgroup C.2.
+    if (change.group.toUpperCase().startsWith('TEAM:')) {
+      return this.team !== null && change.group.slice(5).replace(/\s+/g, '').toUpperCase() === this.team;
+    }
     return change.group === this.group || change.group === this.subgroup || change.group === this.programme;
   }
 }

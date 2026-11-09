@@ -44,6 +44,8 @@ function target(p: Proposal): string {
   // Changes add up rather than replace; only an identical one is "the same thing".
   if (p.kind === "change") return `change ${JSON.stringify([p.change, p.groups])}`;
   if (p.kind === "heading") return `heading ${p.heading.moduleKey}`;
+  // Saving replaces the team slots under the same module and title, so those are the same thing.
+  if (p.kind === "schedule") return `schedule ${p.courseKey} ${p.module} ${p.title.trim().toLowerCase()}`;
   return `${p.kind} ${p.courseKey}`;
 }
 
@@ -52,6 +54,7 @@ function describe(p: Proposal): string {
   if (p.kind === "roster") return `${p.courseKey || "?"} class list · ${p.rows.length} students`;
   if (p.kind === "change") return describeChange(p.change, whoFor(p));
   if (p.kind === "heading") return describeHeading(p.heading);
+  if (p.kind === "schedule") return `${p.module || "?"} ${p.title || "team schedule"} · ${p.events.length} team slots`;
   return `${p.courseKey || "?"} rotation · ${p.sessions.filter((s) => s.groups?.length).length} sessions`;
 }
 
@@ -307,6 +310,8 @@ export function Ask() {
               ? `${proposal.groups.length > 1 ? `${proposal.groups.length} changes` : "Change"} saved. Phones pick ${proposal.groups.length > 1 ? "them" : "it"} up when the app next opens.`
             : proposal.kind === "heading"
               ? `${proposal.heading.moduleKey} heading saved. Phones pick it up when the app next opens.`
+            : proposal.kind === "schedule"
+              ? `Schedule saved — ${proposal.events.length} team slots. Phones show each team's slot on its students' timetables when the app next opens.`
             : proposal.kind === "roster"
               ? `Class list ${proposal.mode === "add" ? "updated" : "saved"} — ${proposal.rows.length} students${proposal.mode === "add" ? " added to or updated on the existing list" : ""}. Phones re-check on their next launch.`
               : `Rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`,
@@ -587,6 +592,7 @@ function ProposalCard({ item, others, onAccept, onChange, onDiscard, disabled }:
               onMatches={(matches) => onChange({ ...p, matches })} />
             : p.kind === "change" ? <ChangePanel p={p} />
             : p.kind === "heading" ? <HeadingPanel p={p} />
+            : p.kind === "schedule" ? <SchedulePanel p={p} />
             : <RotationPanel p={p} />}
 
           {item.status !== "saved" && savedTwin && (
@@ -734,6 +740,42 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
                 <Cell v={s.week} /><Cell v={s.date} mono /><Cell v={s.day} />
                 <Cell v={s.start && s.end ? `${s.start}–${s.end}` : null} mono />
                 <Cell v={s.module} mono /><Cell v={s.activity} /><Cell v={s.groups?.join(" ")} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+/// One-off slots for teams. Team IDs aren't personal data — they are on the class list as
+/// groups are — so unlike a class list this can be shown in full.
+function SchedulePanel({ p }: { p: Extract<Proposal, { kind: "schedule" }> }) {
+  return (
+    <>
+      <h2>
+        {p.module || <span className="tag off">no module</span>}{" "}
+        <span className="dim">{p.title || "no title"} · {p.events.length} team slots · {p.fileName} · {p.readBy}</span>
+      </h2>
+      <p className="dim" style={{ fontSize: 12 }}>
+        Each team&rsquo;s slot is added to that team&rsquo;s students&rsquo; timetables as a class called
+        &ldquo;{p.title || "…"}&rdquo;. Accepting replaces any team slots already saved for {p.module || "this module"} under that name.
+      </p>
+      {p.findings.map((f, i) => (
+        <p key={i} className={f.level === "error" ? "tag off" : f.level === "warn" ? "tag warn" : "tag ok"}>{f.message}</p>
+      ))}
+      <div style={{ maxHeight: 380, overflow: "auto", marginTop: 12 }}>
+        <table>
+          <thead><tr><th>Row</th><th>Team</th><th>Date</th><th>Time</th><th>Room</th></tr></thead>
+          <tbody>
+            {p.events.map((e) => (
+              <tr key={e.row}>
+                <td className="mono dim">{e.row}</td>
+                <td className="mono">{e.team || <span className="tag off">?</span>}</td>
+                <Cell v={e.date ? `${weekday(e.date)} ${e.date}` : null} />
+                <Cell v={e.start ? `${e.start}–${e.end ?? "?"}` : null} mono />
+                <td className="mono">{e.room ?? <span className="dim">—</span>}</td>
               </tr>
             ))}
           </tbody>

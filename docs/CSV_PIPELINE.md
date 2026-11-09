@@ -354,6 +354,36 @@ names are stored as keys and should not be sent to a third party to be compared.
 A file with no lab groups at all is set to **Add** when proposed, since replacing would wipe
 the lab groups already saved.
 
+### 4.3b Team schedules (phase 48)
+
+A third kind of upload besides a class list and a rotation: **one-off dated events for teams** — a
+presentation or assessment schedule, one row per team with a date, a time and perhaps a room. It is
+not a rotation (no weeks, no repeating pattern) and saving it as one would overwrite the lab rotation.
+
+- **Reading.** The classifier has a `schedule` kind. `transcribeSchedule` (lib/mistral/schedule.ts)
+  copies each row's team, date, time, end time and room *as written*; it is told to leave out what the
+  document doesn't say. Which columns exist, and in what order, is for the model to work out — the
+  schema fixes the output, not the document.
+- **Deciding is code** (lib/schedule/parse.ts): day-first or month-first dates (a part over 12
+  settles it; all-ambiguous reads day first), `2.15pm` → `14:15`, and a missing end time — taken as
+  the commonest gap between consecutive slots in the same room and day (15 minutes for the 2026
+  EEG1001 schedule), said so on the proposal. Every value the model returned must appear in the
+  document's own text, or the row is an error: an invented 2pm can't be told from a real one downstream.
+- **Teams.** A team's ID is the `team` on the class list (§4.3a). The proposal checks each ID is on the
+  list — an ID matching no student would be saved and shown to nobody — and says which listed teams
+  have no slot.
+- **Saving.** Each slot becomes an *added class* for one team: `timetable_changes.grp` =
+  `TEAM:A1.A`, nothing else about the table changes, and phones that don't know teams ignore it.
+  `save_team_schedule` removes the team slots already saved for the same module and title and saves
+  these in one step, so a corrected schedule uploaded again replaces the first.
+- **Phones.** A student's team comes from their class-list row (`course_allocations.extra`), is kept on
+  their profile, and a change for `TEAM:<their team>` reaches them — never matched as a lab group, so a
+  team called "C.2" is not lab subgroup C.2. A student not on the class list, or with no team, sees none.
+
+Run order: phase30 → phase46 → phase48 (phase48 refuses to run without the first two). A student
+added to the class list by a team file but with no lab group isn't adopted by the phone (§4.3a), so
+they get no team either until they are on the lab list.
+
 ### 4.4 Note on the allocation itself
 
 Engineering Year 1's allocation is **not alphabetical** — sorting by name gives 155 runs

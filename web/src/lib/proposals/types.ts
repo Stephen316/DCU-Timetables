@@ -4,6 +4,7 @@ import type { Scope } from "./courses";
 import type { RosterRow } from "@/lib/roster/parse";
 import type { TimetableChange } from "@/lib/changes/change";
 import type { Heading } from "./heading";
+import type { ScheduleEvent } from "@/lib/schedule/parse";
 
 /// A proposal is whatever the model called a tool to suggest. Discriminated on `kind` so the
 /// panel renders the right thing and `save` calls the right RPC — two proposals that share a
@@ -36,6 +37,12 @@ export type Proposal =
        *  same person, "" if it is someone new. A row with no answer blocks saving. */
       matches?: Record<number, string>;
       rows: RosterRow[]; findings: Finding[]; log?: Finding[] }
+  | { kind: "schedule"; scope: Scope; courseKey: string; module: string;
+      /** What each slot is — "Preliminary Design Presentation" — and the class's title on a
+       *  student's timetable. Accepting replaces the team slots saved under it before. */
+      title: string;
+      fileName: string; readBy: string;
+      events: ScheduleEvent[]; findings: Finding[]; log?: Finding[] }
   | { kind: "change"; scope: Scope;
       /** The class and its dates. Who it is for is `groups`, so this alone can't be saved. */
       change: Omit<TimetableChange, "group">;

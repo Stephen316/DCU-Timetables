@@ -84,7 +84,7 @@ export async function scopeCheck(
 
 /// Class lists and lab rotations reach phones only for the courses the app has a cohort for
 /// — General Engineering, Year 1. Anywhere else one would save and reach no one.
-export function phoneCohortProblem(scope: Scope, what: "class list" | "lab rotation"): RuleProblem[] {
+export function phoneCohortProblem(scope: Scope, what: "class list" | "lab rotation" | "team schedule"): RuleProblem[] {
   return programmeFor(scope.programme)
     ? []
     : [{ level: "error", message: `A ${what} reaches phones only for ${PROGRAMMES.map((p) => p.name).join(", ")}. ${scope.programme || "This course"} can have splits, timetable changes and headings.` }];

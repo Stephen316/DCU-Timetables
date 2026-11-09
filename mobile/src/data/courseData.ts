@@ -99,7 +99,7 @@ export class SupabaseAllocationStore implements AllocationStore {
   async allocation(courseKey: string, key: string): Promise<Allocation | null> {
     const json = await this.rest.json('GET', '/rest/v1/course_allocations', describe, {
       query: [
-        ['select', 'grp,subgroup,day,workshop,drawing'],
+        ['select', 'grp,subgroup,day,workshop,drawing,extra'],
         ['course_key', `eq.${courseKey}`],
         // PostgREST reads a bytea literal as \x followed by hex.
         ['allocation_key', `eq.\\x${key}`],

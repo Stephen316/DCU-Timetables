@@ -41,7 +41,20 @@ describe('Allocation resolution', () => {
 
   test('allocation decodes the table column names', () => {
     expect(allocationFromRow({ grp: 'B', subgroup: 'B.3', day: 'Wed', workshop: 'SG24', drawing: 'SB38' }))
-      .toEqual({ group: 'B', subgroup: 'B.3', day: 'Wed', workshop: 'SG24', drawing: 'SB38' });
+      .toEqual({ group: 'B', subgroup: 'B.3', day: 'Wed', workshop: 'SG24', drawing: 'SB38', team: null });
+  });
+
+  test('a class list that carries a team gives the student one, beside the lab group', () => {
+    expect(allocationFromRow({ grp: 'B', subgroup: 'B.3', day: null, workshop: null, drawing: null, extra: { team: 'A1.a' } })?.team).toBe('A1.a');
+    expect(allocationFromRow({ grp: 'B', extra: {} })?.team).toBeNull();
+    expect(allocationFromRow({ grp: 'B', extra: 'nonsense' })?.team).toBeNull();
+  });
+
+  test('a profile keeps its team through saving and reading back', () => {
+    const p = profileFromAllocation('S', 'engineeringYear1', { group: 'A', subgroup: null, day: null, workshop: null, drawing: null, team: 'A1.a' }, 'k', 1);
+    expect(p.team).toBe('A1.a');
+    expect(decodeProfile(JSON.parse(JSON.stringify(p)))?.team).toBe('A1.a');
+    expect(decodeProfile({ name: 'S', group: 'A' })?.team).toBe('');
   });
 
   test('a row with no lab group is not an allocation, so the student is left to choose their own', () => {
@@ -464,6 +477,38 @@ describe('Timetable changes', () => {
     expect(out[0].locations).toEqual(['S205']);
     expect(out[0].activity.moduleCode).toBe('EEG1004');
     expect(DublinTime.timeString(out[0].start)).toBe('10:00');
+  });
+
+  describe('a change for one team', () => {
+    // A presentation slot: an added class for team A1.a only (supabase/phase48).
+    const slot = (team: string) => makeChange({ id: `t-${team}`, courseKey: 'EEG1', group: `TEAM:${team}`, kind: 'add', module: 'EEG1001',
+      title: 'Preliminary Design Presentation', dates: ['2026-11-11'], start: '14:00', end: '14:15', room: 'S378' });
+    const week = DublinTime.date('2026-11-09', '00:00');
+    const student = (team: string | null, group = 'B', subgroup = 'B.1') => new TimetableAudience('EEG1', group, subgroup, null, team);
+
+    test('reaches the team it names, whatever the capitalisation, and shows its room and time', () => {
+      const out = TimetableChanges.apply([], [slot('A1.A')], student('A1.a'), week);
+      expect(out).toHaveLength(1);
+      expect(out[0].locations).toEqual(['S378']);
+      expect(DublinTime.timeString(out[0].start)).toBe('14:00');
+    });
+
+    test('does not reach another team, or a student with no team', () => {
+      expect(TimetableChanges.apply([], [slot('A1.A')], student('A1.b'), week)).toEqual([]);
+      expect(TimetableChanges.apply([], [slot('A1.A')], student(null), week)).toEqual([]);
+    });
+
+    test('a team is never mistaken for a lab group', () => {
+      // A team called "C.2" must not reach lab subgroup C.2, nor a group-C student's team be "C".
+      expect(TimetableChanges.apply([], [slot('C.2')], student(null, 'C', 'C.2'), week)).toEqual([]);
+      expect(TimetableChanges.apply([], [slot('C.2')], student('C.2', 'A', 'A.1'), week)).toHaveLength(1);
+    });
+
+    test('a profile carries its team into the audience', () => {
+      const p = makeProfile({ name: 'S', group: 'B', subgroup: 'B.1', team: 'A1.a', courseKey: 'EEG1' });
+      expect(TimetableAudience.forProfile(p).team).toBe('A1.A');
+      expect(TimetableChanges.apply([], [slot('A1.A')], TimetableAudience.forProfile(p), week)).toHaveLength(1);
+    });
   });
 
   test('no audience changes nothing', () => {

@@ -6,6 +6,8 @@ import { mistralKey, MISTRAL_MODEL } from "@/lib/mistral/client";
 import { classify } from "@/lib/mistral/api";
 import { readDocument, transcribeRotation, type ReadDocument } from "@/lib/mistral/rotation";
 import { classifyDocument, classListToCsv } from "@/lib/mistral/roster";
+import { transcribeSchedule } from "@/lib/mistral/schedule";
+import { checkTeams, readSchedule, type ScheduleEvent } from "@/lib/schedule/parse";
 import { correctTable } from "@/lib/mistral/correct";
 import { applyToRoster, applyToRotation, rosterColumns, rosterTable, rotationTable, ROTATION_COLUMNS } from "@/lib/corrections/apply";
 import type { RotationSession } from "@/lib/extraction/rotation";
@@ -13,7 +15,7 @@ import { normalise } from "@/lib/extraction/normalise";
 import { interpretMessage, PROGRAMME_MODEL, type ChangeArgs, type HeadingArgs } from "@/lib/mistral/split";
 import { checkHeading, checkHeadingProvenance, type Heading } from "@/lib/proposals/heading";
 import { classes, dublin, weeks } from "@/lib/dcu/timetable";
-import { checkAudienceProvenance, checkChangeProvenance, describeChange, fromRow, programmesNamed, type TimetableChange } from "@/lib/changes/change";
+import { checkAudienceProvenance, checkChange, checkChangeProvenance, describeChange, fromRow, programmesNamed, teamGroup, toRow, weekday, type TimetableChange } from "@/lib/changes/change";
 import { saveChanges } from "../timetable/actions";
 import { review } from "@/lib/changes/review";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
@@ -448,11 +450,97 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
     };
   }
 
+  if (kind === "schedule") {
+    // One-off slots for teams — a presentation schedule. The model transcribes the cells as
+    // written; code reads the dates and times and checks every value against the text.
+    const run = await transcribeSchedule({ key, text: read.text, model: MISTRAL_MODEL, note });
+    add(run.usage);
+    if (!run.rows.length) {
+      return { ok: false, error: "It looks like a schedule of slots for teams, but no rows could be read from it.", meta: meta() };
+    }
+    const { events, findings: readNotes } = readSchedule(run.rows, read.text);
+    const documentModule = run.module?.toUpperCase().match(/^[A-Z]{2,6}[0-9]{3,5}$/)?.[0] ?? "";
+    // The selection wins, as for a split; what the document says is compared against it.
+    const moduleKey = scope.module || documentModule;
+    const title = (run.event ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const notes: Finding[] = [...readNotes];
+    if (!scope.module && documentModule) notes.push({ level: "info", message: `Module ${documentModule} taken from the document's heading.` });
+    if (scope.module && documentModule && scope.module !== documentModule) {
+      notes.push({ level: "warn", message: `The document's heading names ${documentModule}, but ${scope.module} is selected. It will be saved for ${scope.module}.` });
+    }
+    const part: SchedulePart = { scope, module: moduleKey, title, events };
+    const checks = await scheduleProblems(await supabaseServer(), part);
+    const byDay = new Map<string, number>();
+    for (const e of events) if (e.date) byDay.set(e.date, (byDay.get(e.date) ?? 0) + 1);
+    const summary: Finding = {
+      level: "info",
+      message: `${events.length} slots: ${[...byDay].sort().map(([d, n]) => `${weekday(d)} ${d} ${n}`).join(", ")}.`,
+    };
+    return {
+      ok: true,
+      reply: `Read ${events.length} team slots from the ${source}. Accepting shows each team's slot on that team's students' timetables, ` +
+        `and replaces any team slots already saved for ${moduleKey || "the module"}${title ? ` called “${title}”` : ""}.`,
+      meta: meta(),
+      proposal: {
+        kind: "schedule", scope, courseKey: scope.programme, module: moduleKey, title,
+        fileName: file.name, readBy: `read by ${run.model}`, events,
+        findings: [...notes, summary, ...checks], log: [],
+      },
+    };
+  }
+
   return {
     ok: true,
-    reply: `This doesn't look like a class list or a lab rotation${reason ? ` (${reason})` : ""}, so nothing was proposed.`,
+    reply: `This doesn't look like a class list, a lab rotation or a schedule of slots for teams${reason ? ` (${reason})` : ""}, so nothing was proposed.`,
     meta: meta(),
   };
+}
+
+/// What saving a team schedule needs: the slots, and the module and title they are saved under.
+type SchedulePart = { scope: Scope; module: string; title: string; events: ScheduleEvent[] };
+
+/// Each slot as the added class it becomes, for one team. A slot with something missing still
+/// becomes one, so the ordinary checks say what it is.
+function scheduleChanges(p: SchedulePart): TimetableChange[] {
+  return p.events.map((e) => ({
+    courseKey: p.scope.programme, group: teamGroup(e.team), kind: "add" as const, module: p.module,
+    activityCode: null, title: p.title || null, dates: e.date ? [e.date] : [], start: e.start ?? "",
+    end: e.end, room: e.room, staff: null, note: null,
+  }));
+}
+
+/// Everything that would stop a team schedule being saved, in words: used when it is
+/// proposed and again when it is accepted, so what is saved is what was checked.
+async function scheduleProblems(db: Awaited<ReturnType<typeof supabaseServer>>, p: SchedulePart): Promise<Finding[]> {
+  const out: Finding[] = [...(await scopeCheck(p.scope)), ...phoneCohortProblem(p.scope, "team schedule")];
+  if (!p.module) out.push({ level: "error", message: "Pick the module this schedule is for." });
+  if (!p.title.trim()) out.push({ level: "error", message: "No name for the slots — say what each one is, like “Preliminary Design Presentation”." });
+  if (!p.events.length) out.push({ level: "error", message: "No slots." });
+  if (p.events.length > 100) out.push({ level: "error", message: `${p.events.length} slots — the limit is 100 at once.` });
+
+  // A team ID that isn't on the class list would be saved and shown to nobody.
+  let known: Set<string> | null = null;
+  if (p.scope.programme) {
+    const { data, error } = await db.from("course_allocations").select("extra").eq("course_key", p.scope.programme);
+    if (error) {
+      out.push({ level: "warn", message: "Couldn't read the class list's teams to check these against them." });
+    } else {
+      known = new Set((data ?? []).map((r: Untyped) => String(r.extra?.team ?? "").trim().replace(/\s+/g, "").toUpperCase()).filter(Boolean));
+    }
+  }
+  out.push(...checkTeams(p.events, known));
+
+  const bad = p.events.filter((e) => e.team && !teamGroup(e.team)).map((e) => e.team);
+  if (bad.length) out.push({ level: "error", message: `Not usable as team IDs: ${[...new Set(bad)].slice(0, 6).join(", ")}.` });
+
+  // The ordinary checks for an added class, said once however many slots share the problem.
+  const said = new Set<string>();
+  for (const c of scheduleChanges(p)) {
+    for (const f of checkChange(c)) {
+      if (!said.has(f.message)) { said.add(f.message); out.push(f); }
+    }
+  }
+  return out;
 }
 
 /// What reading left out or reinterpreted, shown on the proposal rather than only in the
@@ -704,6 +792,21 @@ export async function accept(proposal: Proposal) {
     const { error } = h.title === null
       ? await db.rpc("delete_module_title", { p_module_key: h.moduleKey })
       : await db.rpc("save_module_title", { p_module_key: h.moduleKey, p_title: h.title });
+    return error ? { ok: false, error: error.message } : { ok: true };
+  }
+
+  if (proposal.kind === "schedule") {
+    const part: SchedulePart = { scope: proposal.scope, module: proposal.module, title: proposal.title, events: proposal.events };
+    const blocker = (await scheduleProblems(db, part)).find((f) => f.level === "error");
+    if (blocker) return { ok: false, error: blocker.message };
+    // Replaces the team slots saved before under this module and title, and saves these, as
+    // one step: a corrected schedule uploaded again doesn't leave every team with two slots.
+    const { error } = await db.rpc("save_team_schedule", {
+      p_course_key: proposal.scope.programme,
+      p_module: proposal.module,
+      p_title: proposal.title,
+      p_changes: scheduleChanges(part).map(toRow),
+    });
     return error ? { ok: false, error: error.message } : { ok: true };
   }
 
