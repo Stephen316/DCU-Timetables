@@ -12,13 +12,22 @@ import { useTutorial } from '../tutorial/Tutorial';
 import {
   ActionRow, ActionSheet, BarButton, Icon, LabeledRow, ListScroll, Row, Section, Sheet, Txt,
 } from '../../ui/components';
+import { useTabBarClearance } from '../../ui/floatingBar';
 import { appearanceLabel, AppearanceSetting, Space, useTheme } from '../../ui/theme';
 
 const SETTINGS: AppearanceSetting[] = ['system', 'light', 'dark'];
 
 /** Who you're signed in as, the identifier you share to be made trusted, and the way out. */
-export function AccountSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function AccountSheet({ visible, onClose, inline = false, top }: {
+  visible: boolean;
+  onClose: () => void;
+  /** Drawn as the Account tab's page rather than a sheet over another one. */
+  inline?: boolean;
+  /** Rows shown first on the inline page: notifications, calendar export. */
+  top?: React.ReactNode;
+}) {
   const tutorial = useTutorial();
+  const clearance = useTabBarClearance();
   const theme = useTheme();
   const services = useServices();
   const { profiles, deadlines, role, user: signedIn, events } = services;
@@ -93,9 +102,10 @@ export function AccountSheet({ visible, onClose }: { visible: boolean; onClose: 
     setDeleting(false);
   };
 
-  return (
-    <Sheet visible={visible} title="Account" onClose={onClose} right={<BarButton title="Done" onPress={onClose} />}>
-      <ListScroll>
+  const content = (
+    <>
+      <ListScroll contentStyle={inline ? { paddingBottom: clearance } : undefined}>
+        {top}
         <Section header="Signed in as">
           <LabeledRow label="Name" value={email?.displayName ?? '--'} />
           <LabeledRow label="Email" value={user?.address ?? '--'} />
@@ -186,7 +196,12 @@ export function AccountSheet({ visible, onClose }: { visible: boolean; onClose: 
         message="This can't be undone. Deadlines and reports you shared stay, but nothing will link them to you."
         actions={[{ label: 'Delete', destructive: true, onPress: () => void remove() }]}
       />
-    </Sheet>
+    </>
+  );
+  return inline ? (
+    <View style={{ flex: 1 }}>{content}</View>
+  ) : (
+    <Sheet visible={visible} title="Account" onClose={onClose} right={<BarButton title="Done" onPress={onClose} />}>{content}</Sheet>
   );
 }
 

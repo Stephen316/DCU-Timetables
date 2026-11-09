@@ -11,13 +11,13 @@
 export type TutorialTarget =
   | 'dayList' // the day's classes on the day view
   | 'dayHeading' // the day's name at the top of the day view
-  | 'viewToggle' // the week / day button, top left
+  | 'weekTab' // the Week tab
   | 'firstClass' // the week's first class in the week grid
   | 'weekGrid' // the whole week grid, on a Mac
   | 'reportButton' // "Report: lecture cancelled" on a class's page ("Mark as cancelled" for a moderator)
   | 'undoReport' // "Undo my report" on a class's page ("Mark as on" for a moderator)
   | 'backButton' // Back, in a class page's header
-  | 'more' // ⋯, top right
+  | 'accountTab' // the Account tab, last on the bar
   | 'deadlinesTab' // the Deadlines tab
   | 'addDeadline'; // +, top right of the Deadlines page
 
@@ -39,8 +39,7 @@ export type TutorialSignal =
   | 'reportUndone'
   | 'classClosed'
   | 'deadlinesShown'
-  | 'menuOpened'
-  | 'menuClosed';
+  | 'accountShown';
 
 export interface TutorialStep {
   id: string;
@@ -128,12 +127,11 @@ const deadlines: TutorialStep[] = [
   }),
 ];
 
-const more: TutorialStep[] = [
+const account: TutorialStep[] = [
   press({
-    id: 'more', target: 'more', advancesOn: 'menuOpened', toTimetable: true, title: 'More',
-    body: 'Edit your timetable, set notifications, export it to your calendar, and manage your account.',
+    id: 'account', target: 'accountTab', advancesOn: 'accountShown', title: 'Account',
+    body: 'Notifications, exporting to your calendar, your details and signing out all live here.',
   }),
-  step({ id: 'menu', advancesOn: 'menuClosed', continues: true, hidden: true, primary: null, title: 'More' }),
 ];
 
 // TEMPORARY — a recording of Safari's own Add to Home Screen, standing in until the tour can
@@ -157,10 +155,10 @@ const PHONE: TutorialStep[] = [
     body: "View each day's modules here. See locations, class type and lecturers.",
   }),
   step({ id: 'swipe', target: 'dayHeading', title: 'Swipe left to see tomorrow', action: 'swipeLeft', advancesOn: 'daySwiped' }),
-  press({ id: 'week', target: 'viewToggle', advancesOn: 'weekShown', title: 'See the whole week', body: 'Tap here to switch to the week grid.' }),
+  press({ id: 'week', target: 'weekTab', advancesOn: 'weekShown', title: 'See the whole week', body: 'Tap Week to see the grid.' }),
   ...classSteps('Tap a class'),
   ...deadlines,
-  ...more,
+  ...account,
   thanks,
 ];
 
@@ -172,7 +170,7 @@ const MAC: TutorialStep[] = [
   }),
   ...classSteps('Click a class'),
   ...deadlines,
-  ...more,
+  ...account,
   thanks,
 ];
 

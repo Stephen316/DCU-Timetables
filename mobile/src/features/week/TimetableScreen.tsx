@@ -7,46 +7,41 @@ import { WeekdayIndex } from '../../core/misc';
 import { TimetableEvent } from '../../core/timetableEvent';
 import { listenForMacAlertTaps, MacShell } from '../../data/macShell';
 import { listenForAlertTaps } from '../../data/notifications';
-import { PrefKey } from '../../data/storage';
-import { useAppEvent, useModel, useNow, usePrefBool } from '../../state/hooks';
+import { useAppEvent, useModel, useNow } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
-import { BarButton, EmptyState, IconButton, Label, PrimaryButton, SheetAction, Txt } from '../../ui/components';
+import { BarButton, EmptyState, IconButton, Label, PrimaryButton, Txt } from '../../ui/components';
 import { LoadingScreen } from '../../ui/LoadingScreen';
-import { DropdownMenu } from '../../ui/DropdownMenu';
 import { Space, useTheme } from '../../ui/theme';
-import { AccountSheet } from '../account/AccountSheet';
-import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
-import { NotificationsSheet } from '../alerts/NotificationsSheet';
+import { useTutorial } from '../tutorial/Tutorial';
 import { DayPage } from './DayPage';
 import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
 import { ContributionCard } from './ContributionCard';
-import { ExportCalendarCard } from './ExportCalendarCard';
 import { SubgroupCard } from './SubgroupCard';
 import { Pager, PagerControl } from './Pager';
 import { WeekGridView } from './WeekGrid';
 
-/** The timetable tab: the day on the rail, or the week as a grid. */
-export function TimetableScreen() {
+/**
+ * The timetable: the day as cards, or the week as a grid, each its own tab. Both are this
+ * screen; `owner` marks the one the app opens on, which alone listens for what happens to the
+ * timetable (alerts tapped, changes arriving) so nothing is handled twice.
+ */
+export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week'; owner?: boolean }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { signOut, subgroupQuestion } = useRoot();
+  const { subgroupQuestion } = useRoot();
   const model = useModel(useWeekModel());
   const now = useNow();
   // Said relative to today, so it moves on by itself when Monday comes.
   const shownWeek = model.weeks[model.weekIndex];
   const heading = shownWeek ? WeekHeading.of(shownWeek.firstDay, shownWeek.label, now) : null;
-  const [prefersCalendar, setShowsCalendar] = usePrefBool(PrefKey.weekShowsCalendar);
   // The Mac app is the week and the deadlines: the day list is a phone's view.
   const [onMac] = useState(() => MacShell.isPresent());
-  const showsCalendar = onMac || prefersCalendar;
+  const showsCalendar = mode === 'week';
   const weekPager = useRef<PagerControl>(null);
-  const [sheet, setSheet] = useState<'menu' | 'account' | 'alerts' | 'export' | null>(null);
   /** Edit timetable: the course's other classes show as ghosts, and a tap adds or removes. */
   const [editing, setEditing] = useState(false);
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
   const tutorial = useTutorial();
-  const viewToggle = useTutorialTarget('viewToggle');
-  const more = useTutorialTarget('more');
 
   useEffect(() => {
     void model.start();
@@ -62,6 +57,7 @@ export function TimetableScreen() {
   // tomorrow evening) — but only after a real trip to the background, not Control Centre.
   const lastAppState = useRef(AppState.currentState);
   useEffect(() => {
+    if (!owner) return;
     const sub = AppState.addEventListener('change', (next) => {
       if (lastAppState.current === 'background' && next === 'active') model.resetToDefaultDay();
       // Alerts that have fired make room for later ones under iOS's limit.
@@ -69,32 +65,20 @@ export function TimetableScreen() {
       lastAppState.current = next;
     });
     return () => sub.remove();
-  }, [model]);
+  }, [model, owner]);
 
   // A tapped class alert opens that class, as a Calendar alert opens its event.
-  useEffect(() => listenForAlertTaps((id) => router.push({ pathname: '/class/[id]', params: { id } })), []);
-  useEffect(() => listenForMacAlertTaps((id) => router.push({ pathname: '/class/[id]', params: { id } })), []);
+  useEffect(() => (owner ? listenForAlertTaps((id) => router.push({ pathname: '/class/[id]', params: { id } })) : undefined), [owner]);
+  useEffect(() => (owner ? listenForMacAlertTaps((id) => router.push({ pathname: '/class/[id]', params: { id } })) : undefined), [owner]);
 
-  useAppEvent('timetableChangesChanged', () => model.reloadChanges());
-  useAppEvent('moduleSplitsChanged', () => model.reloadSplits());
-  useAppEvent('moduleTitlesChanged', () => model.reloadTitles());
-  useAppEvent('moduleAbbreviationsChanged', () => model.reloadAbbreviations());
-  useAppEvent('labRotationChanged', () => void model.reloadAll());
+  useAppEvent('timetableChangesChanged', () => owner && model.reloadChanges());
+  useAppEvent('moduleSplitsChanged', () => owner && model.reloadSplits());
+  useAppEvent('moduleTitlesChanged', () => owner && model.reloadTitles());
+  useAppEvent('moduleAbbreviationsChanged', () => owner && model.reloadAbbreviations());
+  useAppEvent('labRotationChanged', () => owner && void model.reloadAll());
 
   const open = (event: TimetableEvent) => router.push({ pathname: '/class/[id]', params: { id: event.id } });
   const askToEdit = (event: TimetableEvent, kind: EditKind) => setPendingEdit({ event, kind });
-  const openMenu = () => {
-    setSheet('menu');
-    tutorial?.signal('menuOpened');
-  };
-
-  const menu: SheetAction[] = [
-    { label: 'Edit timetable', icon: 'edit', onPress: () => setEditing(true) },
-    { label: 'Account', icon: 'account', onPress: () => setSheet('account') },
-    { label: 'Notifications', icon: 'bell', onPress: () => setSheet('alerts') },
-    { label: 'Export to Calendar', icon: 'calendar', onPress: () => setSheet('export') },
-    { label: 'Sign out', icon: 'swap', onPress: signOut },
-  ];
 
   let body: ReactNode;
   if (model.errorText && model.events.length === 0) {
@@ -180,16 +164,7 @@ export function TimetableScreen() {
             <IconButton icon="forward" label="Next week" onPress={() => weekPager.current?.turn(1)} />
           </View>
         ) : (
-          <View ref={viewToggle} collapsable={false}>
-            <IconButton
-              icon={showsCalendar ? 'list' : 'calendar'}
-              label={showsCalendar ? 'Show list' : 'Show weekly calendar'}
-              onPress={() => {
-                setShowsCalendar(!showsCalendar);
-                if (!showsCalendar) tutorial?.signal('weekShown');
-              }}
-            />
-          </View>
+          <View style={styles.done} />
         )}
         <View style={styles.titleBlock} accessible accessibilityRole="header">
           <Txt type="headline" numberOfLines={1}>{editing ? 'Edit timetable' : heading?.title ?? ''}</Txt>
@@ -198,16 +173,11 @@ export function TimetableScreen() {
             {model.campusName && !editing ? <Label icon="place" text={model.campusName} type="caption" color={theme.inkSecondary} /> : null}
           </View>
         </View>
-        {editing ? (
-          <View style={[styles.done, onMac && styles.side, onMac && styles.sideRight]}><BarButton title="Done" bold onPress={() => setEditing(false)} /></View>
-        ) : onMac ? (
-          <View style={[styles.side, styles.sideRight]}>
-            <BarButton title="Today" onPress={() => model.showCurrentWeek()} />
-            <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={openMenu} /></View>
-          </View>
-        ) : (
-          <View ref={more} collapsable={false}><IconButton icon="more" label="More" onPress={openMenu} /></View>
-        )}
+        {/* Editing lives here and only here: on the day and the week, the two places a class can be added or dropped. */}
+        <View style={[styles.done, onMac && styles.side, onMac && styles.sideRight]}>
+          {onMac && !editing ? <BarButton title="Today" onPress={() => model.showCurrentWeek()} /> : null}
+          {editing ? <BarButton title="Done" bold onPress={() => setEditing(false)} /> : <BarButton title="Edit" onPress={() => setEditing(true)} />}
+        </View>
       </View>
 
       <View style={styles.fill}>
@@ -217,22 +187,9 @@ export function TimetableScreen() {
         ) : null}
       </View>
 
-      {/* From the ⋯ at the top, where the student's finger already is. */}
-      <DropdownMenu
-        visible={sheet === 'menu'}
-        anchor={more}
-        onClose={() => {
-          setSheet(null);
-          tutorial?.signal('menuClosed');
-        }}
-        actions={menu}
-      />
-      <AccountSheet visible={sheet === 'account'} onClose={() => setSheet(null)} />
-      <NotificationsSheet visible={sheet === 'alerts'} onClose={() => setSheet(null)} />
-      <ExportCalendarCard visible={sheet === 'export'} onClose={() => setSheet(null)} />
       {/* The subgroup question first: it changes the timetable itself, so it waits on nothing else. */}
-      <SubgroupCard ready={hasWeek && sheet === null && !editing} />
-      <ContributionCard ready={hasWeek && sheet === null && !editing && !subgroupQuestion} />
+      {owner ? <SubgroupCard ready={hasWeek && !editing} /> : null}
+      {owner ? <ContributionCard ready={hasWeek && !editing && !subgroupQuestion} /> : null}
       <EditChoiceSheet
         pending={pendingEdit}
         onChoose={({ event, kind }, repeat) => model.edit(kind, repeat, event)}
@@ -248,7 +205,7 @@ const styles = StyleSheet.create({
   titleBlock: { flex: 1, alignItems: 'center' },
   subtitle: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   // As wide as the button on the other side, so the title stays centred.
-  done: { minWidth: 44, alignItems: 'flex-end', paddingRight: Space.xs },
+  done: { minWidth: 64, alignItems: 'flex-end', paddingRight: Space.xs },
   // The Mac's pairs: the same width each side, for the same reason.
   side: { flexDirection: 'row', alignItems: 'center', minWidth: 120 },
   sideRight: { justifyContent: 'flex-end' },

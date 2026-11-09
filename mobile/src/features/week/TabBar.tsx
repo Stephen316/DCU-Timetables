@@ -17,36 +17,40 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
   const theme = useTheme();
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
-  const count = state.routes.length;
+  // A tab hidden with `href: null` (the Week tab on the Mac, where Day is the week) isn't drawn,
+  // and the slider counts only the ones that are.
+  const shown = state.routes.map((_, i) => i).filter((i) => (descriptors[state.routes[i].key].options as { href?: unknown }).href !== null);
+  const count = shown.length;
+  const position = Math.max(shown.indexOf(state.index), 0);
   const tabWidth = count > 0 ? width / count : 0;
   const [offset] = useState(() => new Animated.Value(0));
   /** The tab under the outline mid-drag, so the colours follow the finger. */
   const [hovered, setHovered] = useState<number | null>(null);
   const lastWidth = useRef(0);
 
-  const go = (index: number) => {
-    const route = state.routes[index];
+  const go = (slot: number) => {
+    const route = state.routes[shown[slot]];
     if (!route) return;
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-    if (index !== state.index && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+    if (shown[slot] !== state.index && !event.defaultPrevented) navigation.navigate(route.name, route.params);
   };
 
   /** The latest values, for the gesture handlers, which outlive a render. */
-  const live = useRef({ tabWidth, count, index: state.index, go });
+  const live = useRef({ tabWidth, count, index: position, go });
   useLayoutEffect(() => {
-    live.current = { tabWidth, count, index: state.index, go };
+    live.current = { tabWidth, count, index: position, go };
   });
 
   // A new width is a layout, not a move: jump there. A new tab slides.
   useEffect(() => {
-    const target = state.index * tabWidth;
+    const target = position * tabWidth;
     if (lastWidth.current !== tabWidth) {
       lastWidth.current = tabWidth;
       offset.setValue(target);
       return;
     }
     Animated.timing(offset, { toValue: target, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
-  }, [state.index, tabWidth, offset]);
+  }, [position, tabWidth, offset]);
 
   const responder = useMemo(() => {
     const position = (dx: number) => {
@@ -83,7 +87,10 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
   }, [offset]);
 
   const deadlinesTab = useTutorialTarget('deadlinesTab');
-  const selected = hovered ?? state.index;
+  const weekTab = useTutorialTarget('weekTab');
+  const accountTab = useTutorialTarget('accountTab');
+  const tutorialRefs: Record<string, typeof deadlinesTab> = { deadlines: deadlinesTab, week: weekTab, account: accountTab };
+  const selected = hovered ?? position;
   // The pill is a capsule, and the outline inside it curves round the same centre, one
   // padding in from its edge — a capsule again, as far as the outline's own height allows.
   const outlineRadius = Math.min(concentric(FloatingBar.height / 2, FloatingBar.padding), height / 2 || Radius.control);
@@ -94,6 +101,7 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
     // Laid over the screens, not under them: the lists pad their ends by `useTabBarClearance`.
     // `box-none` keeps the strip either side of the pill from swallowing touches meant for them.
     <View style={[styles.bar, { paddingBottom: floatingBarMargin(insets.bottom) }]} pointerEvents="box-none">
+      <Haze />
       <View style={[styles.pill, glass(theme.scheme, theme.surface, theme.separator)]}>
       <View
         style={styles.slider}
@@ -110,28 +118,48 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
             style={[styles.outline, { width: tabWidth, borderRadius: outlineRadius, backgroundColor: theme.accent, transform: [{ translateX: offset }] }]}
           />
         ) : null}
-        {state.routes.map((route, i) => {
+        {shown.map((routeIndex, i) => {
+          const route = state.routes[routeIndex];
           const { options } = descriptors[route.key];
           const isSelected = selected === i;
           const color = isSelected ? selectedInk : theme.inkSecondary;
           const title = options.title ?? route.name;
+          // The account tab is only its icon, as the Notra tab bar's are: a person says "account".
+          const iconOnly = options.tabBarShowLabel === false;
           return (
             <Pressable
               key={route.key}
-              ref={route.name === 'deadlines' ? deadlinesTab : undefined}
+              ref={tutorialRefs[route.name]}
               onPress={() => go(i)}
               accessibilityRole="tab"
               accessibilityLabel={title}
-              accessibilityState={{ selected: state.index === i }}
+              accessibilityState={{ selected: position === i }}
               style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.6 : 1 }]}
             >
-              {options.tabBarIcon?.({ focused: isSelected, color, size: 20 })}
-              <Txt type="caption2" color={color} style={isSelected ? styles.semibold : undefined}>{title}</Txt>
+              {options.tabBarIcon?.({ focused: isSelected, color, size: iconOnly ? 24 : 20 })}
+              {iconOnly ? null : <Txt type="caption2" color={color} style={isSelected ? styles.semibold : undefined}>{title}</Txt>}
             </Pressable>
           );
         })}
       </View>
       </View>
+    </View>
+  );
+}
+
+/**
+ * The haze behind the bar: the screen's own colour fading up from the bottom edge, so a list
+ * running under the pill dissolves into it rather than being cut off by it. React Native has
+ * no gradient, so it is a stack of thin bands, each a little more opaque than the one above.
+ */
+function Haze() {
+  const theme = useTheme();
+  const bands = 14;
+  return (
+    <View pointerEvents="none" style={styles.haze}>
+      {Array.from({ length: bands }, (_, i) => (
+        <View key={i} style={{ flex: 1, backgroundColor: withAlpha(theme.canvas, Math.pow((i + 1) / bands, 1.6) * 0.95) }} />
+      ))}
     </View>
   );
 }
@@ -157,6 +185,7 @@ function glass(scheme: 'light' | 'dark', surface: string, edge: string): ViewSty
 }
 
 const styles = StyleSheet.create({
+  haze: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FloatingBar.height + 64 },
   bar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: Space.l, alignItems: 'center' },
   // Across a desktop window the two tabs would sit a screen apart; keep them together.
   pill: {

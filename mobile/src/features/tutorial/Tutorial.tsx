@@ -107,7 +107,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     if (!due || !ready || run || flow !== 'shell') return;
     const timer = setTimeout(() => {
       const onMac = MacShell.isPresent();
-      if (!onMac) services.prefs.setBool(PrefKey.weekShowsCalendar, false);
+      // The tour starts on today's list: the Day tab, which is the app's front page.
+      router.navigate('/');
       model?.resetToDefaultDay(new Date(), false);
       setRun({ steps: Tutorial.steps(onMac, Safari.current()), index: 0 });
     }, 600);

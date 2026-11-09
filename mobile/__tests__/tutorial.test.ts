@@ -12,9 +12,9 @@ const mac = Tutorial.steps(true);
 const safari = Tutorial.steps(false, true);
 
 describe('Tutorial steps', () => {
-  test('the phone tour runs forward: day, week, a class and back, Deadlines, More, then the end', () => {
+  test('the phone tour runs forward: day, week, a class and back, Deadlines, Account, then the end', () => {
     expect(phone.map((s) => s.id)).toEqual([
-      'welcome', 'day', 'swipe', 'week', 'class', 'report', 'undo', 'back', 'deadlines', 'deadlinesPage', 'more', 'menu', 'thanks',
+      'welcome', 'day', 'swipe', 'week', 'class', 'report', 'undo', 'back', 'deadlines', 'deadlinesPage', 'account', 'thanks',
     ]);
     expect(Tutorial.position(phone, 0)).toEqual({ n: 1, total: 8 });
     const at = (id: string) => Tutorial.position(phone, phone.findIndex((s) => s.id === id));
@@ -38,12 +38,12 @@ describe('Tutorial steps', () => {
     expect(phone.filter((s) => s.practice).map((s) => s.id)).toEqual(['report', 'undo']);
   });
 
-  test('More and the end take the student to the timetable themselves, so nobody has to go back', () => {
-    expect(phone.filter((s) => s.toTimetable).map((s) => s.id)).toEqual(['more', 'thanks']);
+  test('The end takes the student to the timetable itself, so nobody has to go back', () => {
+    expect(phone.filter((s) => s.toTimetable).map((s) => s.id)).toEqual(['thanks']);
   });
 
   test("the Mac's tour never points at the day view, which it doesn't have", () => {
-    const dayOnly = ['dayList', 'dayHeading', 'viewToggle'];
+    const dayOnly = ['dayList', 'dayHeading', 'weekTab'];
     expect(mac.some((s) => s.target && dayOnly.includes(s.target))).toBe(false);
     expect(mac.some((s) => s.action === 'swipeLeft')).toBe(false);
     expect(Tutorial.position(mac, mac.length - 1)).toEqual({ n: 6, total: 6 });
