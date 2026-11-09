@@ -20,7 +20,7 @@ export type SavedSession = {
 };
 
 export type ClassGroup = {
-  group: string; subgroup: string | null; count: number;
+  group: string | null; subgroup: string | null; count: number;
   day: string | null; workshop: string | null; drawing: string | null;
 };
 
@@ -37,6 +37,8 @@ export type SavedView = {
   classList: {
     title: string | null; version: number; members: number; savedAt: string;
     groups: ClassGroup[];
+    /** Further groupings beside the lab group — project teams, say — and how big they are. */
+    extras: { key: string; values: number; students: number }[];
   } | null;
   heading: { title: string; savedAt: string } | null;
   /// The module's removals and additions, one row per programme or group. Ask saves them
@@ -94,7 +96,7 @@ export async function listSaved(programme: string, module: string):
   let classList: SavedView["classList"] = null;
   if (roster.data && (rotationModules.size === 0 || rotationModules.has(module))) {
     const { data: rows, error } = await db.from("course_allocations")
-      .select("grp, subgroup, day, workshop, drawing").eq("course_key", programme);
+      .select("grp, subgroup, day, workshop, drawing, extra").eq("course_key", programme);
     if (error) return { ok: false, error: error.message };
     const counts = new Map<string, ClassGroup>();
     for (const r of rows ?? []) {
@@ -103,11 +105,21 @@ export async function listSaved(programme: string, module: string):
       if (g) g.count++;
       else counts.set(k, { group: r.grp, subgroup: r.subgroup, count: 1, day: r.day, workshop: r.workshop, drawing: r.drawing });
     }
+    const extraSeen = new Map<string, { values: Set<string>; students: number }>();
+    for (const r of rows ?? []) {
+      for (const [key, value] of Object.entries((r.extra ?? {}) as Record<string, string>)) {
+        const e = extraSeen.get(key) ?? { values: new Set<string>(), students: 0 };
+        e.values.add(value);
+        e.students++;
+        extraSeen.set(key, e);
+      }
+    }
     classList = {
+      extras: [...extraSeen].sort(([a], [b]) => a.localeCompare(b)).map(([key, e]) => ({ key, values: e.values.size, students: e.students })),
       title: roster.data.title, version: roster.data.version, members: roster.data.members,
       savedAt: roster.data.created_at,
       groups: [...counts.values()].sort((a, b) =>
-        `${a.group}${a.subgroup ?? ""}${a.drawing ?? ""}`.localeCompare(`${b.group}${b.subgroup ?? ""}${b.drawing ?? ""}`)),
+        `${a.group ?? ""}${a.subgroup ?? ""}${a.drawing ?? ""}`.localeCompare(`${b.group ?? ""}${b.subgroup ?? ""}${b.drawing ?? ""}`)),
     };
   }
 

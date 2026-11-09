@@ -321,6 +321,29 @@ with per-row accept/edit/reject** → commit to live tables plus an `admin_actio
 messy inputs, this gate matters more here than anywhere else in the console — it is the
 only thing standing between a misread cell and 200 students in the wrong room.
 
+### 4.3a More than one grouping, and adding to a list (phase 46)
+
+A class list can carry groupings beside the lab group — a project team, a studio. They are
+stored per student in `course_allocations.extra` (`jsonb`), e.g. `{"team": "17"}`; a new kind
+of grouping is a new key, never a new column. `grp` is nullable, so a list of teams alone is
+valid. Phones still read only `grp`; a null one reads as "no lab group" (empty string) and
+matches no rotation, only changes addressed to everyone.
+
+On the way in, `parseRoster` keeps a column only if its heading says it is a grouping — `Team`,
+`Project Team ID` (both `team`), or "<kind> Team/Group" (`studio_group`). Anything else (Email,
+Notes) is left out and reported, because this table is downloaded to phones.
+
+Accepting a roster proposal is either:
+
+- **Replace** (default): the whole programme's list is swapped, as before.
+- **Add**: `save_roster(…, p_mode => 'add')` keeps everyone already saved and merges the file
+  into them — matched by student ID, then by name key; what the file gives replaces what was
+  saved, what it leaves empty is kept, `extra` merges key by key; unknown students are added;
+  nobody is removed. A name matching two saved students is refused: add student IDs.
+
+A file with no lab groups at all is set to **Add** when proposed, since replacing would wipe
+the lab groups already saved.
+
 ### 4.4 Note on the allocation itself
 
 Engineering Year 1's allocation is **not alphabetical** — sorting by name gives 155 runs

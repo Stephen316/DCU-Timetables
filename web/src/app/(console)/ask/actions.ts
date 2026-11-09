@@ -7,7 +7,7 @@ import { classify } from "@/lib/mistral/api";
 import { readDocument, transcribeRotation, type ReadDocument } from "@/lib/mistral/rotation";
 import { classifyDocument, classListToCsv } from "@/lib/mistral/roster";
 import { correctTable } from "@/lib/mistral/correct";
-import { applyToRoster, applyToRotation, rosterTable, rotationTable, ROSTER_COLUMNS, ROTATION_COLUMNS } from "@/lib/corrections/apply";
+import { applyToRoster, applyToRotation, rosterColumns, rosterTable, rotationTable, ROTATION_COLUMNS } from "@/lib/corrections/apply";
 import type { RotationSession } from "@/lib/extraction/rotation";
 import { normalise } from "@/lib/extraction/normalise";
 import { interpretMessage, PROGRAMME_MODEL, type ChangeArgs, type HeadingArgs } from "@/lib/mistral/split";
@@ -360,7 +360,7 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
     let noteModel = "";
     if (note) {
       const out = await correctTable({
-        key, what: "class list", columns: ROSTER_COLUMNS.map(([c]) => c), rows: rosterTable(rows), message: note,
+        key, what: "class list", columns: rosterColumns(rows), rows: rosterTable(rows), message: note,
       });
       add(out.usage);
       const applied = applyToRoster(rows, out.ops);
@@ -473,7 +473,7 @@ async function correctDocument(doc: DocProposal, message: string, history: Turn[
 
   if (doc.kind === "roster") {
     const out = await correctTable({
-      key, what: "class list", columns: ROSTER_COLUMNS.map(([c]) => c), rows: rosterTable(doc.rows), message, history,
+      key, what: "class list", columns: rosterColumns(doc.rows), rows: rosterTable(doc.rows), message, history,
     });
     if (!out.ops.length) return { ok: true, reply: out.reply || "Nothing to change.", meta: meta(out.usage) };
     const applied = applyToRoster(doc.rows, out.ops);
@@ -519,11 +519,12 @@ function documentFrom(raw: string): DocProposal | null {
       .map((r: Untyped) => ({
         row: Number(r?.row), surname: str(r?.surname), given: str(r?.given), studentId: str(r?.studentId),
         group: str(r?.group), subgroup: str(r?.subgroup), day: str(r?.day), workshop: str(r?.workshop), drawing: str(r?.drawing),
+        extra: extraFrom(r?.extra),
       }))
       .filter((r: RosterRow) => Number.isInteger(r.row));
     return {
       kind: "roster", scope, courseKey: String(p.courseKey ?? ""), fileName: String(p.fileName ?? ""),
-      readBy: String(p.readBy ?? ""), rows, log, findings: [],
+      readBy: String(p.readBy ?? ""), mode: p.mode === "add" ? "add" : "replace", rows, log, findings: [],
     };
   }
   if (p?.kind === "rotation" && Array.isArray(p.sessions)) {
@@ -538,16 +539,33 @@ function documentFrom(raw: string): DocProposal | null {
   return null;
 }
 
+/// The further groupings on a row as the browser sent them back: short keys, text values.
+/// Anything else is dropped, and the database checks the same again.
+function extraFrom(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return out;
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (/^[a-z][a-z0-9_]{0,29}$/.test(k) && typeof x === "string" && x.trim() && x.length <= 60) out[k] = x.trim();
+  }
+  return out;
+}
+
 function rosterProposal(
   scope: Scope, fileName: string, rows: RosterRow[], readBy: string,
   meta: AskResult["meta"], reply: string, extra: Finding[] = [],
 ): AskResult {
+  // A list with no lab groups at all (only teams) would, replacing, wipe the groups already
+  // saved and put nothing in their place. Adding is the safe starting point; it can be changed.
+  const mode = rows.length > 0 && rows.every((r) => !r.group) ? "add" : "replace";
+  const where = scope.programme || "the selected programme";
   return {
     ok: true,
-    reply: `${reply} Accepting replaces ${scope.programme || "the selected programme"}'s class list.`,
+    reply: `${reply} ${mode === "add"
+      ? `It has no lab groups, so it is set to add to ${where}'s class list; choose Replace to swap the whole list instead.`
+      : `Accepting replaces ${where}'s class list; choose Add to keep the students already on it.`}`,
     meta,
     proposal: {
-      kind: "roster", scope, courseKey: scope.programme, fileName, readBy, rows, log: extra,
+      kind: "roster", scope, courseKey: scope.programme, fileName, readBy, mode, rows, log: extra,
       findings: [...rosterScope(scope), ...extra, ...validateRoster(rows)],
     },
   };
@@ -570,6 +588,7 @@ function members(rows: RosterRow[]) {
     day: r.day,
     workshop: r.workshop,
     drawing: r.drawing,
+    extra: r.extra,
   }));
 }
 
@@ -634,6 +653,7 @@ export async function accept(proposal: Proposal) {
       p_course_key: proposal.courseKey,
       p_title: programme?.name ?? null,
       p_members: members(proposal.rows),
+      p_mode: proposal.mode === "add" ? "add" : "replace",
     });
     return error ? { ok: false, error: error.message } : { ok: true };
   }

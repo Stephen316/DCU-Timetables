@@ -7,7 +7,7 @@ import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
 import type { CourseOption } from "@/lib/proposals/catalogue";
 import { listCourses, listModules } from "./courses";
 import { Combobox } from "../combobox";
-import { csvField, ROSTER_HEADER } from "@/lib/roster/parse";
+import { csvField, extraKeysOf, extraLabel, rosterHeader } from "@/lib/roster/parse";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/upload";
 import { Spinner } from "../spinner";
 import { SavedPanel } from "./saved-panel";
@@ -276,7 +276,7 @@ export function Ask() {
             : proposal.kind === "heading"
               ? `${proposal.heading.moduleKey} heading saved. Phones pick it up when the app next opens.`
             : proposal.kind === "roster"
-              ? `Class list saved — ${proposal.rows.length} students. Phones re-check on their next launch.`
+              ? `Class list ${proposal.mode === "add" ? "updated" : "saved"} — ${proposal.rows.length} students${proposal.mode === "add" ? " added to or updated on the existing list" : ""}. Phones re-check on their next launch.`
               : `Rotation saved — ${proposal.sessions.filter((s) => s.groups?.length).length} sessions.`,
         });
         setRefresh((r) => r + 1);
@@ -490,6 +490,7 @@ export function Ask() {
                 item={item}
                 others={items.filter((o) => o.no !== item.no && target(o.proposal) === target(item.proposal))}
                 onAccept={() => onAccept(item)}
+                onChange={(proposal) => update(item.no, { proposal })}
                 onDiscard={() => discard(item.no)}
                 disabled={busy}
               />
@@ -503,8 +504,8 @@ export function Ask() {
 
 /// One proposal. Open ones start expanded; a saved one folds away but stays, so the
 /// conversation keeps its record of what was accepted.
-function ProposalCard({ item, others, onAccept, onDiscard, disabled }: {
-  item: Item; others: Item[]; onAccept: () => void; onDiscard: () => void; disabled: boolean;
+function ProposalCard({ item, others, onAccept, onChange, onDiscard, disabled }: {
+  item: Item; others: Item[]; onAccept: () => void; onChange: (p: Proposal) => void; onDiscard: () => void; disabled: boolean;
 }) {
   const [open, setOpen] = useState(item.status !== "saved");
   useEffect(() => { if (item.status === "saved") setOpen(false); }, [item.status]);
@@ -527,7 +528,7 @@ function ProposalCard({ item, others, onAccept, onDiscard, disabled }: {
       {open && (
         <div className="saved-body">
           {p.kind === "split" ? <SplitPanel p={p} />
-            : p.kind === "roster" ? <RosterPanel p={p} />
+            : p.kind === "roster" ? <RosterPanel p={p} locked={item.status !== "open"} onMode={(mode) => onChange({ ...p, mode })} />
             : p.kind === "change" ? <ChangePanel p={p} />
             : p.kind === "heading" ? <HeadingPanel p={p} />
             : <RotationPanel p={p} />}
@@ -688,14 +689,30 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
 
 /// Names are shown here, to the administrator, and nowhere else: what is saved is each name
 /// reduced to a key, and what a phone downloads has no names at all.
-function RosterPanel({ p }: { p: Extract<Proposal, { kind: "roster" }> }) {
+function RosterPanel({ p, locked, onMode }: {
+  p: Extract<Proposal, { kind: "roster" }>; locked: boolean; onMode: (m: "replace" | "add") => void;
+}) {
   const has = (f: "studentId" | "subgroup" | "day" | "workshop" | "drawing") => p.rows.some((r) => r[f]);
+  const extras = extraKeysOf(p.rows);
+  const hasGroup = p.rows.some((r) => r.group);
   return (
     <>
       <h2>
         {p.courseKey || <span className="tag off">no programme</span>}{" "}
         <span className="dim">class list · {p.rows.length} students · {p.fileName} · {p.readBy}</span>
       </h2>
+      <fieldset disabled={locked} style={{ border: 0, padding: 0, margin: "8px 0" }}>
+        <legend className="dim">When saved</legend>
+        <label style={{ display: "block" }}>
+          <input type="radio" name={`mode-${p.courseKey}-${p.fileName}`} checked={p.mode === "replace"} onChange={() => onMode("replace")} />{" "}
+          Replace {p.courseKey || "the"} class list — students not in this file are removed
+        </label>
+        <label style={{ display: "block" }}>
+          <input type="radio" name={`mode-${p.courseKey}-${p.fileName}`} checked={p.mode === "add"} onChange={() => onMode("add")} />{" "}
+          Add to the existing list — students are matched by student ID, then by name; what this file
+          gives replaces what was there, what it leaves empty is kept, and anyone new is added
+        </label>
+      </fieldset>
       <div className="row" style={{ margin: "8px 0" }}>
         <button type="button" onClick={() => downloadCsv(p)}>Download as CSV</button>
       </div>
@@ -710,11 +727,12 @@ function RosterPanel({ p }: { p: Extract<Proposal, { kind: "roster" }> }) {
             <tr>
               <th>Row</th><th>Surname</th><th>First name</th>
               {has("studentId") && <th>ID</th>}
-              <th>Group</th>
+              {(hasGroup || extras.length === 0) && <th>Group</th>}
               {has("subgroup") && <th>Sub</th>}
               {has("day") && <th>Day</th>}
               {has("workshop") && <th>Workshop</th>}
               {has("drawing") && <th>Drawing</th>}
+              {extras.map((k) => <th key={k}>{extraLabel(k)}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -724,11 +742,12 @@ function RosterPanel({ p }: { p: Extract<Proposal, { kind: "roster" }> }) {
                 <td>{r.surname ?? <span className="dim">—</span>}</td>
                 <td>{r.given ?? <span className="dim">—</span>}</td>
                 {has("studentId") && <td className="mono">{r.studentId ?? <span className="dim">—</span>}</td>}
-                <Cell v={r.group} />
+                {(hasGroup || extras.length === 0) && <Cell v={r.group} />}
                 {has("subgroup") && <td className="mono">{r.subgroup ?? <span className="dim">—</span>}</td>}
                 {has("day") && <td>{r.day ?? <span className="dim">—</span>}</td>}
                 {has("workshop") && <td className="mono">{r.workshop ?? <span className="dim">—</span>}</td>}
                 {has("drawing") && <td className="mono">{r.drawing ?? <span className="dim">—</span>}</td>}
+                {extras.map((k) => <td key={k} className="mono">{r.extra[k] ?? <span className="dim">—</span>}</td>)}
               </tr>
             ))}
           </tbody>
@@ -741,8 +760,10 @@ function RosterPanel({ p }: { p: Extract<Proposal, { kind: "roster" }> }) {
 /// The class list exactly as it will be saved, as CSV — the normalised form of whatever
 /// was uploaded. Built in the browser from the rows on the panel, so it is the same data.
 function downloadCsv(p: Extract<Proposal, { kind: "roster" }>) {
-  const lines = [ROSTER_HEADER, ...p.rows.map((r) =>
-    [r.surname, r.given, r.studentId, r.group, r.subgroup, r.day, r.workshop, r.drawing].map(csvField).join(","))];
+  const extras = extraKeysOf(p.rows);
+  const lines = [rosterHeader(extras), ...p.rows.map((r) =>
+    [r.surname, r.given, r.studentId, r.group, r.subgroup, r.day, r.workshop, r.drawing, ...extras.map((k) => r.extra[k])]
+      .map(csvField).join(","))];
   const url = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
   const a = document.createElement("a");
   a.href = url;

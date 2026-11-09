@@ -76,7 +76,7 @@ export async function classifyDocument(opts: { key: string; text: string; model?
 const TO_CSV_SYSTEM = `
 You transcribe a class list into CSV. Output ONLY the CSV — no commentary, no code fence.
 
-The first line is exactly this header:
+The first line is exactly this header (then any extra grouping columns, see rule 8):
 ${ROSTER_HEADER}
 
 Then one line per student, in the order they appear. Rules:
@@ -94,7 +94,16 @@ Then one line per student, in the order they appear. Rules:
 5. Day, Workshop and Drawing are the day and rooms given for that student, if any.
 6. Quote any value containing a comma.
 7. A heading between groups ("Group B") or a repeated header is not a student; leave it out.
-8. If the administrator's note says to leave rows out or read a column a certain way, do so.
+8. Some lists group students in more than one way — a lab group and a project team, say.
+   Put each further grouping in its own column AFTER Drawing, headed "Team" for a project
+   team (whatever the document calls its ID) or "<Kind> Group" / "<Kind> Team" for another
+   kind, e.g. "Studio Group". Never write a value into Group that is really a team, and never
+   write the same grouping twice. Add no other columns: no emails, no notes.
+9. ALWAYS write the full header line, in full, in this order. If the administrator's note
+   says to use only some columns, leave the others EMPTY on every row; never delete a column
+   or rename one. A document with only teams and no lab groups leaves Group empty and
+   fills Team.
+10. If the administrator's note says to leave rows out or read a column a certain way, do so.
 `.trim();
 
 /// Long enough for ~600 students; a list that hits it is refused rather than half-saved.

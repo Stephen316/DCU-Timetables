@@ -177,6 +177,8 @@ export function SavedPanel({ programme, programmeName: name, module, refresh }: 
         >
           <p className="dim" style={{ fontSize: 12, marginBottom: 6 }}>
             Counts only — names are stored as keys and can&rsquo;t be shown.
+            {view.classList.extras.map((e) =>
+              ` ${e.key.replace(/_/g, " ")}: ${e.values} across ${e.students} students.`).join("")}
           </p>
           <div className="saved-scroll">
             <table>
@@ -184,7 +186,7 @@ export function SavedPanel({ programme, programmeName: name, module, refresh }: 
               <tbody>
                 {view.classList.groups.map((g, i) => (
                   <tr key={i}>
-                    <td>{g.group}</td><td className="mono">{g.subgroup ?? "—"}</td><td>{g.count}</td>
+                    <td>{g.group ?? "—"}</td><td className="mono">{g.subgroup ?? "—"}</td><td>{g.count}</td>
                     <td>{g.day ?? "—"}</td><td className="mono">{g.workshop ?? "—"}</td><td className="mono">{g.drawing ?? "—"}</td>
                   </tr>
                 ))}

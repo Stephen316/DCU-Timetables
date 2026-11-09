@@ -27,6 +27,10 @@ export type Proposal =
   | { kind: "roster"; scope: Scope; courseKey: string; fileName: string;
       /** How the rows were got: parsed as they stood, or formatted by a model. */
       readBy: string;
+      /** Replace the programme's whole class list, or add these columns to the students
+       *  already on it. Chosen on the panel; replacing is the default unless the list has
+       *  no lab group to replace them with. */
+      mode: "replace" | "add";
       rows: RosterRow[]; findings: Finding[]; log?: Finding[] }
   | { kind: "change"; scope: Scope;
       /** The class and its dates. Who it is for is `groups`, so this alone can't be saved. */

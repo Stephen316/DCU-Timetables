@@ -87,7 +87,7 @@ export async function listLibrary(): Promise<{ ok: true; entries: LibraryEntry[]
     const own = (groups.data ?? []).filter((g) => g.course_key === r.course_key);
     entries.push({
       kind: "classList", programme: r.course_key, title: r.title, version: r.version, members: r.members,
-      groups: new Set(own.map((g) => g.grp)).size, savedAt: r.created_at,
+      groups: new Set(own.map((g) => g.grp).filter(Boolean)).size, savedAt: r.created_at,
     });
   }
 

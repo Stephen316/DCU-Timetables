@@ -5,7 +5,7 @@
 // is a suggestion.
 
 import type { Finding } from "@/lib/extraction/rotation";
-import { nameKey, type RosterRow } from "./parse";
+import { extraKeysOf, extraLabel, nameKey, type RosterRow } from "./parse";
 
 const STUDENT_ID = /^[A-Z][0-9]{8}$/;
 
@@ -18,7 +18,9 @@ export function validateRoster(rows: RosterRow[]): Finding[] {
     if (!key && !r.studentId) {
       out.push({ level: "error", row: r.row, message: "No name and no student ID." });
     }
-    if (!r.group) out.push({ level: "error", row: r.row, message: "No group." });
+    if (!r.group && Object.keys(r.extra).length === 0) {
+      out.push({ level: "error", row: r.row, message: "No group and no team." });
+    }
     if (r.studentId && !STUDENT_ID.test(r.studentId)) {
       out.push({ level: "error", row: r.row, message: `${r.studentId} is not a student ID (one letter, eight digits).` });
     }
@@ -58,11 +60,27 @@ export function validateRoster(rows: RosterRow[]): Finding[] {
 
   const groups = new Map<string, number>();
   for (const r of rows) if (r.group) groups.set(r.group, (groups.get(r.group) ?? 0) + 1);
-  out.push({
-    level: "info",
-    message: `${rows.length} students in ${groups.size} group${groups.size === 1 ? "" : "s"}: ` +
-      [...groups].sort().map(([g, n]) => `${g} ${n}`).join(", ") + ".",
-  });
+  if (groups.size) {
+    out.push({
+      level: "info",
+      message: `${rows.length} students in ${groups.size} group${groups.size === 1 ? "" : "s"}: ` +
+        [...groups].sort().map(([g, n]) => `${g} ${n}`).join(", ") + ".",
+    });
+  }
+  const noGroup = rows.filter((r) => !r.group).length;
+  if (groups.size && noGroup) {
+    out.push({ level: "warn", message: `${noGroup} student${noGroup === 1 ? " has" : "s have"} no lab group, so they get no lab timetable.` });
+  }
+  for (const key of extraKeysOf(rows)) {
+    const sizes = new Map<string, number>();
+    for (const r of rows) if (r.extra[key]) sizes.set(r.extra[key], (sizes.get(r.extra[key]) ?? 0) + 1);
+    const label = extraLabel(key).toLowerCase();
+    out.push({
+      level: "info",
+      message: `${sizes.size} ${label}${sizes.size === 1 ? "" : "s"} across ${[...sizes.values()].reduce((a, b) => a + b, 0)} students` +
+        (sizes.size <= 12 ? `: ${[...sizes].sort().map(([g, n]) => `${g} ${n}`).join(", ")}.` : "."),
+    });
+  }
 
   // Rooms and day are a property of the subgroup. Engineering's .3 subgroups really do
   // split 11/2 between drawing rooms (CSV_PIPELINE.md §4.2), so this is information for

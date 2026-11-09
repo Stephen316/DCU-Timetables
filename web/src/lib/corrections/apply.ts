@@ -8,7 +8,7 @@
 // Not `server-only`: pure, and exercised with tsx.
 
 import type { Finding, RotationSession } from "@/lib/extraction/rotation";
-import { normaliseStudentId, type RosterRow } from "@/lib/roster/parse";
+import { extraKeysOf, extraLabel, normaliseStudentId, type RosterRow } from "@/lib/roster/parse";
 
 export type Op = {
   op: "exclude" | "set" | "swap";
@@ -19,7 +19,7 @@ export type Op = {
   reason: string;
 };
 
-type RosterField = Exclude<keyof RosterRow, "row">;
+type RosterField = Exclude<keyof RosterRow, "row" | "extra">;
 type SessionField = keyof RotationSession;
 
 export const ROSTER_COLUMNS: [string, RosterField][] = [
@@ -32,9 +32,16 @@ export const ROTATION_COLUMNS: [string, SessionField][] = [
   ["Module", "module"], ["Activity", "activity"], ["Groups", "groups"],
 ];
 
+/// The columns the model is shown for these rows: the usual ones, then one for each extra
+/// grouping the list carries (Team, say).
+export function rosterColumns(rows: RosterRow[]): string[] {
+  return [...ROSTER_COLUMNS.map(([c]) => c), ...extraKeysOf(rows).map(extraLabel)];
+}
+
 /// The table as the model is shown it: a row number, then the cells.
 export function rosterTable(rows: RosterRow[]) {
-  return rows.map((r) => ({ row: r.row, cells: ROSTER_COLUMNS.map(([, f]) => r[f]) }));
+  const extras = extraKeysOf(rows);
+  return rows.map((r) => ({ row: r.row, cells: [...ROSTER_COLUMNS.map(([, f]) => r[f]), ...extras.map((k) => r.extra[k] ?? null)] }));
 }
 
 /// A rotation has no source line numbers, so its rows are numbered in order, 1 up.
@@ -48,9 +55,11 @@ export function rotationTable(sessions: RotationSession[]) {
 const clean = (v: string | null) => (v ?? "").trim() || null;
 
 export function applyToRoster(rows: RosterRow[], ops: Op[]): { rows: RosterRow[]; log: Finding[] } {
-  let out = rows.map((r) => ({ ...r }));
+  let out = rows.map((r) => ({ ...r, extra: { ...r.extra } }));
   const log: Finding[] = [];
   const field = (name: string | null) => ROSTER_COLUMNS.find(([c]) => c === name)?.[1];
+  const extras = extraKeysOf(rows);
+  const extraField = (name: string | null) => extras.find((k) => extraLabel(k) === name);
   const who = (r: RosterRow) => [r.given, r.surname].filter(Boolean).join(" ") || r.studentId || "";
 
   for (const o of ops) {
@@ -66,6 +75,15 @@ export function applyToRoster(rows: RosterRow[], ops: Op[]): { rows: RosterRow[]
     if (o.op === "exclude") {
       out = out.filter((r) => r !== target);
       log.push({ level: "warn", row: target.row, message: `Left out${who(target) ? ` (${who(target)})` : ""}: ${o.reason}` });
+      continue;
+    }
+    const ek = extraField(o.field);
+    if (ek) {
+      const before = target.extra[ek];
+      const after = clean(o.value);
+      if ((before ?? null) === after) continue;
+      if (after) target.extra[ek] = after; else delete target.extra[ek];
+      log.push({ level: "info", row: target.row, message: `${o.field}: ${before ?? "—"} → ${after ?? "—"}${o.reason ? ` (${o.reason})` : ""}` });
       continue;
     }
     const f = field(o.field);

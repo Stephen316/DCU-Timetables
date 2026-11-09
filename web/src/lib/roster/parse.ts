@@ -18,6 +18,9 @@ export type RosterRow = {
   day: string | null;
   workshop: string | null;
   drawing: string | null;
+  /** Any further grouping the list carries — a project team, a studio — keyed by a short
+   *  name ("team"). Kept beside the lab group, never instead of it. */
+  extra: Record<string, string>;
 };
 
 export type ParsedRoster =
@@ -31,11 +34,29 @@ export type ParsedRoster =
     }
   | { ok: false; error: string };
 
-type Field = Exclude<keyof RosterRow, "row">;
+type Field = Exclude<keyof RosterRow, "row" | "extra">;
 
 /// The CSV a class list is normalised to: what the model is told to write, and what the
 /// console offers for download.
 export const ROSTER_HEADER = "Surname,First Name,Student ID,Group,Sub-group,Day,Workshop,Drawing";
+
+/// Readable text for an extra key, for headers and messages: "project_team" -> "Project team".
+export function extraLabel(key: string): string {
+  const t = key.replace(/_/g, " ");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/// The header row for a list that carries these extra groupings after the usual columns.
+export function rosterHeader(extraKeys: string[]): string {
+  return [ROSTER_HEADER, ...extraKeys.map(extraLabel)].join(",");
+}
+
+/// Every extra key used in a list, in the order first met.
+export function extraKeysOf(rows: RosterRow[]): string[] {
+  const keys: string[] = [];
+  for (const r of rows) for (const k of Object.keys(r.extra)) if (!keys.includes(k)) keys.push(k);
+  return keys;
+}
 
 export function csvField(v: string | null | undefined): string {
   const s = v ?? "";
@@ -54,6 +75,20 @@ const HEADERS: [RegExp, Field][] = [
   [/^workshop$/, "workshop"],
   [/^drawing$/, "drawing"],
 ];
+
+// A further grouping a student belongs to. Only headings that say so are kept: a column
+// called Email or Notes is never carried into the allocation table, which phones download.
+const TEAM_HEADERS = /^(team|team id|team no|team number|project team|project team id|project team no|project team number|project group|project group id)$/;
+
+/// Header text -> the key an extra grouping is stored under, or null when it isn't one.
+/// "Project Team ID" and "Team" are both "team"; "Studio Group" is "studio_group".
+export function extraKey(text: string): string | null {
+  const t = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (TEAM_HEADERS.test(t)) return "team";
+  const kind = t.match(/^([a-z][a-z0-9 ]{0,23}) (team|group)$/);
+  if (kind && !/^(lab|sub)$/.test(kind[1])) return t.replace(/ /g, "_");
+  return null;
+}
 
 function headerField(text: string): Field | null {
   const t = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -80,22 +115,27 @@ export function parseRoster(text: string): ParsedRoster {
   // A lone "Name" column counts towards finding the header, so the error below can say why
   // it isn't enough rather than claiming there is no header at all.
   const known = (cell: string) => headerField(cell) !== null || /^(full |student )?name$/i.test(cell.trim());
-  const headerIndex = lines.findIndex((l) => splitLine(l, detect(l)).filter(known).length >= 2);
+  const headerKnown = (cell: string) => known(cell) || extraKey(cell) !== null;
+  const headerIndex = lines.findIndex((l) => splitLine(l, detect(l)).filter(headerKnown).length >= 2);
   if (headerIndex < 0) {
     return {
       ok: false,
       error:
         "No header row found. A class list needs headed columns — Surname and First name " +
-        "(or Student ID), and Group.",
+        "(or Student ID), and Group or Team.",
     };
   }
 
   const kind = detect(lines[headerIndex]);
   const headers = splitLine(lines[headerIndex], kind);
   const fields = headers.map(headerField);
+  // A column that is not a field of its own may still be a further grouping (a team).
+  const extraKeyAt = headers.map((h, j) => (fields[j] ? null : extraKey(h)));
 
   const has = (f: Field) => fields.includes(f);
-  if (!has("group")) return { ok: false, error: "No Group column." };
+  if (!has("group") && !extraKeyAt.some(Boolean)) {
+    return { ok: false, error: "No Group or Team column. A class list needs to say which group, or team, each student is in." };
+  }
   if (!(has("surname") && has("given")) && !has("studentId")) {
     return {
       ok: false,
@@ -104,6 +144,8 @@ export function parseRoster(text: string): ParsedRoster {
         "Name column can't be used: nothing says which part is the surname.",
     };
   }
+
+  const ignored = headers.filter((h, j) => h.trim() && !fields[j] && !extraKeyAt[j]);
 
   const rows: RosterRow[] = [];
   const skipped: { row: number; text: string }[] = [];
@@ -130,11 +172,15 @@ export function parseRoster(text: string): ParsedRoster {
 
     const row: RosterRow = {
       row: i + 1, surname: null, given: null, studentId: null, group: null,
-      subgroup: null, day: null, workshop: null, drawing: null,
+      subgroup: null, day: null, workshop: null, drawing: null, extra: {},
     };
     fields.forEach((f, j) => {
-      if (!f) return;
       const v = (cells[j] ?? "").trim();
+      if (!f) {
+        const k = extraKeyAt[j];
+        if (k && v !== "" && !row.extra[k]) row.extra[k] = v;
+        return;
+      }
       row[f] = v === "" ? null : v;
     });
     row.studentId = normaliseStudentId(row.studentId);
@@ -153,11 +199,14 @@ export function parseRoster(text: string): ParsedRoster {
   return {
     ok: true,
     rows,
-    columns: headers.filter((_, j) => fields[j]).map((h) => h.trim()),
+    columns: headers.filter((_, j) => fields[j] || extraKeyAt[j]).map((h) => h.trim()),
     skipped,
-    notes: splitGroups
-      ? [`The Group column held subgroups like ${rows.find((r) => r.subgroup)?.subgroup}, so ${splitGroups} were read as group ${rows.find((r) => r.subgroup)?.group} and subgroup ${rows.find((r) => r.subgroup)?.subgroup}, and so on.`]
-      : [],
+    notes: [
+      ...(splitGroups
+        ? [`The Group column held subgroups like ${rows.find((r) => r.subgroup)?.subgroup}, so ${splitGroups} were read as group ${rows.find((r) => r.subgroup)?.group} and subgroup ${rows.find((r) => r.subgroup)?.subgroup}, and so on.`]
+        : []),
+      ...(ignored.length ? [`Left out, because only names, IDs, groups and teams are kept: ${ignored.join(", ")}.`] : []),
+    ],
   };
 }
 
