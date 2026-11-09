@@ -131,17 +131,20 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
         </Step>
         <Step title="Profile">
           {manual ? (
-            <>
-              <Txt type="title3" accessibilityRole="header">Enter your student number</Txt>
-              <StudentNumberField
-                value={entry}
-                disabled={saving}
-                onChange={(value) => { setEntry(value); setSaveError(null); }}
-                onSubmit={() => { if (number) setStep(4); }}
-              />
-              <Txt type="footnote" color={theme.inkSecondary}>Enter the letter and eight digits from your student ID. Once saved, only an admin can change it.</Txt>
+            <View style={styles.cameraStep}>
+              <Txt type="title3" accessibilityRole="header" style={styles.cameraTitle}>Enter your student number</Txt>
+              <View style={styles.numberEntry}>
+                <StudentNumberField
+                  value={entry}
+                  disabled={saving}
+                  onChange={(value) => { setEntry(value); setSaveError(null); }}
+                  onSubmit={() => { if (number) setStep(4); }}
+                />
+                <Txt type="footnote" color={theme.inkSecondary} style={styles.entryHelp}>The letter and eight digits on your student ID.</Txt>
+                <Txt type="caption" color={theme.inkSecondary} style={styles.entryHelp}>Once saved, only an admin can change it.</Txt>
+              </View>
               <SetupButton variant="outline" title="Use camera" disabled={saving} onPress={() => setCamera(true)} />
-            </>
+            </View>
           ) : (
             <View style={styles.cameraStep}>
               <Txt type="title3" accessibilityRole="header" style={styles.cameraTitle}>Take a photo of your student ID</Txt>
@@ -167,6 +170,8 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
 }
 
 const styles = StyleSheet.create({
+  numberEntry: { width: '100%', maxWidth: 300, gap: Space.s },
+  entryHelp: { textAlign: 'center' },
   cameraStep: { alignItems: 'center', gap: Space.l, paddingVertical: Space.s },
   cameraTitle: { textAlign: 'center', fontSize: 17, lineHeight: 22 },
   cameraActions: { width: '100%', maxWidth: 240, gap: Space.s },

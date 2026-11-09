@@ -43,5 +43,5 @@ const styles = StyleSheet.create({
   planHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.s },
   plan: { flexDirection: 'row', alignItems: 'center', gap: Space.m, padding: Space.m, borderWidth: 1, borderRadius: 8 },
   planText: { flex: 1, gap: Space.xs },
-  input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: Space.m, fontSize: 17 },
+  input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: Space.m, fontSize: 17, textAlign: 'center', fontVariant: ['tabular-nums'], letterSpacing: 1 },
 });

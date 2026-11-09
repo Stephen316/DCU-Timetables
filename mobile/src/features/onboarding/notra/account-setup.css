@@ -76,3 +76,10 @@
   outline: 2px solid var(--notra-ring);
   outline-offset: 4px;
 }
+
+.account-setup-input {
+  min-height: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
