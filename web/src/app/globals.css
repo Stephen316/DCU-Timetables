@@ -280,6 +280,11 @@ label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px
 .attach-chip .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .attach-chip .dim { white-space: nowrap; }
 .attach-chip .attach-actions { margin-left: auto; display: flex; gap: 14px; }
+/* A radio is an input, and `input { width: 100% }` would stretch it across the row. */
+label.choice { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 6px; font-size: 13px; color: var(--text); cursor: pointer; }
+label.choice input { width: auto; flex: none; margin: 3px 0 0; padding: 0; }
+fieldset.attach-mode { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 8px 12px 4px; margin: 0 0 8px; }
+fieldset.attach-mode legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .attach-chip.bad { border-color: var(--off); color: var(--off); }
 
 dialog.preview { width: min(900px, 94vw); height: min(80vh, 760px); padding: 0; border: 1px solid var(--border);

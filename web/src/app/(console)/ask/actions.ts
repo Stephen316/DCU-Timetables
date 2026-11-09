@@ -80,7 +80,11 @@ export async function ask(form: FormData): Promise<AskResult> {
   try {
     // What was typed with the file is about the file — "the headings aren't students" —
     // and goes to every step that reads it. It used to be dropped here.
-    if (hasFile) return await readUpload(file, scope, started, message);
+    // How to save it if it is a class list, chosen alongside the file. Anything unrecognised
+    // is "auto": add when the file has no lab groups, otherwise replace.
+    const wanted = String(form.get("rosterMode") ?? "");
+    const want: RosterWant = wanted === "replace" || wanted === "add" ? wanted : "auto";
+    if (hasFile) return await readUpload(file, scope, started, message, want);
 
     // A class list or rotation is waiting to be accepted: until it is, every message is
     // about it. The browser sends the version on the panel; accepting one starts a new
@@ -330,7 +334,9 @@ async function changeProposal(scope: Scope, a: ChangeArgs, source: string): Prom
 ///   class list  -> the model writes it out as CSV (n61) -> the same parser and validators
 ///   rotation    -> the transcription the harness measured
 ///   -> a proposal on the panel: the review screen (n34). Accept saves it.
-async function readUpload(file: File, scope: Scope, started: number, note: string): Promise<AskResult> {
+type RosterWant = "auto" | "replace" | "add";
+
+async function readUpload(file: File, scope: Scope, started: number, note: string, want: RosterWant): Promise<AskResult> {
   // An upload is a class list or a rotation, and neither reaches phones outside the fixed
   // courses. Said before the file is read, not after paying to read it.
   if (scope.programme && !programmeFor(scope.programme)) {
@@ -369,7 +375,7 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
       noteReply = out.reply;
       noteModel = out.model;
     }
-    return rosterProposal(scope, file.name, rows,
+    return rosterProposal(scope, file.name, rows, want,
       note ? `read directly; your note applied by ${noteModel}` : "read directly, no model",
       meta(),
       `Read ${rows.length} students from the ${source} (columns: ${direct.columns.join(", ")}).` +
@@ -392,7 +398,7 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
         meta: meta(),
       };
     }
-    return rosterProposal(scope, file.name, parsed.rows, `formatted by ${out.model}`, meta(),
+    return rosterProposal(scope, file.name, parsed.rows, want, `formatted by ${out.model}`, meta(),
       `Read the ${source} as a class list and formatted it as CSV: ${parsed.rows.length} students. ` +
       `Check the names and groups against the document — a misread name is a student who never matches.` +
         (parsed.skipped.length ? ` ${parsed.skipped.length} heading line${parsed.skipped.length === 1 ? "" : "s"} left out.` : ""),
@@ -563,22 +569,31 @@ function extraFrom(v: unknown): Record<string, string> {
 }
 
 function rosterProposal(
-  scope: Scope, fileName: string, rows: RosterRow[], readBy: string,
+  scope: Scope, fileName: string, rows: RosterRow[], want: RosterWant, readBy: string,
   meta: AskResult["meta"], reply: string, extra: Finding[] = [],
 ): AskResult {
-  // A list with no lab groups at all (only teams) would, replacing, wipe the groups already
-  // saved and put nothing in their place. Adding is the safe starting point; it can be changed.
-  const mode = rows.length > 0 && rows.every((r) => !r.group) ? "add" : "replace";
+  // Chosen with the file. Left to us ("auto"), a list with no lab groups at all adds, because
+  // replacing would wipe the lab groups already saved and put nothing in their place.
+  const noGroups = rows.length > 0 && rows.every((r) => !r.group);
+  const mode = want === "auto" ? (noGroups ? "add" : "replace") : want;
   const where = scope.programme || "the selected programme";
+  const findings: Finding[] = [...extra];
+  if (mode === "replace" && noGroups) {
+    findings.push({
+      level: "warn",
+      message: `This file has no lab groups, so replacing ${where}'s class list removes every student's lab group. ` +
+        "Attach it again with \"Add to the existing list\" to keep them.",
+    });
+  }
   return {
     ok: true,
     reply: `${reply} ${mode === "add"
-      ? `It has no lab groups, so it is set to add to ${where}'s class list; choose Replace to swap the whole list instead.`
-      : `Accepting replaces ${where}'s class list; choose Add to keep the students already on it.`}`,
+      ? `Accepting adds these to ${where}'s class list and leaves everyone else as they are.`
+      : `Accepting replaces ${where}'s class list.`}`,
     meta,
     proposal: {
-      kind: "roster", scope, courseKey: scope.programme, fileName, readBy, mode, rows, log: extra,
-      findings: [...rosterScope(scope), ...extra, ...validateRoster(rows)],
+      kind: "roster", scope, courseKey: scope.programme, fileName, readBy, mode, rows, log: findings,
+      findings: [...rosterScope(scope), ...findings, ...validateRoster(rows)],
     },
   };
 }
