@@ -3,8 +3,12 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 @source "./button";
+@source "./shadcn-card.tsx";
+@source "./shadcn-input.tsx";
 @custom-variant dark (&:where(.notra-dark, .notra-dark *));
 @theme inline {
+  --color-card: var(--notra-background);
+  --color-card-foreground: var(--notra-foreground);
   --color-background: var(--notra-background);
   --color-foreground: var(--notra-foreground);
   --color-primary: var(--notra-primary);
@@ -67,7 +71,7 @@
   }
 }
 
-.notra-setup-button {
+:where(.account-setup-stepper, .notra-setup-button) {
   --notra-background: #fff;
   --notra-foreground: #18181b;
   --notra-primary: #6d42cf;
@@ -81,7 +85,7 @@
   /* Notra's depth gradient references this token directly. */
   --color-primary: var(--notra-primary);
 }
-.notra-setup-button.notra-dark {
+:where(.account-setup-stepper, .notra-setup-button).notra-dark {
   --notra-background: #222126;
   --notra-foreground: #fafafa;
   --notra-primary: #8055dc;

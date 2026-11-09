@@ -1,15 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
 import { StudentNumber } from '../../core/identity';
 import { errorMessage, isNotSignedIn } from '../../data/rest';
 import { useServices } from '../../state/hooks';
-import { Icon, Txt } from '../../ui/components';
+import { Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 import Stepper, { Step } from './Stepper';
 import { StudentID } from './StudentID';
 import { SetupSurface } from './SetupSurface';
 import { SetupButton } from './SetupButton';
+import { SetupPlan, StudentNumberField } from './SetupFields';
 
 const PLUS_PROMO = 'https://info.dcutimetables.app/purchase/';
 
@@ -119,20 +120,8 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
         </Step>
         <Step title="Plan">
           <Txt type="title3" accessibilityRole="header">Choose a plan</Txt>
-          <View style={[styles.plan, { backgroundColor: theme.canvas, borderColor: plan === 'standard' ? theme.accent : theme.separator }]}>
-            <View style={styles.planText}>
-              <Txt type="headline">{plan === 'standard' ? 'Standard · Selected' : 'Standard'}</Txt>
-              <Txt color={theme.inkSecondary}>Free · Your timetable and class updates</Txt>
-            </View>
-            {plan === 'standard' ? <Icon name="check" color={theme.accent} /> : null}
-          </View>
-          <View style={[styles.plan, { backgroundColor: theme.canvas, borderColor: hasPlus ? theme.accent : theme.separator }]}>
-            <View style={styles.planText}>
-              <Txt type="headline">{hasPlus ? 'Plus · Selected' : 'Plus'}</Txt>
-              <Txt color={theme.inkSecondary}>Full deadlines list and class alerts</Txt>
-            </View>
-            {hasPlus ? <Icon name="check" color={theme.accent} /> : null}
-          </View>
+          <SetupPlan title="Standard" description="Free · Your timetable and class updates" selected={plan === 'standard'} />
+          <SetupPlan title="Plus" description="Full deadlines list and class alerts" selected={hasPlus} />
           {plan === 'checking' ? <Txt type="footnote" accessibilityLiveRegion="polite">Checking your plan…</Txt> : null}
           {plan === 'unavailable' ? <Txt type="footnote" accessibilityLiveRegion="polite">Couldn’t check your plan. You can still continue setup.</Txt> : null}
           {!hasPlus && plan !== 'checking' ? (
@@ -147,18 +136,11 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
           {manual ? (
             <>
               <Txt type="title3" accessibilityRole="header">Enter your student number</Txt>
-              <TextInput
-                accessibilityLabel="Student number"
-                autoCapitalize="characters"
-                autoCorrect={false}
-                editable={!saving}
-                onChangeText={(value) => { setEntry(value); setSaveError(null); }}
-                onSubmitEditing={() => { if (number) setStep(4); }}
-                placeholder="A00000000"
-                placeholderTextColor={theme.inkTertiary}
-                returnKeyType="done"
-                style={[styles.input, { color: theme.ink, borderColor: theme.separator, backgroundColor: theme.canvas }]}
+              <StudentNumberField
                 value={entry}
+                disabled={saving}
+                onChange={(value) => { setEntry(value); setSaveError(null); }}
+                onSubmit={() => { if (number) setStep(4); }}
               />
               <Txt type="footnote" color={theme.inkSecondary}>Enter the letter and eight digits from your student ID. Once saved, only an admin can change it.</Txt>
               <SetupButton variant="outline" title="Use camera" disabled={saving} onPress={() => setCamera(true)} />
@@ -188,7 +170,4 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
 const styles = StyleSheet.create({
   signOut: { alignSelf: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: Space.l },
   status: { alignSelf: 'center', width: '100%', maxWidth: 440, gap: Space.m, padding: Space.l, borderRadius: 12 },
-  plan: { flexDirection: 'row', alignItems: 'center', gap: Space.m, padding: Space.m, borderWidth: 1, borderRadius: 8 },
-  planText: { flex: 1, gap: Space.xs },
-  input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: Space.m, fontSize: 17 },
 });

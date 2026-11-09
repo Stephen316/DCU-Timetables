@@ -14,6 +14,7 @@ declare const ReferenceStepper: ComponentType<{
   backButtonText: string;
   nextButtonText: string;
   completeButtonText: string;
+  FooterButton?: ComponentType<ButtonHTMLAttributes<HTMLButtonElement>>;
   backButtonProps?: ButtonHTMLAttributes<HTMLButtonElement>;
   nextButtonProps?: ButtonHTMLAttributes<HTMLButtonElement>;
   className?: string;

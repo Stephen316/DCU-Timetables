@@ -121,6 +121,7 @@ export default function Stepper({
   backButtonText = 'Back',
   nextButtonText = 'Continue',
   completeButtonText = 'Complete',
+  FooterButton = 'button',
   backButtonProps = {},
   nextButtonProps = {},
   completedContent,
@@ -468,7 +469,7 @@ export default function Stepper({
           >
             <div className="stepper__footer-clip">
               <div className={`stepper__footer ${footerClassName}`.trim()}>
-                <button
+                <FooterButton
                   type="button"
                   {...backRest}
                   className={`stepper__button stepper__button--back ${backClass}`.trim()}
@@ -481,8 +482,8 @@ export default function Stepper({
                 >
                   <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={2} />
                   <span>{backButtonText}</span>
-                </button>
-                <button
+                </FooterButton>
+                <FooterButton
                   type="button"
                   {...nextRest}
                   className={`stepper__button stepper__button--next ${nextClass}`.trim()}
@@ -494,7 +495,7 @@ export default function Stepper({
                 >
                   <span>{nextLabel}</span>
                   <HugeiconsIcon icon={isLast ? Tick02Icon : ArrowRight01Icon} size={16} strokeWidth={2} />
-                </button>
+                </FooterButton>
               </div>
             </div>
           </div>

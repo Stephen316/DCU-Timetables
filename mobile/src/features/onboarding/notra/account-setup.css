@@ -19,3 +19,42 @@
 .account-setup-stepper .account-setup-next-hidden {
   visibility: hidden;
 }
+
+.account-setup-action {
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.account-setup-back[data-hidden] {
+  visibility: hidden;
+}
+
+.account-setup-next {
+  margin-inline-start: auto;
+}
+
+.account-setup-plan {
+  box-sizing: border-box;
+  border: 1px solid var(--notra-border);
+}
+
+.account-setup-plan[data-selected] {
+  border-color: var(--notra-ring);
+}
+
+.account-setup-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: 8px;
+  color: var(--notra-muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.account-setup-input {
+  box-sizing: border-box;
+  border-style: solid;
+  color: var(--notra-foreground);
+  font-family: inherit;
+}
