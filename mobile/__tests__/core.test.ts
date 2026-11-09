@@ -4,7 +4,7 @@ import {
   AccountRules, makeAccountProfile, parseDCUEmail, parseRole, parseSignInEmail, PasswordValidation, PublicIdentifier, StudentNumber,
 } from '../src/core/identity';
 import { locationDisplay, parseRoom, roomDisplayText } from '../src/core/roomLocation';
-import { ClashDetector, DaySchedule, DaySlot, DefaultDay, NextClassWindow, WeekGrid, gapLabel } from '../src/core/schedule';
+import { ClashDetector, DaySchedule, DaySlot, DefaultDay, GridHours, NextClassWindow, WeekGrid, gapLabel } from '../src/core/schedule';
 import { DublinTime, parseISO, isoSeconds, WeekHeading } from '../src/core/time';
 import { compactTitleOf, EventType, isOnline, shortTitleOf } from '../src/core/timetableEvent';
 import { at, event, utc } from './helpers';
@@ -379,6 +379,44 @@ describe('Week grid', () => {
     expect(byID.c).toBe(1);
   });
   test('an empty day places nothing', () => expect(WeekGrid.place([])).toHaveLength(0));
+});
+
+describe('Grid hours', () => {
+  const c = (from: number, to: number) => event('', at(2026, 11, 10, Math.floor(from), (from % 1) * 60), at(2026, 11, 10, Math.floor(to), (to % 1) * 60));
+
+  test('starts an empty hour above the first class and ends with the last', () => {
+    expect(GridHours.of([c(9, 10), c(14, 16.5)])).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+  });
+
+  test('never starts before 8am', () => {
+    expect(GridHours.of([c(8, 9)])[0]).toBe(8);
+    const early = c(7, 9);
+    const hours = GridHours.of([early]);
+    expect(hours[0]).toBe(8);
+    expect(GridHours.clip(early, hours).start).toEqual(at(2026, 11, 10, 8));
+  });
+
+  test('never runs past 9pm', () => {
+    const late = c(19, 22);
+    const hours = GridHours.of([late]);
+    expect(hours[hours.length - 1]).toBe(21);
+    expect(GridHours.clip(late, hours)).toEqual({ start: at(2026, 11, 10, 19), end: at(2026, 11, 10, 21) });
+  });
+
+  test('a class wholly in the night is not drawn', () => {
+    expect(GridHours.shows(c(21, 22))).toBe(false);
+    expect(GridHours.shows(c(0, 1))).toBe(false);
+    expect(GridHours.shows(c(7, 8))).toBe(false);
+    expect(GridHours.shows(c(20.5, 21.5))).toBe(true);
+    expect(GridHours.of([c(0, 1), c(22, 23)])).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+  });
+
+  test('a class past midnight still ends the grid at 9pm', () => {
+    const overnight = event('', at(2026, 11, 10, 20), at(2026, 11, 11, 0, 30));
+    expect(GridHours.of([c(9, 10), overnight]).slice(-1)).toEqual([21]);
+  });
+
+  test('a free day shows 9 to 6', () => expect(GridHours.of([])).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17, 18]));
 });
 
 describe('Day schedule', () => {

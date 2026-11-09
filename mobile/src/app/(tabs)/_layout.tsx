@@ -27,7 +27,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="account"
-        options={{ title: 'Account', tabBarShowLabel: false, tabBarIcon: ({ color, size }) => <Icon name="account" color={color} size={size} /> }}
+        options={{ title: 'Account', tabBarIcon: ({ color, size }) => <Icon name="account" color={color} size={size} /> }}
       />
     </Tabs>
   );

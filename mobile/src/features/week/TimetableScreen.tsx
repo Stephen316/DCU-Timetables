@@ -1,15 +1,14 @@
 import { router } from 'expo-router';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { addDays, isSameDay, startOfDay, WeekHeading } from '../../core/time';
+import { addDays, daysBetween, formatDayMonth, isSameDay, isToday, isTomorrow, startOfDay, weekdayName, WeekHeading } from '../../core/time';
 import { WeekdayIndex } from '../../core/misc';
 import { TimetableEvent } from '../../core/timetableEvent';
 import { listenForMacAlertTaps, MacShell } from '../../data/macShell';
 import { listenForAlertTaps } from '../../data/notifications';
 import { useAppEvent, useModel, useNow } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
-import { BarButton, EmptyState, IconButton, Label, PrimaryButton, Txt } from '../../ui/components';
+import { EmptyState, IconButton, Label, PillButton, PrimaryButton, ScreenHeader, Txt } from '../../ui/components';
 import { LoadingScreen } from '../../ui/LoadingScreen';
 import { Space, useTheme } from '../../ui/theme';
 import { useTutorial } from '../tutorial/Tutorial';
@@ -21,13 +20,12 @@ import { Pager, PagerControl } from './Pager';
 import { WeekGridView } from './WeekGrid';
 
 /**
- * The timetable: the day as cards, or the week as a grid, each its own tab. Both are this
- * screen; `owner` marks the one the app opens on, which alone listens for what happens to the
- * timetable (alerts tapped, changes arriving) so nothing is handled twice.
+ * The timetable: the day or the week, each its own tab, both drawn on the same grid. Both are
+ * this screen; `owner` marks the one the app opens on, which alone listens for what happens to
+ * the timetable (alerts tapped, changes arriving) so nothing is handled twice.
  */
 export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week'; owner?: boolean }) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { subgroupQuestion } = useRoot();
   const model = useModel(useWeekModel());
   const now = useNow();
@@ -148,6 +146,10 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
               isLoading={model.isLoading}
               onSelect={open}
               onEdit={askToEdit}
+              onPick={(picked) => {
+                const offset = firstDay ? daysBetween(startOfDay(firstDay), startOfDay(picked)) : 0;
+                if (offset >= 0 && offset < WeekdayIndex.daysPerWeek) model.setDay(week, offset);
+              }}
             />
           );
         }}
@@ -155,30 +157,40 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
     );
   }
 
+  // The Day tab is titled by its day; the Week tab by its week ("This week", "Next week").
+  const shownDay = shownWeek ? addDays(startOfDay(shownWeek.firstDay), model.dayIndex) : null;
+  const dayLine = shownDay ? (isToday(shownDay, now) ? 'Today' : isTomorrow(shownDay, now) ? 'Tomorrow' : formatDayMonth(shownDay)) : '';
+  const title = editing ? 'Edit timetable' : showsCalendar ? heading?.title ?? '' : shownDay ? weekdayName(shownDay) : '';
+  const detail = editing
+    ? (showsCalendar ? heading?.title : shownDay ? `${weekdayName(shownDay)} ${formatDayMonth(shownDay)}` : '') ?? ''
+    : showsCalendar ? heading?.detail ?? '' : [dayLine, heading?.detail].filter(Boolean).join(' · ');
+
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
-      <View style={[styles.bar, { paddingTop: insets.top, borderBottomColor: theme.separator, backgroundColor: theme.canvas }]}>
-        {onMac ? (
-          <View style={styles.side}>
+      <ScreenHeader
+        title={title}
+        subtitle={
+          <View style={styles.subtitle}>
+            <Txt type="footnote" color={theme.inkSecondary} numberOfLines={1}>{detail}</Txt>
+            {model.campusName && !editing ? <Label icon="place" text={model.campusName} type="footnote" color={theme.inkSecondary} /> : null}
+          </View>
+        }
+        left={onMac ? (
+          <>
             <IconButton icon="back" label="Previous week" onPress={() => weekPager.current?.turn(-1)} />
             <IconButton icon="forward" label="Next week" onPress={() => weekPager.current?.turn(1)} />
-          </View>
-        ) : (
-          <View style={styles.done} />
-        )}
-        <View style={styles.titleBlock} accessible accessibilityRole="header">
-          <Txt type="headline" numberOfLines={1}>{editing ? 'Edit timetable' : heading?.title ?? ''}</Txt>
-          <View style={styles.subtitle}>
-            <Txt type="caption" color={theme.inkSecondary}>{editing ? heading?.title : heading?.detail}</Txt>
-            {model.campusName && !editing ? <Label icon="place" text={model.campusName} type="caption" color={theme.inkSecondary} /> : null}
-          </View>
-        </View>
-        {/* Editing lives here and only here: on the day and the week, the two places a class can be added or dropped. */}
-        <View style={[styles.done, onMac && styles.side, onMac && styles.sideRight]}>
-          {onMac && !editing ? <BarButton title="Today" onPress={() => model.showCurrentWeek()} /> : null}
-          {editing ? <BarButton title="Done" bold onPress={() => setEditing(false)} /> : <BarButton title="Edit" onPress={() => setEditing(true)} />}
-        </View>
-      </View>
+          </>
+        ) : undefined}
+        right={
+          // Editing lives here and only here: on the day and the week, the two places a class can be added or dropped.
+          <>
+            {onMac && !editing ? <PillButton title="Today" onPress={() => model.showCurrentWeek()} /> : null}
+            {editing
+              ? <PillButton title="Done" filled onPress={() => setEditing(false)} />
+              : <PillButton title="Edit" icon="edit" label="Edit timetable" onPress={() => setEditing(true)} />}
+          </>
+        }
+      />
 
       <View style={styles.fill}>
         {body}
@@ -201,12 +213,5 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.xs, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
-  titleBlock: { flex: 1, alignItems: 'center' },
   subtitle: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-  // As wide as the button on the other side, so the title stays centred.
-  done: { minWidth: 64, alignItems: 'flex-end', paddingRight: Space.xs },
-  // The Mac's pairs: the same width each side, for the same reason.
-  side: { flexDirection: 'row', alignItems: 'center', minWidth: 120 },
-  sideRight: { justifyContent: 'flex-end' },
 });

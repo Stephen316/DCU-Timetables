@@ -1,22 +1,22 @@
 import { Tabs } from 'expo-router';
 import { ComponentProps, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, LayoutChangeEvent, PanResponder, Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
-import { Txt } from '../../ui/components';
 import { useTutorialTarget } from '../tutorial/Tutorial';
 import { FloatingBar, floatingBarMargin } from '../../ui/floatingBar';
-import { concentric, Desktop, MIN_TARGET, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
+import { Desktop, Palette, Space, useTheme, withAlpha } from '../../ui/theme';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 /**
- * The tabs as a slider: an accent fill sits behind the selected tab and slides to the
- * other when it's tapped — or follows the finger when the slider is dragged, landing on
- * whichever tab it's released nearer.
+ * The tabs as a row of icons on a plain white pill, as the design draws them: no words under
+ * any of them, and the selected one sitting on a violet disc ringed by a pale violet halo. The
+ * disc slides to a tab when it's tapped, or follows the finger when the row is dragged,
+ * landing on whichever tab it's released nearer. The pill casts no shadow; it stands off the
+ * screen by being white on the grey, and behind it the screen fades into the haze.
  */
 export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) {
   const theme = useTheme();
   const [width, setWidth] = useState(0);
-  const [height, setHeight] = useState(0);
   // A tab hidden with `href: null` (the Week tab on the Mac, where Day is the week) isn't drawn,
   // and the slider counts only the ones that are.
   const shown = state.routes.map((_, i) => i).filter((i) => (descriptors[state.routes[i].key].options as { href?: unknown }).href !== null);
@@ -24,7 +24,7 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
   const position = Math.max(shown.indexOf(state.index), 0);
   const tabWidth = count > 0 ? width / count : 0;
   const [offset] = useState(() => new Animated.Value(0));
-  /** The tab under the outline mid-drag, so the colours follow the finger. */
+  /** The tab under the disc mid-drag, so the colours follow the finger. */
   const [hovered, setHovered] = useState<number | null>(null);
   const lastWidth = useRef(0);
 
@@ -49,7 +49,7 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
       offset.setValue(target);
       return;
     }
-    Animated.timing(offset, { toValue: target, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    Animated.timing(offset, { toValue: target, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [position, tabWidth, offset]);
 
   const responder = useMemo(() => {
@@ -75,12 +75,12 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
         const destination = nearest(g.dx);
         setHovered(null);
         if (destination !== index) return select(destination);
-        Animated.timing(offset, { toValue: index * w, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+        Animated.timing(offset, { toValue: index * w, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
       },
       onPanResponderTerminate: () => {
         const { index, tabWidth: w } = live.current;
         setHovered(null);
-        Animated.timing(offset, { toValue: index * w, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+        Animated.timing(offset, { toValue: index * w, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
       },
       onPanResponderTerminationRequest: () => false,
     });
@@ -91,109 +91,116 @@ export function TabBar({ state, descriptors, navigation, insets }: TabBarProps) 
   const accountTab = useTutorialTarget('accountTab');
   const tutorialRefs: Record<string, typeof deadlinesTab> = { deadlines: deadlinesTab, week: weekTab, account: accountTab };
   const selected = hovered ?? position;
-  // The pill is a capsule, and the outline inside it curves round the same centre, one
-  // padding in from its edge — a capsule again, as far as the outline's own height allows.
-  const outlineRadius = Math.min(concentric(FloatingBar.height / 2, FloatingBar.padding), height / 2 || Radius.control);
-  // Filled like the app's other selected chips, so the tab under it takes their text colour.
-  const selectedInk = theme.onAccent;
+  const margin = floatingBarMargin(insets.bottom);
 
   return (
     // Laid over the screens, not under them: the lists pad their ends by `useTabBarClearance`.
     // `box-none` keeps the strip either side of the pill from swallowing touches meant for them.
-    <View style={[styles.bar, { paddingBottom: floatingBarMargin(insets.bottom) }]} pointerEvents="box-none">
-      <Haze />
-      <View style={[styles.pill, glass(theme.scheme, theme.surface, theme.separator)]}>
+    <View style={[styles.bar, { paddingBottom: margin }]} pointerEvents="box-none">
+      <Haze height={FloatingBar.fade + FloatingBar.height + margin} />
       <View
-        style={styles.slider}
-        onLayout={(e: LayoutChangeEvent) => {
-          setWidth(e.nativeEvent.layout.width);
-          setHeight(e.nativeEvent.layout.height);
-        }}
-        accessibilityRole="tablist"
-        {...responder.panHandlers}
+        style={[
+          styles.pill,
+          { backgroundColor: theme.surface },
+          // White on the light grey needs nothing more; in the dark, a hairline keeps its edge.
+          theme.scheme === 'dark' ? { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.separator } : null,
+        ]}
       >
-        {tabWidth > 0 ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.outline, { width: tabWidth, borderRadius: outlineRadius, backgroundColor: theme.accent, transform: [{ translateX: offset }] }]}
-          />
-        ) : null}
-        {shown.map((routeIndex, i) => {
-          const route = state.routes[routeIndex];
-          const { options } = descriptors[route.key];
-          const isSelected = selected === i;
-          const color = isSelected ? selectedInk : theme.inkSecondary;
-          const title = options.title ?? route.name;
-          // The account tab is only its icon, as the Notra tab bar's are: a person says "account".
-          const iconOnly = options.tabBarShowLabel === false;
-          return (
-            <Pressable
-              key={route.key}
-              ref={tutorialRefs[route.name]}
-              onPress={() => go(i)}
-              accessibilityRole="tab"
-              accessibilityLabel={title}
-              accessibilityState={{ selected: position === i }}
-              style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.6 : 1 }]}
-            >
-              {options.tabBarIcon?.({ focused: isSelected, color, size: iconOnly ? 24 : 20 })}
-              {iconOnly ? null : <Txt type="caption2" color={color} style={isSelected ? styles.semibold : undefined}>{title}</Txt>}
-            </Pressable>
-          );
-        })}
-      </View>
+        <View style={styles.slider} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)} accessibilityRole="tablist" {...responder.panHandlers}>
+          {tabWidth > 0 ? (
+            <Animated.View pointerEvents="none" style={[styles.indicator, { width: tabWidth, transform: [{ translateX: offset }] }]}>
+              <View style={[styles.halo, { backgroundColor: haloColor(theme) }]}>
+                <View style={[styles.disc, { backgroundColor: theme.accent }]} />
+              </View>
+            </Animated.View>
+          ) : null}
+          {shown.map((routeIndex, i) => {
+            const route = state.routes[routeIndex];
+            const { options } = descriptors[route.key];
+            const isSelected = selected === i;
+            return (
+              <Pressable
+                key={route.key}
+                ref={tutorialRefs[route.name]}
+                onPress={() => go(i)}
+                accessibilityRole="tab"
+                accessibilityLabel={options.title ?? route.name}
+                accessibilityState={{ selected: position === i }}
+                style={({ pressed }) => [styles.tab, { opacity: pressed && !isSelected ? 0.5 : 1 }]}
+              >
+                {options.tabBarIcon?.({ focused: isSelected, color: isSelected ? theme.onAccent : theme.inkTertiary, size: isSelected ? 22 : 24 })}
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
 }
 
+/** The ring round the selected tab's disc: the violet, faint on white and a touch stronger on the dark. */
+function haloColor(theme: Palette): string {
+  return withAlpha(theme.accent, theme.scheme === 'dark' ? 0.22 : 0.12);
+}
+
 /**
- * The haze behind the bar: the screen's own colour fading up from the bottom edge, so a list
- * running under the pill dissolves into it rather than being cut off by it. React Native has
- * no gradient, so it is a stack of thin bands, each a little more opaque than the one above.
+ * How opaque the haze is a fraction `t` of the way down its fade. Eased so it leaves clear
+ * and arrives solid without a kink at either end: a fade that starts or stops on a slope
+ * shows a line there, however soft the rest of it is.
  */
-function Haze() {
+function hazeAt(t: number): number {
+  return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+/** The fade as gradient stops, close enough together that the curve between them doesn't show. */
+function hazeStops(color: (alpha: number) => string, reach: number): string {
+  const steps = 16;
+  return Array.from({ length: steps + 1 }, (_, i) => `${color(hazeAt(i / steps))} ${((i / steps) * reach).toFixed(1)}px`).join(', ');
+}
+
+/**
+ * The haze behind the bar: the screen fades into its own background colour over the last
+ * stretch above the pill, so a list running under the bar dissolves rather than being cut
+ * off, and the pill sits on plain background, as in the design. In the browser what fades is
+ * also blurred, a little more the further down it goes, the way an iPhone frosts what passes
+ * under its bars. React Native has no gradient, so on a phone the fade is a stack of thin
+ * bands, too fine to see as steps.
+ */
+function Haze({ height }: { height: number }) {
   const theme = useTheme();
-  const bands = 14;
+  const c = theme.canvas;
+  const reach = FloatingBar.fade;
+  if (Platform.OS === 'web') {
+    const fade = `linear-gradient(to bottom, ${hazeStops((a) => withAlpha(c, a), reach)}, ${c} 100%)`;
+    const mask = `linear-gradient(to bottom, ${hazeStops((a) => `rgba(0, 0, 0, ${a.toFixed(3)})`, reach)}, #000 100%)`;
+    return (
+      <View pointerEvents="none" style={[styles.haze, { height }]}>
+        <View style={[StyleSheet.absoluteFill, { backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', maskImage: mask, WebkitMaskImage: mask } as ViewStyle]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundImage: fade } as ViewStyle]} />
+      </View>
+    );
+  }
+  const bands = 32;
   return (
-    <View pointerEvents="none" style={styles.haze}>
-      {Array.from({ length: bands }, (_, i) => (
-        <View key={i} style={{ flex: 1, backgroundColor: withAlpha(theme.canvas, Math.pow((i + 1) / bands, 1.6) * 0.95) }} />
-      ))}
+    <View pointerEvents="none" style={[styles.haze, { height }]}>
+      <View style={{ height: reach }}>
+        {Array.from({ length: bands }, (_, i) => (
+          <View key={i} style={{ flex: 1, backgroundColor: withAlpha(c, hazeAt((i + 0.5) / bands)) }} />
+        ))}
+      </View>
+      <View style={{ flex: 1, backgroundColor: c }} />
     </View>
   );
-}
-
-/**
- * Frosted glass, as the Figma design draws it: the surface colour only about a third opaque
- * (the glass supplies the body), whatever scrolls beneath blurred and a touch more saturated,
- * and a faint light along the top edge where the glass catches the light. The blur is the
- * browser's `backdrop-filter`; the native build has no blur module, so there it's the tint
- * alone — which is why it keeps a little more of it.
- */
-function glass(scheme: 'light' | 'dark', surface: string, edge: string): ViewStyle {
-  const web = Platform.OS === 'web';
-  const filter = 'blur(16px) saturate(1.6)';
-  const highlight = scheme === 'dark' ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.6)';
-  const style = {
-    backgroundColor: withAlpha(surface, web ? (scheme === 'dark' ? 0.4 : 0.45) : 0.72),
-    borderColor: withAlpha(edge, 0.9),
-    ...(web ? { backdropFilter: filter, WebkitBackdropFilter: filter } : null),
-    boxShadow: `inset 0 1px 0 ${highlight}, 0 8px 24px rgba(0, 0, 0, 0.14)`,
-  };
-  return style as unknown as ViewStyle;
 }
 
 const styles = StyleSheet.create({
-  haze: { position: 'absolute', left: 0, right: 0, bottom: 0, height: FloatingBar.height + 64 },
-  bar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: Space.l, alignItems: 'center' },
-  // Across a desktop window the two tabs would sit a screen apart; keep them together.
-  pill: {
-    width: '100%', maxWidth: Desktop.dialog, padding: FloatingBar.padding,
-    borderRadius: FloatingBar.height / 2, borderWidth: StyleSheet.hairlineWidth,
-  },
+  haze: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  bar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: Space.xl, alignItems: 'center' },
+  // Across a desktop window the tabs would sit a screen apart; keep them together.
+  pill: { width: '100%', maxWidth: Desktop.dialog, padding: FloatingBar.padding, borderRadius: FloatingBar.height / 2 },
   slider: { flexDirection: 'row', width: '100%' },
-  outline: { position: 'absolute', top: 0, bottom: 0, left: 0 },
-  tab: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xs, gap: Space.xxs },
-  semibold: { fontWeight: '600' },
+  indicator: { position: 'absolute', top: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
+  halo: { width: FloatingBar.halo, height: FloatingBar.halo, borderRadius: FloatingBar.halo / 2, alignItems: 'center', justifyContent: 'center' },
+  disc: { width: FloatingBar.disc, height: FloatingBar.disc, borderRadius: FloatingBar.disc / 2 },
+  tab: { flex: 1, height: FloatingBar.halo, alignItems: 'center', justifyContent: 'center' },
 });

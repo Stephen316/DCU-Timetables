@@ -522,8 +522,8 @@ export function deadlineSectionTitle(section: DeadlineSection): string {
   switch (section) {
     case 'today': return 'Today';
     case 'tomorrow': return 'Tomorrow';
-    case 'thisWeek': return 'This Week';
-    case 'nextWeek': return 'Next Week';
+    case 'thisWeek': return 'This week';
+    case 'nextWeek': return 'Next week';
     case 'later': return 'Later';
   }
 }

@@ -10,10 +10,10 @@ import { AppLinks } from '../../ui/links';
 import { TutorialText } from '../../core/tutorial';
 import { useTutorial } from '../tutorial/Tutorial';
 import {
-  ActionRow, ActionSheet, BarButton, Icon, LabeledRow, ListScroll, Row, Section, Sheet, Txt,
+  ActionRow, ActionSheet, Avatar, BarButton, Icon, LabeledRow, ListScroll, Row, Section, Sheet, Txt,
 } from '../../ui/components';
 import { useTabBarClearance } from '../../ui/floatingBar';
-import { appearanceLabel, AppearanceSetting, Space, useTheme } from '../../ui/theme';
+import { appearanceLabel, AppearanceSetting, elevation, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 
 const SETTINGS: AppearanceSetting[] = ['system', 'light', 'dark'];
 
@@ -105,12 +105,20 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
   const content = (
     <>
       <ListScroll contentStyle={inline ? { paddingBottom: clearance } : undefined}>
+        {/* Who's signed in, as a profile card: initials on violet, the name, the email. */}
+        <View style={[styles.profile, { backgroundColor: theme.surface }, elevation(theme)]}>
+          <Avatar text={initialsOf(email?.displayName ?? user?.address ?? '?')} color={theme.accent} size={52} />
+          <View style={styles.profileText}>
+            <Txt type="headline" numberOfLines={1} style={styles.bold}>{email?.displayName ?? '--'}</Txt>
+            <Txt type="footnote" color={theme.inkSecondary} numberOfLines={1}>{user?.address ?? '--'}</Txt>
+            {profile && profile.role !== 'student' ? (
+              <View style={[styles.role, { backgroundColor: withAlpha(theme.accent, 0.12) }]}>
+                <Txt type="caption" color={theme.accent} style={styles.bold}>{Roles.label(profile.role)}</Txt>
+              </View>
+            ) : null}
+          </View>
+        </View>
         {top}
-        <Section header="Signed in as">
-          <LabeledRow label="Name" value={email?.displayName ?? '--'} />
-          <LabeledRow label="Email" value={user?.address ?? '--'} />
-          {profile && profile.role !== 'student' ? <LabeledRow label="Role" value={Roles.label(profile.role)} /> : null}
-        </Section>
 
         {/* Rows with a checkmark rather than a segmented control: rows wrap at large text sizes. */}
         <Section header="Appearance" footer="Match phone follows the Light or Dark setting on your phone.">
@@ -151,16 +159,18 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
         {hiddenCount !== null && hiddenCount > 0 ? (
           <Section header="Hidden people" footer="Deadlines from people you've hidden don't reach you.">
             <LabeledRow label="Hidden" value={hiddenCount === 1 ? '1 person' : `${hiddenCount} people`} />
-            <ActionRow title="Show everyone again" busy={unhiding} onPress={() => void unhideAll()} />
+            <ActionRow title="Show everyone again" icon="show" busy={unhiding} onPress={() => void unhideAll()} />
           </Section>
         ) : null}
 
         <Section header="About" footer="An independent student project. Not affiliated with or endorsed by Dublin City University.">
-          <ActionRow title="Privacy policy" onPress={() => void Linking.openURL(AppLinks.privacy)} />
-          <ActionRow title="Terms of use" onPress={() => void Linking.openURL(AppLinks.terms)} />
-          <ActionRow title="Help and contact" onPress={() => void Linking.openURL(AppLinks.support)} />
+          <ActionRow title="Privacy policy" icon="shield" tint={theme.modules[3]} chevron onPress={() => void Linking.openURL(AppLinks.privacy)} />
+          <ActionRow title="Terms of use" icon="document" tint={theme.modules[4]} chevron onPress={() => void Linking.openURL(AppLinks.terms)} />
+          <ActionRow title="Help and contact" icon="help" tint={theme.modules[1]} chevron onPress={() => void Linking.openURL(AppLinks.support)} />
           {tutorial ? (
             <ActionRow
+              icon="replay"
+              tint={theme.modules[6]}
               title={TutorialText.replay}
               onPress={() => {
                 onClose();
@@ -173,12 +183,14 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
         <Section footer="Delete account removes your account and everything on this device.">
           <ActionRow
             title="Sign out"
+            icon="signOut"
+            tint={theme.inkSecondary}
             onPress={() => {
               onClose();
               events.emit('signOutRequested');
             }}
           />
-          <ActionRow title="Delete account"destructive busy={deleting} onPress={() => setConfirmingDelete(true)} />
+          <ActionRow title="Delete account" icon="delete" destructive busy={deleting} onPress={() => setConfirmingDelete(true)} />
         </Section>
         {deleteError ? (
           <Section>
@@ -205,7 +217,17 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
   );
 }
 
+/** "Aoife Murphy" → "AM"; an address falls back to its first two letters. */
+function initialsOf(name: string): string {
+  const words = name.split(/[\s.@_-]+/).filter(Boolean);
+  return ((words[0]?.[0] ?? '') + (words[1]?.[0] ?? words[0]?.[1] ?? '')).toUpperCase();
+}
+
 const styles = StyleSheet.create({
+  profile: { flexDirection: 'row', alignItems: 'center', gap: Space.l, marginHorizontal: Space.l, marginTop: Space.l, padding: Space.l, borderRadius: Radius.card },
+  profileText: { flex: 1, gap: 2, alignItems: 'flex-start' },
+  role: { borderRadius: 999, paddingHorizontal: Space.s, paddingVertical: 2, marginTop: Space.xxs },
+  bold: { fontWeight: '700' },
   line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
   mono: { fontVariant: ['tabular-nums'], letterSpacing: 1 },
 });

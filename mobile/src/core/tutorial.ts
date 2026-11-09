@@ -9,16 +9,16 @@
 
 /** What a step's cut-out goes around. Each is registered by the control it names. */
 export type TutorialTarget =
-  | 'dayList' // the day's classes on the day view
-  | 'dayHeading' // the day's name at the top of the day view
-  | 'weekTab' // the Week tab
+  | 'dayList' // the day's grid of classes on the Day tab
+  | 'dayHeading' // the row of weekdays across the top of the day's grid
+  | 'weekTab' // the Week tab, the calendar icon on the bar
   | 'firstClass' // the week's first class in the week grid
   | 'weekGrid' // the whole week grid, on a Mac
   | 'reportButton' // "Report: lecture cancelled" on a class's page ("Mark as cancelled" for a moderator)
   | 'undoReport' // "Undo my report" on a class's page ("Mark as on" for a moderator)
   | 'backButton' // Back, in a class page's header
-  | 'accountTab' // the Account tab, last on the bar
-  | 'deadlinesTab' // the Deadlines tab
+  | 'accountTab' // the Account tab, the person icon last on the bar
+  | 'deadlinesTab' // the Deadlines tab, the page icon on the bar
   | 'addDeadline'; // +, top right of the Deadlines page
 
 /**
@@ -155,7 +155,7 @@ const PHONE: TutorialStep[] = [
     body: "View each day's modules here. See locations, class type and lecturers.",
   }),
   step({ id: 'swipe', target: 'dayHeading', title: 'Swipe left to see tomorrow', action: 'swipeLeft', advancesOn: 'daySwiped' }),
-  press({ id: 'week', target: 'weekTab', advancesOn: 'weekShown', title: 'See the whole week', body: 'Tap Week to see the grid.' }),
+  press({ id: 'week', target: 'weekTab', advancesOn: 'weekShown', title: 'See the whole week', body: 'Tap the calendar to see the whole week.' }),
   ...classSteps('Tap a class'),
   ...deadlines,
   ...account,

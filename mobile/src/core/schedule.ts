@@ -150,6 +150,57 @@ export const WeekGrid = {
   },
 };
 
+// MARK: - The grid's hours
+
+/**
+ * The hours a timetable grid runs over. DCU teaches between 8am and 9pm, so neither grid ever
+ * draws the night or scrolls into it: a class wholly outside those hours isn't drawn, and one
+ * running over either end is cut off at it. Inside them, a grid starts an empty hour above its
+ * first class, so that class never sits flush against the weekday names, and ends with its
+ * last. A day or week with nothing on shows 9 to 6.
+ */
+export const GridHours = {
+  open: 8,
+  close: 21,
+
+  /** Whether any of the class falls inside the grid's hours on its day. */
+  shows(event: TimetableEvent): boolean {
+    return event.end > atHour(event.start, GridHours.open) && event.start < atHour(event.start, GridHours.close);
+  },
+
+  /** The hours whose lines a grid of these classes draws, first to last. */
+  of(events: TimetableEvent[]): number[] {
+    const shown = events.filter(GridHours.shows);
+    if (shown.length === 0) return hourRange(9, 18);
+    const first = Math.max(GridHours.open, Math.min(...shown.map((e) => e.start.getHours())) - 1);
+    const last = Math.min(GridHours.close, Math.max(...shown.map(endHour)));
+    return hourRange(first, Math.max(last, first + 1));
+  },
+
+  /** The part of a class a grid over these hours draws: cut off at its first and last lines. */
+  clip(event: TimetableEvent, hours: number[]): { start: Date; end: Date } {
+    const top = atHour(event.start, hours[0]);
+    const bottom = atHour(event.start, hours[hours.length - 1]);
+    return { start: event.start < top ? top : event.start, end: event.end > bottom ? bottom : event.end };
+  },
+};
+
+function atHour(day: Date, hour: number): Date {
+  const d = startOfDay(day);
+  d.setHours(hour, 0, 0, 0);
+  return d;
+}
+
+/** The hour line a class ends on or before, counted on the day it starts: past midnight is 24. */
+function endHour(event: TimetableEvent): number {
+  if (startOfDay(event.end).getTime() > startOfDay(event.start).getTime()) return 24;
+  return event.end.getMinutes() > 0 ? event.end.getHours() + 1 : event.end.getHours();
+}
+
+function hourRange(low: number, high: number): number[] {
+  return Array.from({ length: high - low + 1 }, (_, i) => low + i);
+}
+
 // MARK: - Clashes
 
 export interface Clash {

@@ -1,17 +1,19 @@
 import { createContext, useContext } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, ViewStyle } from 'react-native';
 
 /**
  * The app's design tokens: colour, space, shape and type, defined once.
  *
- * The look follows Notra (usenotra.com): a violet accent on near-white or near-black
- * neutrals, 10pt controls and soft cards, with soft, clean module colours (blue, green, purple, teal, indigo) drawn solid under white text. Meaning
- * still has its own colours — five slates of one cool blue-grey, and an accent lifted from the same hue. Colour that isn't slate is news: orange for a
- * cancellation, amber for something due, blue for a test, green for a confirmed date
- * (`tint`). Keeping everything else grey is what lets those four be seen at a glance on a
- * phone held at arm's length on the way to a lecture.
+ * The look is Notra's (usenotra.com): Notra's violet on near-white or near-black neutrals,
+ * white cards with a soft shadow (a hairline border instead in the dark), 10pt controls and
+ * pill-shaped choices. Classes are drawn solid in their module's colour under white type.
  *
- * Light is a violet-tinted white; dark is #131316 with #1C1C21 cards, as Notra draws it.
+ * Meaning keeps colours of its own (`tint`): orange for a cancellation, amber for something
+ * due, blue for a test, green for a confirmed or completed date. Nothing decorative uses
+ * those four, so they can be seen at a glance on the way to a lecture.
+ *
+ * Light is a violet-tinted white; dark is #131316 with #1C1C21 cards. The module colours are
+ * the same in both, so a module is one colour whichever way the phone is set.
  */
 export interface Palette {
   scheme: 'light' | 'dark';
@@ -21,11 +23,13 @@ export interface Palette {
   surface: string;
   /** One step up from a surface — sheets, a pressed row, a secondary button. */
   raised: string;
-  /** A step darker than `canvas`: free time on the day view. */
+  /** Free time on the day view: a quiet fill between classes. */
   band: string;
-  /** Hairlines between rows and on the week grid. */
+  /** Hairlines between rows, and a card's border in the dark. */
   separator: string;
-  /** The line down the day view. */
+  /** The hour lines on the timetable grids: fainter than a row's hairline. */
+  gridLine: string;
+  /** An unticked circle, a sheet's grabber: a mark that should read as empty. */
   rail: string;
   ink: string;
   inkSecondary: string;
@@ -59,23 +63,30 @@ export interface Palette {
   modules: string[];
 }
 
+/**
+ * Module colours, from the timetable design Stephen picked: soft blue, green, purple, teal and
+ * indigo, with a rose and an amber in the same key for the sixth and seventh module.
+ */
+const MODULES = ['#406AC3', '#6AA75E', '#8953BA', '#6AA0B4', '#4D4CB0', '#C14D6B', '#D2853A'];
+
 export const light: Palette = {
   scheme: 'light',
   canvas: '#F6F5FB',
   surface: '#FFFFFF',
   raised: '#EFEDF9',
-  band: '#ECE9F7',
-  separator: '#E3E0F0',
-  rail: '#B9B4D6',
+  band: '#F1EFF8',
+  separator: '#E7E4F2',
+  gridLine: '#EEECF6',
+  rail: '#C4C0DA',
   ink: '#171717',
   inkSecondary: '#55526B',
   inkTertiary: '#6B6885',
-  accent: '#7C4DFF',
+  accent: '#7C3AED',
   onAccent: '#FFFFFF',
   destructive: '#E11D48',
   now: '#F43F5E',
   tint: { due: '#B45309', test: '#2563EB', off: '#EA580C', confirmed: '#059669', offFill: '#C2410C', online: '#16A34A' },
-  modules: ['#406AC3', '#6AA75E', '#8953BA', '#6AA0B4', '#4D4CB0', '#C14D6B', '#D2853A'],
+  modules: MODULES,
 };
 
 export const dark: Palette = {
@@ -83,19 +94,40 @@ export const dark: Palette = {
   canvas: '#131316',
   surface: '#1C1C21',
   raised: '#26252D',
-  band: '#0E0E11',
+  band: '#26252E',
   separator: '#2C2B34',
-  rail: '#3E3C4C',
+  gridLine: '#24232B',
+  rail: '#4A4858',
   ink: '#FAFAFA',
   inkSecondary: '#B4B1C7',
   inkTertiary: '#8A879F',
-  accent: '#A78BFA',
-  onAccent: '#131316',
+  accent: '#8B5CF6',
+  onAccent: '#FFFFFF',
   destructive: '#FF6B81',
   now: '#FF4D6A',
   tint: { due: '#FBBF24', test: '#60A5FA', off: '#FB923C', confirmed: '#34D399', offFill: '#C2410C', online: '#4ADE80' },
-  modules: ['#4C7BDC', '#6DBB62', '#9A62CC', '#5FB0C6', '#5E5CC8', '#D25A78', '#DB9040'],
+  modules: MODULES,
 };
+
+/**
+ * How a card sits on the canvas, as Notra draws its cards: a soft two-layer shadow on light,
+ * and on dark — where a shadow can't be seen — a hairline border with a faint top highlight.
+ * `float` is for what hovers over the page: the tab bar, a menu.
+ */
+export function elevation(p: Palette, level: 'card' | 'float' = 'card'): ViewStyle {
+  if (p.scheme === 'dark') {
+    return {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.separator,
+      boxShadow: level === 'float' ? '0 10px 30px rgba(0, 0, 0, 0.5)' : 'inset 0 1px 0 rgba(255, 255, 255, 0.04)',
+    };
+  }
+  return {
+    boxShadow: level === 'float'
+      ? '0 10px 30px -8px rgba(40, 28, 90, 0.22), 0 2px 6px rgba(23, 23, 28, 0.06)'
+      : '0 1px 2px rgba(23, 23, 28, 0.06), 0 2px 8px -2px rgba(23, 23, 28, 0.08)',
+  };
+}
 
 /** A 4-point scale. Views take their padding from here rather than inventing numbers. */
 export const Space = { xxs: 2, xs: 4, s: 8, m: 12, l: 16, xl: 24, xxl: 32 } as const;

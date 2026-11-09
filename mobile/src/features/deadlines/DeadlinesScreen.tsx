@@ -1,20 +1,18 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { deadlineSectionTitle, DeadlineRules } from '../../core/deadline';
 import { startOfWeek } from '../../core/time';
 import { useModel, useNow, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { BarButton, EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt } from '../../ui/components';
+import { EmptyState, Icon, InlineAction, Label, ListScroll, PillButton, Row, ScreenHeader, Section, Txt } from '../../ui/components';
 import { LoadingScreen } from '../../ui/LoadingScreen';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { useTabBarClearance } from '../../ui/floatingBar';
 import { CardSwap } from '../../ui/CardSwap';
-import { Space, useTheme } from '../../ui/theme';
+import { elevation, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DeadlineCard } from './DeadlineCard';
-import { DeadlineForm, DeadlineRow } from './DeadlineRows';
-import { canEdit } from './Moderation';
+import { DeadlineForm, DeadlineSheet } from './DeadlineRows';
 import { DeadlinesModel } from './DeadlinesModel';
 import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
 
@@ -24,7 +22,6 @@ import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
  */
 export function DeadlinesScreen() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const clearance = useTabBarClearance();
   const services = useServices();
   const week = useModel(useWeekModel());
@@ -82,29 +79,32 @@ export function DeadlinesScreen() {
     .filter((g) => g.deadlines.length > 0);
   // Read from the model each render, so a deadline deleted from its sheet closes the sheet.
   const open = openId ? all.find((d) => d.id === openId) ?? null : null;
-  const [editing, setEditing] = useState(false);
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top + Space.s, borderBottomColor: theme.separator }]}>
-      <Txt type="headline" accessibilityRole="header">Deadlines</Txt>
-      {model.isEmpty ? null : (
-        <View ref={filterButton} collapsable={false} style={styles.filter}>
-          <Pressable
-            onPress={() => setFilterOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Showing ${filterTitle}`}
-            accessibilityHint="Choose a module"
-            hitSlop={10}
-            style={({ pressed }) => [styles.filterLabel, { opacity: pressed ? 0.6 : 1 }]}
-          >
-            <Txt type="caption" color={theme.accent} numberOfLines={1} style={styles.shrink}>{filterTitle}</Txt>
-            <Icon name="dropdown" size={14} color={theme.accent} />
-          </Pressable>
-        </View>
-      )}
-      <View ref={addButton} collapsable={false} style={styles.add}>
-        <IconButton icon="add" label="Add a deadline" disabled={moduleOptions.length === 0} onPress={() => setAdding(true)} />
-      </View>
+    <>
+      <ScreenHeader
+        title="Deadlines"
+        subtitle={model.isEmpty ? undefined : (
+          <View ref={filterButton} collapsable={false} style={styles.filter}>
+            <Pressable
+              onPress={() => setFilterOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Showing ${filterTitle}`}
+              accessibilityHint="Choose a module"
+              hitSlop={10}
+              style={({ pressed }) => [styles.filterLabel, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Txt type="footnote" color={theme.accent} numberOfLines={1} style={[styles.shrink, styles.semibold]}>{filterTitle}</Txt>
+              <Icon name="dropdown" size={14} color={theme.accent} />
+            </Pressable>
+          </View>
+        )}
+        right={
+          <View ref={addButton} collapsable={false}>
+            <PillButton icon="plus" filled label="Add a deadline" disabled={moduleOptions.length === 0} onPress={() => setAdding(true)} />
+          </View>
+        }
+      />
       <DeadlineForm
         visible={adding}
         modules={moduleOptions}
@@ -126,7 +126,7 @@ export function DeadlinesScreen() {
           })),
         ]}
       />
-    </View>
+    </>
   );
 
   if (model.isEmpty && model.isLoading) {
@@ -185,7 +185,12 @@ export function DeadlinesScreen() {
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
               accessibilityLabel={`${key === 'pending' ? 'Pending' : 'Completed'}, ${count}`}
-              style={[styles.tabPill, on ? { backgroundColor: theme.accent } : { backgroundColor: theme.surface }]}
+              style={[
+                styles.tabPill,
+                on
+                  ? { backgroundColor: theme.accent, boxShadow: `0 0 0 4px ${withAlpha(theme.accent, 0.16)}` }
+                  : [{ backgroundColor: theme.surface }, elevation(theme)],
+              ]}
             >
               <Txt type="subheadline" color={on ? theme.onAccent : theme.ink} style={on ? styles.tabOn : undefined}>
                 {key === 'pending' ? 'Pending' : 'Completed'}
@@ -219,8 +224,8 @@ export function DeadlinesScreen() {
               <View key={group.section}>
                 <View style={styles.sectionHeader}>
                   <Txt type="footnote" color={theme.inkSecondary} accessibilityRole="header" style={styles.sectionTitle}>
-                    {deadlineSectionTitle(group.section).toUpperCase()}
-                    {group.section === 'thisWeek' && showsThisWeek ? `  (${week.weekLabel})` : ''}
+                    {deadlineSectionTitle(group.section)}
+                    {group.section === 'thisWeek' && showsThisWeek ? ` · ${week.weekLabel}` : ''}
                   </Txt>
                 </View>
                 {group.deadlines.map((d) => (
@@ -239,74 +244,48 @@ export function DeadlinesScreen() {
         </CardSwap>
       </ListScroll>
 
-      {/* The card, opened: every setting the deadline has, for a student, for its poster and for an admin. */}
-      <Sheet
-        visible={open !== null}
-        title="Deadline"
+      {/* The card, opened: every setting the deadline has, for a student, its poster and an admin. */}
+      <DeadlineSheet
+        deadline={open}
+        moduleName={open ? week.moduleName(open.moduleKey) : ''}
+        standing={open ? model.standing(open) : null}
+        isMine={open ? model.isMine(open) : false}
+        moderation={model.moderation}
+        completed={open ? model.isCompleted(open) : false}
+        detailsProblem={open ? model.details.problem(open) : null}
+        detailsReported={open ? model.details.reported.has(open.id) : false}
         onClose={() => setOpenId(null)}
-        left={open && canEdit(model.moderation, model.isMine(open)) ? <BarButton title="Edit" onPress={() => setEditing(true)} /> : undefined}
-        right={<BarButton title="Done" bold onPress={() => setOpenId(null)} />}
-      >
-        <ListScroll>
-          {open ? (
-            <View style={styles.sheetBody}>
-              <DeadlineRow
-                deadline={open}
-                moduleName={week.moduleName(open.moduleKey)}
-                standing={model.standing(open)}
-                isMine={model.isMine(open)}
-                variant="schedule"
-                actions={{
-                  onConfirm: () => void model.toggleConfirmation(open),
-                  onDispute: () => void model.toggleDispute(open),
-                  onEdit: (fields, details) => void model.edit(open, fields, details),
-                  onRename: (label) => void model.rename(open, label),
-                  onDelete: () => void model.remove(open),
-                  onReport: (reason) => void model.report(open, reason),
-                  onHideAuthor: () => void model.hideAuthor(open),
-                  onSaveDetails: (text) => void model.details.save(open, text),
-                  onReportDetails: () => void model.details.report(open),
-                  onVerify: () => void model.toggleVerified(open),
-                  onToggleCompleted: () => model.toggleCompleted(open),
-                }}
-                detailsProblem={model.details.problem(open)}
-                detailsReported={model.details.reported.has(open.id)}
-                moderation={model.moderation}
-                completed={model.isCompleted(open)}
-              />
-            </View>
-          ) : null}
-        </ListScroll>
-        {open && canEdit(model.moderation, model.isMine(open)) ? (
-          <DeadlineForm
-            visible={editing}
-            editing={{ deadline: open, standing: model.standing(open) }}
-            confirms={model.moderation.canVerify}
-            onClose={() => setEditing(false)}
-            onSubmit={(fields, details) => void model.edit(open, fields, details)}
-          />
-        ) : null}
-      </Sheet>
+        actions={{
+          onConfirm: () => open && void model.toggleConfirmation(open),
+          onDispute: () => open && void model.toggleDispute(open),
+          onEdit: (fields, details) => open && void model.edit(open, fields, details),
+          onRename: (label) => open && void model.rename(open, label),
+          onDelete: () => open && void model.remove(open),
+          onReport: (reason) => open && void model.report(open, reason),
+          onHideAuthor: () => open && void model.hideAuthor(open),
+          onSaveDetails: (text) => open && void model.details.save(open, text),
+          onReportDetails: () => open && void model.details.report(open),
+          onVerify: () => open && void model.toggleVerified(open),
+          onToggleCompleted: () => open && model.toggleCompleted(open),
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  header: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
-  filter: { maxWidth: '80%' },
-  // Level with the title, as ⋯ is on the timetable.
-  add: { position: 'absolute', right: Space.s, bottom: 0 },
-  // Pills as the weekday pills of the design this is after: a white capsule, the selected one filled.
-  tabs: { flexDirection: 'row', gap: Space.s, paddingHorizontal: Space.l, paddingTop: Space.m },
-  tabPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 40, borderRadius: 999 },
+  filter: { maxWidth: '100%' },
+  // Pills as the weekday pills of the design this is after: white capsules, the chosen one violet.
+  tabs: { flexDirection: 'row', gap: Space.m, paddingHorizontal: Space.l, paddingTop: Space.xs, paddingBottom: Space.xs },
+  tabPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 44, borderRadius: 999 },
   tabOn: { fontWeight: '600' },
   tabCount: { fontWeight: '600', fontVariant: ['tabular-nums'] },
-  list: { paddingHorizontal: Space.l, paddingTop: Space.m },
-  sectionHeader: { paddingVertical: Space.s },
-  sectionTitle: { fontWeight: '600', letterSpacing: 0.4 },
-  none: { paddingVertical: Space.xl, gap: Space.xs },
-  sheetBody: { padding: Space.l },
+  list: { paddingHorizontal: Space.l, paddingTop: Space.xs },
+  sectionHeader: { paddingTop: Space.m, paddingBottom: Space.s, paddingHorizontal: Space.xs },
+  sectionTitle: { fontWeight: '600' },
+  none: { paddingVertical: Space.xl, gap: Space.xs, alignItems: 'center' },
   filterLabel: { flexDirection: 'row', alignItems: 'center', gap: Space.xxs },
   shrink: { flexShrink: 1 },
+  semibold: { fontWeight: '600' },
 });

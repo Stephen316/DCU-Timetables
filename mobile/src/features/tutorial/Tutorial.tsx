@@ -10,7 +10,7 @@ import { PrefKey } from '../../data/storage';
 import { usePrefBool, useServices } from '../../state/hooks';
 import { useRoot } from '../../state/root';
 import { Icon, Txt, useReduceMotion } from '../../ui/components';
-import { Radius, Space, useTheme, withAlpha } from '../../ui/theme';
+import { elevation, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { TutorialVideo } from './TutorialVideo';
 
 /**
@@ -410,7 +410,7 @@ function Overlay({ step, position, targets, onPrimary, onSkip, onMissing, draggi
         // Only when there's nothing else to press: VoiceOver must still reach a control the step is for.
         accessibilityViewIsModal={!passThrough && !free}
         onLayout={(e) => setCardHeight(e.nativeEvent.layout.height)}
-        style={[styles.card, { top: cardTop, left: cardLeft, width: cardWidth, backgroundColor: theme.surface, borderColor: theme.separator }]}
+        style={[styles.card, { top: cardTop, left: cardLeft, width: cardWidth, backgroundColor: theme.surface, borderColor: theme.separator }, elevation(theme, 'float')]}
       >
         <Txt type="caption" color={theme.inkTertiary}>{TutorialText.count(position.n, position.total)}</Txt>
         <Txt type="headline" accessibilityRole="header">{title}</Txt>

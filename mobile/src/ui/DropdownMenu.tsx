@@ -1,7 +1,7 @@
 import { RefObject, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Icon, Label, SheetAction, Txt } from './components';
-import { CardInset, Radius, Space, useTheme } from './theme';
+import { CardInset, elevation, Radius, Space, useTheme, withAlpha } from './theme';
 
 /**
  * A menu that drops down from the button that opened it, its right edge under the button's,
@@ -64,7 +64,8 @@ export function DropdownMenu({ visible, anchor, actions, onClose, align = 'right
         accessibilityViewIsModal
         style={[
           styles.menu,
-          { width, backgroundColor: theme.raised, borderColor: theme.separator, opacity: place ? 1 : 0 },
+          { width, backgroundColor: theme.surface, borderColor: theme.separator, opacity: place ? 1 : 0 },
+          elevation(theme, 'float'),
           place ?? { top: 0, left: Space.s },
         ]}
       >
@@ -75,13 +76,13 @@ export function DropdownMenu({ visible, anchor, actions, onClose, align = 'right
               accessibilityRole="menuitem"
               accessibilityState={{ selected: !!action.selected }}
               onPress={() => choose(action)}
-              style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.surface }]}
+              style={({ pressed }) => [styles.row, action.selected && { backgroundColor: withAlpha(theme.accent, theme.scheme === 'dark' ? 0.18 : 0.08) }, pressed && { backgroundColor: theme.raised }]}
             >
               <View style={styles.choice}>
                 {action.icon ? (
                   <Label icon={action.icon} text={action.label} color={action.destructive ? theme.destructive : theme.ink} />
                 ) : (
-                  <Txt numberOfLines={1} style={styles.flex} color={action.destructive ? theme.destructive : theme.ink}>{action.label}</Txt>
+                  <Txt numberOfLines={1} style={[styles.flex, action.selected && styles.semibold]} color={action.destructive ? theme.destructive : action.selected ? theme.accent : theme.ink}>{action.label}</Txt>
                 )}
                 {action.selected ? <Icon name="check" color={theme.accent} /> : null}
               </View>
@@ -98,9 +99,9 @@ const MENU_WIDTH = 260;
 const styles = StyleSheet.create({
   // A card: its rows `CardInset.x` in, its corners concentric with what's in them.
   menu: {
-    position: 'absolute', borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
-    shadowColor: '#000000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+    position: 'absolute', borderRadius: Radius.card, overflow: 'hidden',
   },
+  semibold: { fontWeight: '600' },
   row: { minHeight: 48, justifyContent: 'center', paddingHorizontal: CardInset.x },
   choice: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   flex: { flex: 1 },

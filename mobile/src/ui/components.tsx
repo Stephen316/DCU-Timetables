@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, createContext, isValidElement, ReactNode, Ref, useContext, useEffect, useRef, useState } from 'react';
+import { Children, createContext, isValidElement, ReactNode, Ref, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo, ActivityIndicator, Animated, ColorValue, Easing, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CardInset, concentric, Desktop, MIN_TARGET, Radius, screenCorner, Space, Type, useTheme } from './theme';
+import { CardInset, concentric, Desktop, elevation, MIN_TARGET, Radius, screenCorner, Space, Type, useTheme, withAlpha } from './theme';
+import { elasticScroll } from './elasticScroll';
 
 // MARK: - Icons
 
@@ -17,7 +18,7 @@ const ICONS = {
   calendar: 'calendar-outline',
   today: 'today-outline',
   list: 'list-outline',
-  checklist: 'list',
+  checklist: 'reader-outline',
   alert: 'alert-circle',
   warning: 'warning',
   assignment: 'document-text-outline',
@@ -39,6 +40,12 @@ const ICONS = {
   video: 'videocam-outline',
   undo: 'arrow-undo-outline',
   add: 'add-circle-outline',
+  plus: 'add',
+  shield: 'shield-checkmark-outline',
+  document: 'document-text-outline',
+  help: 'help-buoy-outline',
+  replay: 'play-circle-outline',
+  contrast: 'contrast-outline',
   flag: 'flag-outline',
   hide: 'eye-off-outline',
   show: 'eye-outline',
@@ -152,10 +159,12 @@ export function ListScroll({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const viewport = useRef({ offsetY: 0, height: 0 });
+  // Rubber-banded in the browser too, and still handed to whoever asked for the view.
+  const ref = useMemo(() => elasticScroll(scrollRef), [scrollRef]);
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       <ScrollView
-        ref={scrollRef}
+        ref={ref}
         onLayout={onViewport && ((e) => {
           viewport.current.height = e.nativeEvent.layout.height;
           onViewport(viewport.current.offsetY, viewport.current.height);
@@ -180,8 +189,8 @@ export function ListScroll({
 }
 
 /**
- * A group of rows on the slate surface with slate hairlines, and optional words above and
- * below. `bare` puts the rows straight on the canvas — an introduction, or a button that
+ * A group of rows on a white card (Notra's: a soft shadow on light, a hairline border on
+ * dark), with hairlines between them and optional words above and below. `bare` puts the rows straight on the canvas — an introduction, or a button that
  * stands on its own.
  */
 export function Section({
@@ -195,13 +204,13 @@ export function Section({
     <View style={styles.section}>
       {header ? (
         <Txt type="footnote" color={theme.inkSecondary} style={styles.sectionHeader} accessibilityRole="header">
-          {header.toUpperCase()}
+          {header}
         </Txt>
       ) : null}
       {rows.length > 0 ? (
         // A bare section's buttons stand where a card would, so they curve as the cards round them do.
         <ButtonCorner.Provider value={bare ? Radius.card : outerCorner}>
-          <View style={bare ? undefined : [styles.card, { backgroundColor: theme.surface }]}>
+          <View style={bare ? undefined : [styles.card, { backgroundColor: theme.surface }, elevation(theme)]}>
             {rows.map((row, i) => (
               <View key={isValidElement(row) && row.key != null ? row.key : i}>
                 {i > 0 && !bare ? <View style={[styles.hairline, { backgroundColor: theme.separator }]} /> : null}
@@ -250,19 +259,89 @@ export function Row({
   );
 }
 
-/** A tappable row that reads as an action: accent (or destructive) text, optional icon. */
+/**
+ * A tappable row that reads as an action. With an icon, as Notra lists its settings: the icon
+ * in a tinted rounded square, the words in ink, and a chevron when it opens somewhere else.
+ * Without one, the words alone in the accent, as a link. Destructive rows are red either way.
+ */
 export function ActionRow({
-  title, icon, onPress, destructive, disabled, busy,
-}: { title: string; icon?: IconName; onPress: () => void; destructive?: boolean; disabled?: boolean; busy?: boolean }) {
+  title, icon, onPress, destructive, disabled, busy, tint, chevron, detail,
+}: {
+  title: string;
+  icon?: IconName;
+  onPress: () => void;
+  destructive?: boolean;
+  disabled?: boolean;
+  busy?: boolean;
+  /** The icon's colour, when it isn't the accent: green for "done", say. */
+  tint?: string;
+  /** Opens a page or a sheet, rather than doing the thing there and then. */
+  chevron?: boolean;
+  /** A value on the right, such as the alert time chosen. */
+  detail?: string;
+}) {
   const theme = useTheme();
-  const color = destructive ? theme.destructive : theme.accent;
+  const color = destructive ? theme.destructive : tint ?? theme.accent;
   return (
-    <Row onPress={onPress} disabled={disabled || busy} accessibilityLabel={title}>
+    <Row onPress={onPress} disabled={disabled || busy} accessibilityLabel={detail ? `${title}, ${detail}` : title}>
       <View style={styles.rowLine}>
-        {icon ? <Label icon={icon} text={title} color={color} /> : <Txt color={color}>{title}</Txt>}
-        {busy ? <ActivityIndicator color={theme.inkSecondary} /> : null}
+        {icon ? (
+          <View style={styles.actionLead}>
+            <View style={[styles.iconTile, { backgroundColor: withAlpha(color, theme.scheme === 'dark' ? 0.2 : 0.12) }]}>
+              <Icon name={icon} size={17} color={color} />
+            </View>
+            <Txt color={destructive ? theme.destructive : theme.ink} style={styles.flexText}>{title}</Txt>
+          </View>
+        ) : (
+          <Txt color={color} style={styles.flexText}>{title}</Txt>
+        )}
+        {busy ? (
+          <ActivityIndicator color={theme.inkSecondary} />
+        ) : detail || chevron ? (
+          <View style={styles.actionTrail}>
+            {detail ? <Txt type="subheadline" color={theme.inkSecondary}>{detail}</Txt> : null}
+            {chevron ? <Icon name="forward" size={16} color={theme.inkTertiary} /> : null}
+          </View>
+        ) : null}
       </View>
     </Row>
+  );
+}
+
+/** A person or a module as a round badge: initials in white on a colour. */
+export function Avatar({ text, color, size = 32 }: { text: string; color: string; size?: number }) {
+  return (
+    <View
+      style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}
+      importantForAccessibility="no-hide-descendants"
+      accessibilityElementsHidden
+    >
+      <Text style={[styles.avatarText, { fontSize: size * 0.38 }]} allowFontScaling={false}>{text}</Text>
+    </View>
+  );
+}
+
+/**
+ * A tab's title bar, the same on every tab: the title centred and bold, an optional line under
+ * it, and a control either side. It sits on the canvas with no rule beneath, as Notra's pages
+ * open; the cards below are what set the content apart.
+ */
+export function ScreenHeader({
+  title, subtitle, left, right,
+}: { title: string; subtitle?: ReactNode; left?: ReactNode; right?: ReactNode }) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.screenHeader, { paddingTop: insets.top + Space.xs, backgroundColor: theme.canvas }]}>
+      <View style={styles.screenHeaderSide}>{left}</View>
+      <View style={styles.screenHeaderTitle}>
+        <Txt type="title3" numberOfLines={1} style={styles.bold} accessibilityRole="header">{title}</Txt>
+        {typeof subtitle === 'string' ? (
+          <Txt type="footnote" color={theme.inkSecondary} numberOfLines={1}>{subtitle}</Txt>
+        ) : subtitle ?? null}
+      </View>
+      <View style={[styles.screenHeaderSide, styles.screenHeaderRight]}>{right}</View>
+    </View>
   );
 }
 
@@ -446,6 +525,35 @@ export function BarButton({ title, onPress, disabled, bold }: { title: string; o
   );
 }
 
+/**
+ * A small capsule for a header: "Edit" on a tinted pill, or filled violet while it's the thing
+ * to press next ("Done"). An icon-only one is a circle, as the + for a new deadline is.
+ */
+export function PillButton({
+  title, icon, onPress, filled, disabled, label,
+}: { title?: string; icon?: IconName; onPress: () => void; filled?: boolean; disabled?: boolean; label?: string }) {
+  const theme = useTheme();
+  const ink = filled ? theme.onAccent : theme.accent;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label ?? title}
+      accessibilityState={{ disabled: !!disabled }}
+      hitSlop={8}
+      style={({ pressed }) => [
+        styles.pillButton,
+        !title && styles.pillRound,
+        { backgroundColor: filled ? theme.accent : withAlpha(theme.accent, theme.scheme === 'dark' ? 0.2 : 0.1), opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
+      ]}
+    >
+      {icon ? <Icon name={icon} size={title ? 15 : 20} color={ink} /> : null}
+      {title ? <Txt type="subheadline" color={ink} style={styles.semibold}>{title}</Txt> : null}
+    </Pressable>
+  );
+}
+
 export function IconButton({
   icon, onPress, label, disabled, color, size = 22,
 }: { icon: IconName; onPress: () => void; label: string; disabled?: boolean; color?: string; size?: number }) {
@@ -467,14 +575,13 @@ export function IconButton({
 // MARK: - Controls
 
 /**
- * A segmented control, for a few mutually exclusive choices — drawn as the tab bar is: an
- * accent outline around the chosen segment that slides to the next one.
+ * A segmented control, for a few mutually exclusive choices — drawn as the tab bar and the
+ * Pending / Completed pills are: a violet pill behind the chosen segment, sliding to the next.
  */
 export function Segmented<T extends string>({
   options, value, onChange, label,
 }: { options: { value: T; label: string }[]; value: T; onChange: (value: T) => void; label: string }) {
   const theme = useTheme();
-  const corner = useContext(ButtonCorner);
   const [width, setWidth] = useState(0);
   const segmentWidth = options.length > 0 ? width / options.length : 0;
   const index = Math.max(options.findIndex((option) => option.value === value), 0);
@@ -492,12 +599,9 @@ export function Segmented<T extends string>({
     Animated.timing(offset, { toValue: target, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
   }, [index, segmentWidth, offset]);
 
-  // As the tab bar: white reads on the dark canvas, but would vanish on Solarized Light's cream.
-  const selectedInk = theme.scheme === 'dark' ? '#FFFFFF' : theme.ink;
-
   return (
     <View
-      style={styles.segmented}
+      style={[styles.segmented, { backgroundColor: theme.raised }]}
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       accessibilityRole="radiogroup"
       accessibilityLabel={label}
@@ -505,7 +609,7 @@ export function Segmented<T extends string>({
       {segmentWidth > 0 ? (
         <Animated.View
           pointerEvents="none"
-          style={[styles.segmentOutline, { width: segmentWidth, borderRadius: corner, borderColor: theme.accent, transform: [{ translateX: offset }] }]}
+          style={[styles.segmentPill, { width: segmentWidth, backgroundColor: theme.accent, transform: [{ translateX: offset }] }]}
         />
       ) : null}
       {options.map((option) => {
@@ -518,7 +622,7 @@ export function Segmented<T extends string>({
             accessibilityState={{ selected }}
             style={({ pressed }) => [styles.segment, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Txt type="subheadline" color={selected ? selectedInk : theme.inkSecondary} style={selected ? styles.semibold : undefined}>
+            <Txt type="subheadline" color={selected ? theme.onAccent : theme.inkSecondary} style={selected ? styles.semibold : undefined}>
               {option.label}
             </Txt>
           </Pressable>
@@ -836,7 +940,7 @@ export const styles = StyleSheet.create({
   // A card's worth of air between groups, so each heading reads as starting the next one.
   section: { marginHorizontal: Space.l, marginTop: Space.xl },
   // In line with the text in the card below: `CardInset.x` from its edge.
-  sectionHeader: { marginBottom: Space.xs + 2, marginHorizontal: CardInset.x },
+  sectionHeader: { marginBottom: Space.xs + 2, marginHorizontal: CardInset.x, fontWeight: '600' },
   sectionFooter: { marginTop: Space.xs + 2, marginHorizontal: CardInset.x },
   card: { borderRadius: Radius.card, overflow: 'hidden' },
   hairline: { height: StyleSheet.hairlineWidth, marginLeft: CardInset.x },
@@ -861,11 +965,23 @@ export const styles = StyleSheet.create({
   deadlineMark: { alignItems: 'center', justifyContent: 'center' },
   deadlineMarkText: { color: '#FFFFFF', fontWeight: '800', textAlign: 'center' },
   semibold: { fontWeight: '600' },
+  bold: { fontWeight: '700' },
+  pillButton: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, minHeight: 34, paddingHorizontal: Space.m, borderRadius: 999, marginHorizontal: Space.xs },
+  pillRound: { width: 36, height: 36, paddingHorizontal: 0, justifyContent: 'center' },
+  actionLead: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.m },
+  actionTrail: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  iconTile: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  avatar: { alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#FFFFFF', fontWeight: '700' },
+  screenHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.s, paddingBottom: Space.s, minHeight: 52 },
+  screenHeaderSide: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  screenHeaderRight: { justifyContent: 'flex-end' },
+  screenHeaderTitle: { flexShrink: 1, maxWidth: '64%', alignItems: 'center' },
   barButton: { minHeight: MIN_TARGET, justifyContent: 'center', paddingHorizontal: Space.xs },
   iconButton: { minWidth: MIN_TARGET, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center' },
-  segmented: { flexDirection: 'row' },
-  segment: { flex: 1, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.s },
-  segmentOutline: { position: 'absolute', top: 0, bottom: 0, left: 0, borderWidth: 1 },
+  segmented: { flexDirection: 'row', borderRadius: 999, padding: 3 },
+  segment: { flex: 1, minHeight: MIN_TARGET - 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.s },
+  segmentPill: { position: 'absolute', top: 3, bottom: 3, left: 3, borderRadius: 999 },
   spinner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.s, padding: Space.xl },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.s, padding: Space.xxl },
   emptyAction: { marginTop: Space.m },

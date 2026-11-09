@@ -7,13 +7,14 @@ import {
 import { Lecturer, lecturerDisplayName, lecturerInitials } from '../../core/misc';
 import { locationDisplay } from '../../core/roomLocation';
 import { formatComplete, formatTime, formatWeekdayDayMonth } from '../../core/time';
-import { eventTypeLabel, groupLabelOf, TimetableEvent, titleOf } from '../../core/timetableEvent';
+import { eventTypeLabel, groupLabelOf, shortTitleOf, TimetableEvent, titleOf } from '../../core/timetableEvent';
 import { useModel, useServices } from '../../state/hooks';
 import {
-  ActionRow, ConfirmSheet, DeadlineMark, IconName, Label, LabeledRow, ListScroll, Row, Section, Txt,
+  ActionRow, ConfirmSheet, DeadlineMark, Icon, IconName, Label, LabeledRow, ListScroll, Row, Section, Txt,
 } from '../../ui/components';
-import { Space, useTheme, withAlpha } from '../../ui/theme';
-import { DeadlineForm, DeadlineRow } from '../deadlines/DeadlineRows';
+import { CardInset, elevation, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
+import { DeadlineCard } from '../deadlines/DeadlineCard';
+import { DeadlineForm, DeadlineSheet } from '../deadlines/DeadlineRows';
 import { LectureModel } from './LectureModel';
 import { useTutorial, useTutorialRect, useTutorialTarget } from '../tutorial/Tutorial';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -29,6 +30,11 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
   const theme = useTheme();
   const model = useModel(useMemo(() => new LectureModel(services, event, known), [services, event, known]));
   const [showingForm, setShowingForm] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  // Read from the model each render, so a deadline deleted from its sheet closes the sheet.
+  const open = openId ? model.deadlines.find((d) => d.id === openId) ?? null : null;
+  const tint = moduleTint(theme, event.activity.moduleCode ?? titleOf(event));
+  const room = locationDisplay(event);
   /** Non-null while the "are you sure?" card is up, holding the side being reported. */
   const [pendingReport, setPendingReport] = useState<ReportStance | null>(null);
   const status = model.status;
@@ -80,12 +86,23 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           </Section>
         ) : null}
 
-        <Section>
-          <Row>
-            <Txt type="pageTitle">{titleOf(event)}</Txt>
-            <Txt type="subheadline" color={theme.inkSecondary}>{groupLabelOf(event)}</Txt>
-          </Row>
-        </Section>
+        {/* The class as the timetable draws it: a solid block of its module's colour. */}
+        <View style={[styles.hero, { backgroundColor: tint }, elevation(theme)]} accessible accessibilityRole="header">
+          <Txt type="pageTitle" color="#FFFFFF" style={styles.heroTitle}>{titleOf(event)}</Txt>
+          <Txt type="subheadline" color="rgba(255, 255, 255, 0.85)">{groupLabelOf(event)}</Txt>
+          <View style={styles.heroLine}>
+            <Icon name="calendar" size={15} color="#FFFFFF" />
+            <Txt type="subheadline" color="#FFFFFF" style={styles.bold}>
+              {formatWeekdayDayMonth(event.start)} · {formatTime(event.start)}–{formatTime(event.end)}
+            </Txt>
+          </View>
+          {room !== '—' ? (
+            <View style={styles.heroLine}>
+              <Icon name={event.type === 'onCampus' ? 'place' : 'video'} size={15} color="#FFFFFF" />
+              <Txt type="subheadline" color="#FFFFFF" style={styles.fill}>{room}</Txt>
+            </View>
+          ) : null}
+        </View>
 
         {/* Just under the heading: what's due at this exact class, and nothing else. */}
         {model.dueHere.length > 0 ? (
@@ -106,9 +123,7 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
         ) : null}
 
         <Section header="Class">
-          <LabeledRow label="Time" value={`${formatTime(event.start)}–${formatTime(event.end)}`} />
-          <LabeledRow label="Date" value={formatWeekdayDayMonth(event.start)} />
-          <LabeledRow label="Where" value={locationDisplay(event)} />
+          {/* The time, date and room are on the card above; these are the rest. */}
           <LabeledRow label="Delivery" value={eventTypeLabel(event.type)} />
           {event.activity.moduleCode ? <LabeledRow label="Module" value={event.activity.moduleCode} /> : null}
           <LabeledRow label="Activity" value={event.activity.raw} />
@@ -195,43 +210,35 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
           {model.errorText ? <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.tint.off} /></Row> : null}
         </Section>
 
-        <Section
-          header={`All ${model.moduleKey} dates`}
-          footer={`Shared with everyone taking this module. Confirm the ones you know are right — a deadline is flagged as confirmed once ${CONFIRM_THRESHOLD} people have vouched for it and more say it's right than wrong. You can only edit or remove your own, but anyone can add to the details, and you can give any of them a name only you see.`}
-        >
+        {/* The module's deadlines as the Deadlines tab draws them: a card each, ticked off with its circle. */}
+        <View style={styles.deadlines}>
+          <Txt type="footnote" color={theme.inkSecondary} style={styles.groupHeader} accessibilityRole="header">
+            All {model.moduleKey} dates
+          </Txt>
           {model.isLoading && model.deadlines.length === 0 ? (
-            <Row><ActivityIndicator color={theme.inkSecondary} /></Row>
+            <View style={[styles.note, { backgroundColor: theme.surface }, elevation(theme)]}><ActivityIndicator color={theme.inkSecondary} /></View>
           ) : model.deadlines.length === 0 ? (
-            <Row><Txt color={theme.inkSecondary}>No deadlines shared for {model.moduleKey} yet</Txt></Row>
+            <View style={[styles.note, { backgroundColor: theme.surface }, elevation(theme)]}>
+              <Txt color={theme.inkSecondary}>No deadlines shared for {model.moduleKey} yet</Txt>
+            </View>
           ) : (
             model.deadlines.map((d) => (
-              <DeadlineRow
+              <DeadlineCard
                 key={d.id}
                 deadline={d}
-                standing={model.standing(d)}
-                isMine={model.isMine(d)}
-                variant="module"
-                actions={{
-                  onConfirm: () => void model.toggleConfirmation(d),
-                  onDispute: () => void model.toggleDispute(d),
-                  onEdit: (fields, details) => void model.editDeadline(d, fields, details),
-                  onRename: (label) => void model.renameDeadline(d, label),
-                  onDelete: () => void model.removeDeadline(d),
-                  onReport: (reason) => void model.reportDeadline(d, reason),
-                  onHideAuthor: () => void model.hideAuthor(d),
-                  onSaveDetails: (text) => void model.details.save(d, text),
-                  onReportDetails: () => void model.details.report(d),
-                  onVerify: () => void model.toggleVerified(d),
-                  onToggleCompleted: () => model.toggleCompleted(d),
-                }}
-                detailsProblem={model.details.problem(d)}
-                detailsReported={model.details.reported.has(d.id)}
-                moderation={model.moderation}
+                moduleName={shortTitleOf(event)}
                 completed={model.isCompleted(d)}
+                leaves={false}
+                onToggle={() => model.toggleCompleted(d)}
+                onOpen={() => setOpenId(d.id)}
               />
             ))
           )}
-          <ActionRow title="Add a deadline" icon="add" onPress={() => setShowingForm(true)} />
+        </View>
+        <Section
+          footer={`Shared with everyone taking this module. Confirm the ones you know are right — a deadline is flagged as confirmed once ${CONFIRM_THRESHOLD} people have vouched for it and more say it's right than wrong. You can only edit or remove your own, but anyone can add to the details, and you can give any of them a name only you see.`}
+        >
+          <ActionRow title="Add a deadline" icon="add" chevron onPress={() => setShowingForm(true)} />
         </Section>
       </ListScroll>
 
@@ -241,6 +248,30 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
         defaultDue={DeadlineRules.defaultDue(event)}
         onClose={() => setShowingForm(false)}
         onSubmit={(fields, details) => void model.addDeadline(fields, details)}
+      />
+      <DeadlineSheet
+        deadline={open}
+        moduleName={shortTitleOf(event)}
+        standing={open ? model.standing(open) : null}
+        isMine={open ? model.isMine(open) : false}
+        moderation={model.moderation}
+        completed={open ? model.isCompleted(open) : false}
+        detailsProblem={open ? model.details.problem(open) : null}
+        detailsReported={open ? model.details.reported.has(open.id) : false}
+        onClose={() => setOpenId(null)}
+        actions={{
+          onConfirm: () => open && void model.toggleConfirmation(open),
+          onDispute: () => open && void model.toggleDispute(open),
+          onEdit: (fields, details) => open && void model.editDeadline(open, fields, details),
+          onRename: (label) => open && void model.renameDeadline(open, label),
+          onDelete: () => open && void model.removeDeadline(open),
+          onReport: (reason) => open && void model.reportDeadline(open, reason),
+          onHideAuthor: () => open && void model.hideAuthor(open),
+          onSaveDetails: (text) => open && void model.details.save(open, text),
+          onReportDetails: () => open && void model.details.report(open),
+          onVerify: () => open && void model.toggleVerified(open),
+          onToggleCompleted: () => open && model.toggleCompleted(open),
+        }}
       />
       <ConfirmSheet
         visible={pendingReport !== null}
@@ -289,6 +320,12 @@ const styles = StyleSheet.create({
   bannerLines: { marginLeft: 26, gap: Space.xxs },
   lecturer: { flexDirection: 'row', alignItems: 'center', gap: Space.m },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  hero: { marginHorizontal: Space.l, marginTop: Space.l, borderRadius: Radius.card + 2, padding: Space.l, gap: Space.xs },
+  heroTitle: { fontWeight: '700' },
+  heroLine: { flexDirection: 'row', alignItems: 'center', gap: Space.s, marginTop: Space.xxs },
+  deadlines: { marginHorizontal: Space.l, marginTop: Space.xl },
+  groupHeader: { fontWeight: '600', marginHorizontal: CardInset.x, marginBottom: Space.xs + 2 },
+  note: { borderRadius: Radius.card, padding: Space.l, marginBottom: Space.s, alignItems: 'flex-start' },
   bold: { fontWeight: '600' },
   fill: { flex: 1 },
 });

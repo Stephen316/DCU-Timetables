@@ -1,42 +1,35 @@
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
-import { useRoot } from '../../state/root';
-import { ActionRow, Section, Txt } from '../../ui/components';
-import { Space, useTheme } from '../../ui/theme';
+import { ActionRow, ScreenHeader, Section } from '../../ui/components';
+import { useTheme } from '../../ui/theme';
 import { NotificationsSheet } from '../alerts/NotificationsSheet';
 import { ExportCalendarCard } from '../week/ExportCalendarCard';
 import { useTutorial } from '../tutorial/Tutorial';
 import { AccountSheet } from './AccountSheet';
 
 /**
- * The fourth tab: everything that isn't the timetable or the deadlines. Notifications and
- * calendar export open as sheets from the top of the page; below them is the account itself —
- * who you are, appearance, your ID, the tour, and the way out.
+ * The fourth tab: everything that isn't the timetable or the deadlines. Who's signed in first,
+ * then the timetable's own settings — notifications and calendar export, each opening as a
+ * sheet — then the account itself: appearance, your ID, the tour, and the way out.
  */
 export function AccountScreen() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const { signOut } = useRoot();
   const tutorial = useTutorial();
   const [sheet, setSheet] = useState<'alerts' | 'export' | null>(null);
   useFocusEffect(useCallback(() => tutorial?.signal('accountShown'), [tutorial]));
 
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
-      <View style={[styles.header, { paddingTop: insets.top + Space.s, borderBottomColor: theme.separator }]}>
-        <Txt type="headline" accessibilityRole="header">Account</Txt>
-      </View>
+      <ScreenHeader title="Account" />
       <AccountSheet
         visible
         inline
         onClose={() => undefined}
         top={
           <Section header="Your timetable">
-            <ActionRow title="Notifications" icon="bell" onPress={() => setSheet('alerts')} />
-            <ActionRow title="Export to Calendar" icon="calendar" onPress={() => setSheet('export')} />
-            <ActionRow title="Switch account" icon="swap" onPress={signOut} />
+            <ActionRow title="Notifications" icon="bell" tint={theme.modules[5]} chevron onPress={() => setSheet('alerts')} />
+            <ActionRow title="Export to Calendar" icon="calendar" tint={theme.modules[0]} chevron onPress={() => setSheet('export')} />
           </Section>
         }
       />
@@ -48,5 +41,4 @@ export function AccountScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  header: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
 });

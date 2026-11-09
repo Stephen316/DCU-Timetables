@@ -40,11 +40,12 @@ export const PreviewData = {
 
   /**
    * Today's shape is set relative to the clock: one class already over, the next starting
-   * on the hour (so its highlight window is open), then one reported cancelled.
+   * on the hour (so its highlight window is open), then one reported cancelled. Early or late
+   * in the day the three are held inside teaching hours, 9am to 9pm, as real classes are.
    */
   get today(): TimetableEvent[] {
     const next = new Date();
-    next.setHours(next.getHours() + 1, 0, 0, 0);
+    next.setHours(Math.min(Math.max(next.getHours() + 1, 12), 17), 0, 0, 0);
     const e = PreviewData.event;
     return [
       e('t1', 'Computer Systems', 'CA106[1]OC/L1/01', new Date(next.getTime() - 3 * HOUR), 1, 'GLA.C114', ['Byrne, Ciara']),

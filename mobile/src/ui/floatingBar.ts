@@ -1,5 +1,9 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MIN_TARGET, Space } from './theme';
+import { Space } from './theme';
+
+/** The selected tab's violet disc, and the pale ring round it. */
+const DISC = 40;
+const HALO = 56;
 
 /**
  * The tab bar floats over the screens rather than taking a strip off the bottom of them, so
@@ -7,10 +11,14 @@ import { MIN_TARGET, Space } from './theme';
  * where both the bar and what scrolls beneath it can read them.
  */
 export const FloatingBar = {
-  /** Between the pill's edge and the tabs inside it. */
-  padding: Space.xs,
-  /** A tab is a full touch target; the pill wraps it. */
-  height: MIN_TARGET + Space.xs * 2,
+  disc: DISC,
+  halo: HALO,
+  /** Between the pill's edge and the halo, which is the tallest thing inside it. */
+  padding: Space.s,
+  /** The halo with the padding either side; a tab is the halo's height, past a full touch target. */
+  height: HALO + Space.s * 2,
+  /** How far above the pill the screen fades into the haze behind it. */
+  fade: 64,
 } as const;
 
 /**
@@ -22,8 +30,11 @@ export function floatingBarMargin(bottomInset: number): number {
   return Math.max(bottomInset - Space.s, Space.s);
 }
 
-/** What the bar covers at the foot of the screen, plus room to breathe: pad a list's end by this. */
+/**
+ * What the bar and its haze cover at the foot of the screen: pad a list's end by this, so
+ * scrolled all the way down, its last line rests clear of the fade rather than dissolving in it.
+ */
 export function useTabBarClearance(): number {
   const { bottom } = useSafeAreaInsets();
-  return FloatingBar.height + floatingBarMargin(bottom) + Space.l;
+  return FloatingBar.height + floatingBarMargin(bottom) + FloatingBar.fade;
 }

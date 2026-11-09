@@ -42,7 +42,7 @@ BUTTONS: Start | Skip
 
 
 Step 2 — Your day
-POINTS AT: the day's list of classes
+POINTS AT: the day's grid of classes
 --------------------------------------------------------
 TITLE: Your day
 BODY: View each day's modules here. See locations, class type and lecturers.
@@ -50,18 +50,18 @@ BUTTONS: Next
 
 
 Step 3 — Other days
-POINTS AT: the day's heading ("Wednesday")
+POINTS AT: the row of weekdays across the top of the day's grid
 --------------------------------------------------------
 TITLE: Swipe left to see tomorrow
 ACTION: Animated swiping feature (Next also works: a swipe isn't a button)
 
 
 Step 4 — The week
-POINTS AT: the Week tab at the bottom
+POINTS AT: the Week tab (the calendar icon), second on the bottom bar
 --------------------------------------------------------
 TITLE: See the whole week
-BODY: Tap Week to see the grid.   (drafted by Claude — edit freely)
-ACTION: Tap the button; the timetable switches to the week grid
+BODY: Tap the calendar to see the whole week.   (drafted by Claude — edit freely)
+ACTION: Tap the tab; the week grid opens
 
 
 Step 5 — A class (on the week grid)
@@ -101,7 +101,7 @@ ACTION: Tap Back
 
 
 Step 6 — Deadlines
-POINTS AT: the Deadlines tab at the bottom
+POINTS AT: the Deadlines tab (the page icon), third on the bottom bar
 --------------------------------------------------------
 TITLE: Deadlines
 BODY: Tap here to open them.   (drafted by Claude — edit freely)
@@ -125,7 +125,7 @@ ACTION: Tap the tab
 
 
 Step 8 — Thank you!
-(Back on the timetable, in the week grid the student switched to)
+(Back on the Day tab, where the tour began)
 POINTS AT: nothing (a card in the middle of the screen)
 --------------------------------------------------------
 TITLE: Thank you!

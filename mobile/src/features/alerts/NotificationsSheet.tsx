@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useState } from 'react';
-import { AppState, Linking, StyleSheet, View } from 'react-native';
+import { AppState, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { AlertOffset, AlertSettings, ClassAlerts } from '../../core/classAlerts';
 import { PushKinds, PushKindsRules } from '../../core/webPush';
 import { AlertPermission } from '../../data/alerts';
@@ -8,8 +8,8 @@ import { PrefKey } from '../../data/storage';
 import { WebPush } from '../../data/webPush';
 import { usePrefJSON, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { ActionRow, BarButton, Icon, ListScroll, Row, Section, Sheet, ToggleRow, Txt } from '../../ui/components';
-import { useTheme } from '../../ui/theme';
+import { ActionRow, BarButton, ListScroll, Row, Section, Sheet, ToggleRow, Txt } from '../../ui/components';
+import { Space, useTheme } from '../../ui/theme';
 
 /**
  * Calendar's Default Alert Times, for classes: when each class alerts, and a second alert.
@@ -153,7 +153,10 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
   }
 }
 
-/** Rows with a checkmark, as Appearance does: rows wrap at large text sizes, a picker doesn't. */
+/**
+ * The alert times as pills, as the Deadlines tab's Pending and Completed are: the chosen one
+ * violet, the rest white. They wrap onto as many lines as the text size needs.
+ */
 function OffsetList({ header, selected, onChoose, disabled, footer }: {
   header: string;
   selected: AlertOffset;
@@ -164,22 +167,36 @@ function OffsetList({ header, selected, onChoose, disabled, footer }: {
   const theme = useTheme();
   return (
     <Section header={header} footer={footer}>
-      {ClassAlerts.options.map((offset) => {
-        const label = ClassAlerts.label(offset);
-        const isSelected = offset === selected;
-        return (
-          <Row key={String(offset)} onPress={() => onChoose(offset)} disabled={disabled} accessibilityLabel={isSelected ? `${label}, selected` : label}>
-            <View style={styles.line}>
-              <Txt>{label}</Txt>
-              {isSelected ? <Icon name="check" color={theme.accent} /> : null}
-            </View>
-          </Row>
-        );
-      })}
+      <Row>
+        <View style={styles.pills} accessibilityRole="radiogroup" accessibilityLabel={header}>
+          {ClassAlerts.options.map((offset) => {
+            const label = ClassAlerts.label(offset);
+            const isSelected = offset === selected;
+            return (
+              <Pressable
+                key={String(offset)}
+                onPress={() => onChoose(offset)}
+                disabled={disabled}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected, disabled: !!disabled }}
+                accessibilityLabel={label}
+                style={({ pressed }) => [
+                  styles.pill,
+                  { backgroundColor: isSelected ? theme.accent : theme.raised, opacity: disabled ? 0.45 : pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Txt type="footnote" color={isSelected ? theme.onAccent : theme.ink} style={isSelected ? styles.semibold : undefined}>{label}</Txt>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Row>
     </Section>
   );
 }
 
 const styles = StyleSheet.create({
-  line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.s },
+  pill: { borderRadius: 999, paddingHorizontal: Space.m, paddingVertical: Space.s - 1 },
+  semibold: { fontWeight: '600' },
 });
