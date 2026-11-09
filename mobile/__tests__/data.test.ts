@@ -55,6 +55,10 @@ describe('Allocation resolution', () => {
     expect(p.team).toBe('A1.a');
     expect(decodeProfile(JSON.parse(JSON.stringify(p)))?.team).toBe('A1.a');
     expect(decodeProfile({ name: 'S', group: 'A' })?.team).toBe('');
+    // Saved before teams existed: the list is read again once, not trusted as "no team".
+    expect(decodeProfile({ name: 'S', group: 'A', courseKey: 'EEG1', rosterVersion: 5 })?.rosterVersion).toBe(0);
+    expect(decodeProfile({ name: 'S', group: 'A', team: '', courseKey: 'EEG1', rosterVersion: 5 })?.rosterVersion).toBe(5);
+    expect(decodeProfile({ name: 'S', group: 'A', courseKey: null })?.rosterVersion).toBeNull();
   });
 
   test('a row with no lab group is not an allocation, so the student is left to choose their own', () => {

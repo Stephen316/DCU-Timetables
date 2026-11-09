@@ -133,7 +133,10 @@ export function decodeProfile(value: unknown): StudentProfile | null {
     team: text(v.team),
     courseKey: opt(v.courseKey),
     allocationKey: opt(v.allocationKey),
-    rosterVersion: typeof v.rosterVersion === 'number' ? v.rosterVersion : null,
+    // A profile saved before teams existed has no `team` key at all, which is not the same as
+    // "no team": the class list was never asked. Version 0 matches no saved list, so the next
+    // launch reads it again once (AllocationRefresh.check) and fills the team in.
+    rosterVersion: typeof v.rosterVersion === 'number' ? ('team' in v ? v.rosterVersion : 0) : null,
   };
 }
 
