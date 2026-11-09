@@ -3,13 +3,11 @@ import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Animated, Easing, Linking, Platform, Pressable, StyleSheet, Text,
+  ActivityIndicator, Animated, Linking, Platform, Pressable, StyleSheet, Text,
   useWindowDimensions, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StudentNumber } from '../../core/identity';
-import { errorMessage, isNotSignedIn } from '../../data/rest';
-import { useServices } from '../../state/hooks';
 import { SecondaryButton, Txt, useReduceMotion } from '../../ui/components';
 import { Space } from '../../ui/theme';
 
@@ -20,7 +18,7 @@ const CARD_ASPECT = 85.6 / 54;
 /**
  * A live read counts once this many frames agree. The barcode has no check character, so
  * one frame caught mid-blur could hand over a wrong number that still has the right shape —
- * and it's saved without a second look. Three frames is a tenth of a second on a card held still.
+ * and make it harder to spot a mistake. Three frames is a tenth of a second on a card held still.
  */
 const LIVE_AGREEMENT = 3;
 /** How long the shutter waits for the live scanner before saying it couldn't read the card. */
@@ -30,28 +28,11 @@ const CONFIRMATION_HOLD_MS = 1100;
 
 type CameraStatus = 'starting' | 'running' | 'unavailable' | 'denied';
 type Problem = 'notACard' | 'unreadable';
-/** The number on its way to the server, and whether it has arrived. */
-type Confirmation = { number: string; saved: boolean };
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/**
- * Between signing in and the timetable: the student's number, read from the barcode on
- * their card. "Other methods" returns to account setup for manual entry.
- *
- * A number is saved the moment it's read, and `SavedOverlay` confirms it over
- * the camera. There's no "is this right?" step, and the number can be set only once —
- * after that only an admin can change it — so a misread is stopped before it gets here:
- * `StudentNumber.fromBarcode` refuses anything not shaped like a card's barcode, and a
- * read counts only once `LIVE_AGREEMENT` frames agree.
- *
- * Every read comes from the live scanner, the shutter's included. On iOS, expo-camera can
- * read a still photo for QR codes only (`scanFromURLAsync` uses a QR-only detector), so a
- * photo of the card could never be decoded; the shutter instead waits for the live scanner
- * and says so when nothing comes. No photo is taken, so none is ever stored.
- */
-export function StudentID({ onSaved, onSignOut, onOtherMethods }: { onSaved: (number: string) => void; onSignOut: () => void; onOtherMethods: () => void }) {
-  const { profiles } = useServices();
+/** Reads the card's live Code 39 barcode and returns the number for review. */
+export function StudentID({ onRead, onOtherMethods }: { onRead: (number: string) => void; onOtherMethods: () => void }) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
@@ -62,12 +43,11 @@ export function StudentID({ onSaved, onSignOut, onOtherMethods }: { onSaved: (nu
   /** The shutter was pressed and is waiting on the live scanner. */
   const [capturing, setCapturing] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
 
   /** The number the last frames agreed on, and how many of them. */
   const liveRead = useRef<{ number: string; frames: number } | null>(null);
-  /** A number is being saved — for callbacks that run before the next render. */
+  /** Guards against repeated reads and queued callbacks while leaving the camera. */
   const busy = useRef(false);
   const shutterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The shutter's window saw a Code 39 barcode that wasn't a student card's. */
@@ -96,36 +76,15 @@ export function StudentID({ onSaved, onSignOut, onOtherMethods }: { onSaved: (nu
     setCapturing(false);
   };
 
-  /** Back to lining up a card, after a failed save. */
-  const resume = () => {
-    busy.current = false;
-    liveRead.current = null;
-    setProblem(null);
-  };
-
-  /** Shows the confirmation at once, then saves; the tick lands when the server has it. */
-  const save = async (number: string) => {
+  const confirmRead = async (number: string) => {
     if (busy.current) return;
     busy.current = true;
     endShutter();
     setProblem(null);
-    setSaveError(null);
-    setConfirmation({ number, saved: false });
-    try {
-      await profiles.setStudentID(number);
-      setConfirmation({ number, saved: true });
-      if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await wait(CONFIRMATION_HOLD_MS);
-      onSaved(number);
-    } catch (error) {
-      if (isNotSignedIn(error)) {
-        onSignOut();
-        return;
-      }
-      setConfirmation(null);
-      setSaveError(errorMessage(error, "Couldn't reach the server. Check your connection and try again."));
-      resume();
-    }
+    setConfirmation(number);
+    if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    await wait(CONFIRMATION_HOLD_MS);
+    onRead(number);
   };
 
   const onBarcode = (result: BarcodeScanningResult) => {
@@ -137,14 +96,13 @@ export function StudentID({ onSaved, onSignOut, onOtherMethods }: { onSaved: (nu
     }
     const frames = liveRead.current?.number === number ? liveRead.current.frames + 1 : 1;
     liveRead.current = { number, frames };
-    if (frames >= LIVE_AGREEMENT) void save(number);
+    if (frames >= LIVE_AGREEMENT) void confirmRead(number);
   };
 
   const capture = () => {
     if (status !== 'running' || capturing || busy.current) return;
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setProblem(null);
-    setSaveError(null);
     sawOtherBarcode.current = false;
     setCapturing(true);
     shutterTimer.current = setTimeout(() => {
@@ -165,8 +123,7 @@ export function StudentID({ onSaved, onSignOut, onOtherMethods }: { onSaved: (nu
   const guideW = width * GUIDE_WIDTH_FRACTION;
   const guideH = guideW / CARD_ASPECT;
   const guide = { x: (width - guideW) / 2, y: height * 0.42 - guideH / 2, w: guideW, h: guideH };
-  const message = saveError
-    ?? (problem === 'notACard' ? "That barcode isn't from a DCU student card."
+  const message = (problem === 'notACard' ? "That barcode isn't from a DCU student card."
       : problem === 'unreadable' ? "Couldn't read the barcode. Hold the card still in the frame, tilted away from the light."
         : null);
 
@@ -233,7 +190,7 @@ export function StudentID({ onSaved, onSignOut, onOtherMethods }: { onSaved: (nu
       </View>
 
       {confirmation ? (
-        <SavedOverlay guide={guide} number={confirmation.number} saved={confirmation.saved} reduceMotion={reduceMotion} />
+        <ReadOverlay guide={guide} number={confirmation} reduceMotion={reduceMotion} />
       ) : null}
     </View>
   );
@@ -335,26 +292,15 @@ function GuideOverlay({ guide }: { guide: { x: number; y: number; w: number; h: 
   );
 }
 
-/**
- * The translucent confirmation over the camera: a ring that turns while the number is sent,
- * then closes and a tick springs in when the server has it, with the number underneath so
- * the student sees what was saved.
- */
-function SavedOverlay({ guide, number, saved, reduceMotion }: { guide: Box; number: string; saved: boolean; reduceMotion: boolean }) {
+/** Confirms a successful scan before the review step. */
+function ReadOverlay({ guide, number, reduceMotion }: { guide: Box; number: string; reduceMotion: boolean }) {
   const [appear] = useState(() => new Animated.Value(0));
-  const [spin] = useState(() => new Animated.Value(0));
   const [tick] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     Animated.spring(appear, { toValue: 1, speed: 16, bounciness: reduceMotion ? 0 : 8, useNativeDriver: true }).start();
-    const turning = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
-    turning.start();
-    return () => turning.stop();
-  }, [appear, spin, reduceMotion]);
-
-  useEffect(() => {
-    if (saved) Animated.spring(tick, { toValue: 1, speed: 14, bounciness: reduceMotion ? 0 : 12, useNativeDriver: true }).start();
-  }, [saved, tick, reduceMotion]);
+    Animated.spring(tick, { toValue: 1, speed: 14, bounciness: reduceMotion ? 0 : 12, useNativeDriver: true }).start();
+  }, [appear, tick, reduceMotion]);
 
   const badge = 84;
   const ring = { width: badge, height: badge, borderRadius: badge / 2 };
@@ -366,7 +312,7 @@ function SavedOverlay({ guide, number, saved, reduceMotion }: { guide: Box; numb
     >
       <Animated.View
         accessible
-        accessibilityLabel={saved ? `Student number ${number} saved` : `Saving student number ${number}`}
+        accessibilityLabel={`Student number ${number} scanned`}
         style={[styles.savedCard, {
           opacity: appear,
           transform: [{ scale: reduceMotion ? 1 : appear.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }],
@@ -374,12 +320,6 @@ function SavedOverlay({ guide, number, saved, reduceMotion }: { guide: Box; numb
       >
         <View style={ring}>
           <View style={[StyleSheet.absoluteFill, ring, styles.ringTrack]} />
-          <Animated.View
-            style={[StyleSheet.absoluteFill, ring, styles.ringArc, {
-              opacity: saved ? 0 : 1,
-              transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }],
-            }]}
-          />
           <Animated.View style={[StyleSheet.absoluteFill, ring, styles.ringClosed, { opacity: tick }]} />
           <View style={[StyleSheet.absoluteFill, styles.tickHolder]}>
             <Animated.View
@@ -392,7 +332,7 @@ function SavedOverlay({ guide, number, saved, reduceMotion }: { guide: Box; numb
         </View>
         <View style={styles.savedText}>
           <Txt type="pageTitle" color="#FFFFFF" style={[styles.center, styles.mono]}>{number}</Txt>
-          <Txt type="subheadline" color="rgba(255,255,255,0.8)" style={styles.center}>{saved ? 'Student number saved' : 'Saving…'}</Txt>
+          <Txt type="subheadline" color="rgba(255,255,255,0.8)" style={styles.center}>Student ID scanned</Txt>
         </View>
       </Animated.View>
     </View>
@@ -436,7 +376,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(24,24,30,0.62)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.22)',
   },
   ringTrack: { borderWidth: 5, borderColor: 'rgba(255,255,255,0.25)' },
-  ringArc: { borderWidth: 5, borderColor: 'transparent', borderTopColor: '#FFFFFF', borderRightColor: '#FFFFFF' },
   ringClosed: { borderWidth: 5, borderColor: '#FFFFFF' },
   tickHolder: { alignItems: 'center', justifyContent: 'center' },
   // The classic tick: two sides of a box, turned 45°, nudged up to sit in the ring's centre.

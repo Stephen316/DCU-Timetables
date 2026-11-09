@@ -1,0 +1,154 @@
+/* Compile from mobile with npm run build:setup-css. */
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./button";
+@source "./icon-tabs";
+@custom-variant dark (&:where(.notra-dark, .notra-dark *));
+@theme inline {
+  --color-background: var(--notra-background);
+  --color-foreground: var(--notra-foreground);
+  --color-primary: var(--notra-primary);
+  --color-primary-foreground: var(--notra-primary-foreground);
+  --color-muted: var(--notra-muted);
+  --color-muted-foreground: var(--notra-muted-foreground);
+  --color-border: var(--notra-border);
+  --color-input: var(--notra-input);
+  --color-ring: var(--notra-ring);
+  --color-secondary: var(--notra-secondary);
+  --color-secondary-foreground: var(--notra-foreground);
+  --color-accent: var(--notra-muted);
+  --color-accent-foreground: var(--notra-foreground);
+  --color-destructive: #dc2626;
+  --animate-button-swap-in: button-swap-in 280ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  --animate-button-swap-out: button-swap-out 360ms cubic-bezier(0.45, 0, 0.25, 1) both;
+  --animate-button-dot: button-dot 1s ease-in-out infinite;
+  --animate-button-progress-out: button-progress-out 600ms ease-out both;
+}
+@keyframes button-swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+@keyframes button-swap-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.45em);
+    filter: blur(4px);
+  }
+}
+@keyframes button-dot {
+  0%, 60%, 100% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.3em);
+  }
+}
+@keyframes button-progress-out {
+  0%, 50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.notra-setup, .notra-setup-button {
+  --notra-background: #fff;
+  --notra-foreground: #18181b;
+  --notra-primary: #6d42cf;
+  --notra-primary-foreground: #fff;
+  --notra-muted: #efeff2;
+  --notra-muted-foreground: #52525b;
+  --notra-border: #e4e4e7;
+  --notra-input: #e4e4e7;
+  --notra-ring: #8155da;
+  --notra-secondary: #f4f4f5;
+  /* Notra's depth gradient references this token directly. */
+  --color-primary: var(--notra-primary);
+}
+.notra-setup.notra-dark, .notra-setup-button.notra-dark {
+  --notra-background: #222126;
+  --notra-foreground: #fafafa;
+  --notra-primary: #8055dc;
+  --notra-muted: #303036;
+  --notra-muted-foreground: #c0bfc7;
+  --notra-border: #45444c;
+  --notra-input: #39383f;
+  --notra-secondary: #303036;
+}
+.notra-setup, .notra-setup-button {
+  font-family: system-ui, sans-serif;
+  color: var(--notra-foreground);
+}
+.notra-setup *, .notra-setup-button {
+  box-sizing: border-box;
+}
+.notra-setup [data-slot="icon-tabs-trigger"], .notra-setup-button {
+  font-family: system-ui, sans-serif;
+}
+.notra-setup [data-slot="icon-tabs-trigger"] {
+  border: 0;
+  background: transparent;
+}
+.notra-setup {
+  align-self: center;
+  width: min(100%, calc(100vw - 32px), 480px);
+  padding: 12px;
+  border: 1px solid var(--notra-border);
+  border-radius: 16px;
+  background: var(--notra-background);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 20%);
+}
+.notra-setup [data-slot="icon-tabs-list"] {
+  width: 100%;
+  height: auto;
+  min-height: 36px;
+}
+.notra-setup [data-slot="icon-tabs-trigger"] {
+  min-width: 0;
+  min-height: 32px;
+  padding-inline: 4px;
+}
+.notra-setup [data-slot="icon-tabs-trigger"]:disabled {
+  opacity: 0.6;
+}
+.notra-setup-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 4px;
+}
+.notra-setup-footer > :last-child {
+  margin-inline-start: auto;
+}
+.notra-setup-number {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 375px) {
+  .notra-setup [data-slot="icon-tabs-trigger"] {
+    font-size: 12px;
+  }
+}
+
+@layer theme {
+  :where(.notra-setup-button) {
+    background-color: transparent;
+  }
+}

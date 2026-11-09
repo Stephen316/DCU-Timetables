@@ -1,29 +1,16 @@
-import { ReactElement, ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Icon, PrimaryButton, SecondaryButton, Txt } from '../../ui/components';
+import { Icon, Txt } from '../../ui/components';
+import { SetupButton } from './SetupButton';
 import { Space, useTheme } from '../../ui/theme';
 
-type StepProps = { title: string; children: ReactNode };
-
-export function Step({ children }: StepProps) {
-  return <View style={styles.content}>{children}</View>;
-}
+import type { StepperProps } from './Step';
+export { Step } from './Step';
 
 /** The supplied React Bits stepper's horizontal numbered track, adapted for React Native. */
 export default function Stepper({
   children, step, onStepChange, onFinalStepCompleted,
   backButtonText = 'Back', nextButtonText = 'Continue', showNext = true, nextDisabled, busy,
-}: {
-  children: ReactElement<StepProps>[];
-  step: number;
-  onStepChange: (step: number) => void;
-  onFinalStepCompleted: () => void;
-  backButtonText?: string;
-  nextButtonText?: string;
-  showNext?: boolean;
-  nextDisabled?: boolean;
-  busy?: boolean;
-}) {
+}: StepperProps) {
   const theme = useTheme();
   return (
     <View style={[styles.frame, { backgroundColor: theme.raised, borderColor: theme.separator }]}>
@@ -53,10 +40,10 @@ export default function Stepper({
       </View>
       {children[step - 1]}
       <View style={styles.footer}>
-        {step > 1 ? <SecondaryButton title={backButtonText} disabled={busy} onPress={() => onStepChange(step - 1)} /> : null}
+        {step > 1 ? <SetupButton variant="outline" title={backButtonText} disabled={busy} onPress={() => onStepChange(step - 1)} /> : null}
         {showNext ? (
           <View style={styles.next}>
-            <PrimaryButton
+            <SetupButton
               title={nextButtonText}
               disabled={nextDisabled}
               busy={busy}
@@ -74,7 +61,6 @@ const styles = StyleSheet.create({
   track: { flexDirection: 'row', gap: Space.xs, padding: Space.xs, borderRadius: 10 },
   segment: { flex: 1, minHeight: 44, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: Space.xs, padding: Space.xs, borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
   badge: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { gap: Space.m, padding: Space.l },
   footer: { flexDirection: 'row', gap: Space.s, paddingHorizontal: Space.s, paddingBottom: Space.s },
   next: { flex: 1 },
 });

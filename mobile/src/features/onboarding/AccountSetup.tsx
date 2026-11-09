@@ -1,13 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, TextInput, View } from 'react-native';
 import { StudentNumber } from '../../core/identity';
 import { errorMessage, isNotSignedIn } from '../../data/rest';
 import { useServices } from '../../state/hooks';
-import { Icon, ListScroll, SecondaryButton, Txt } from '../../ui/components';
+import { Icon, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 import Stepper, { Step } from './Stepper';
 import { StudentID } from './StudentID';
+import { SetupSurface } from './SetupSurface';
+import { SetupButton } from './SetupButton';
 
 const PLUS_PROMO = 'https://info.dcutimetables.app/purchase/';
 
@@ -76,32 +78,37 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
 
   if (checking) {
     return (
-      <ListScroll contentStyle={styles.screen}>
-        <View style={styles.status}>
+      <SetupSurface>
+        <View style={[styles.status, { backgroundColor: theme.raised }]}>
           {profileError ? (
             <>
               <Txt accessibilityLiveRegion="polite">{profileError}</Txt>
-              <SecondaryButton title="Try again" onPress={() => { setProfileError(null); setAttempt(attempt + 1); }} />
-              <SecondaryButton title="Sign out" onPress={onSignOut} />
+              <SetupButton variant="outline" title="Try again" onPress={() => { setProfileError(null); setAttempt(attempt + 1); }} />
+              <SetupButton variant="outline" title="Sign out" onPress={onSignOut} />
             </>
           ) : <ActivityIndicator accessibilityLabel="Checking account" color={theme.inkSecondary} />}
         </View>
-      </ListScroll>
+      </SetupSurface>
     );
   }
 
   if (camera) {
-    return <StudentID onSaved={onSaved} onSignOut={onSignOut} onOtherMethods={() => { setManual(true); setCamera(false); }} />;
+    return (
+      <StudentID
+        onRead={(scanned) => { setEntry(scanned); setCamera(false); setStep(4); }}
+        onOtherMethods={() => { setManual(true); setCamera(false); }}
+      />
+    );
   }
 
   return (
-    <ListScroll contentStyle={styles.screen}>
+    <SetupSurface>
       <Stepper
         step={step}
         onStepChange={setStep}
         onFinalStepCompleted={() => void saveNumber()}
         backButtonText="Back"
-        nextButtonText={step === 2 && hasPlus ? 'Continue with Plus' : 'Continue'}
+        nextButtonText={step === 4 ? 'Complete setup' : step === 2 && hasPlus ? 'Continue with Plus' : 'Continue'}
         showNext={step !== 3 || manual}
         nextDisabled={(step === 2 && plan === 'checking') || (step === 3 && number === null)}
         busy={saving}
@@ -129,7 +136,7 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
           {plan === 'checking' ? <Txt type="footnote" accessibilityLiveRegion="polite">Checking your plan…</Txt> : null}
           {plan === 'unavailable' ? <Txt type="footnote" accessibilityLiveRegion="polite">Couldn’t check your plan. You can still continue setup.</Txt> : null}
           {!hasPlus && plan !== 'checking' ? (
-            <SecondaryButton title="Explore Plus" onPress={() => {
+            <SetupButton variant="outline" title="Explore Plus" onPress={() => {
               setLinkError(false);
               void Linking.openURL(PLUS_PROMO).catch(() => setLinkError(true));
             }} />
@@ -146,7 +153,7 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
                 autoCorrect={false}
                 editable={!saving}
                 onChangeText={(value) => { setEntry(value); setSaveError(null); }}
-                onSubmitEditing={() => void saveNumber()}
+                onSubmitEditing={() => { if (number) setStep(4); }}
                 placeholder="A00000000"
                 placeholderTextColor={theme.inkTertiary}
                 returnKeyType="done"
@@ -154,38 +161,34 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
                 value={entry}
               />
               <Txt type="footnote" color={theme.inkSecondary}>Enter the letter and eight digits from your student ID. Once saved, only an admin can change it.</Txt>
-              {saveError ? <Txt accessibilityLiveRegion="polite">{saveError}</Txt> : null}
-              <SecondaryButton title="Use camera" disabled={saving} onPress={() => setCamera(true)} />
+              <SetupButton variant="outline" title="Use camera" disabled={saving} onPress={() => setCamera(true)} />
             </>
           ) : (
             <>
               <Txt type="title3" accessibilityRole="header">Take a photo of your student ID</Txt>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setCamera(true)}
-                style={({ pressed }) => [styles.camera, { backgroundColor: theme.accent, opacity: pressed ? 0.8 : 1 }]}
-              >
-                <Ionicons name="camera-outline" size={20} color={theme.onAccent} />
-                <Txt type="headline" color={theme.onAccent}>Open camera</Txt>
-              </Pressable>
-              <SecondaryButton title="Other methods" onPress={() => setManual(true)} />
+              <SetupButton title="Open camera" icon={<Ionicons name="camera-outline" size={18} />} onPress={() => setCamera(true)} />
+              <SetupButton variant="outline" title="Other methods" onPress={() => setManual(true)} />
             </>
           )}
         </Step>
+        <Step title="Review">
+          <Txt type="title3" accessibilityRole="header">Review your setup</Txt>
+          <Txt color={theme.inkSecondary}>{hasPlus ? 'Plus plan' : plan === 'standard' ? 'Standard plan' : 'Plan unavailable'}</Txt>
+          <Txt color={theme.inkSecondary}>Student number {number}</Txt>
+          {saveError ? <Txt accessibilityLiveRegion="polite">{saveError}</Txt> : null}
+        </Step>
       </Stepper>
-      <Pressable accessibilityRole="button" disabled={saving} onPress={onSignOut} style={styles.signOut}>
-        <Txt type="footnote" color={theme.inkSecondary}>Sign out</Txt>
-      </Pressable>
-    </ListScroll>
+      <View style={styles.signOut}>
+        <SetupButton variant="ghost" title="Sign out" disabled={saving} onPress={onSignOut} />
+      </View>
+    </SetupSurface>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flexGrow: 1, justifyContent: 'center', padding: Space.l },
   signOut: { alignSelf: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: Space.l },
-  status: { alignSelf: 'center', width: '100%', maxWidth: 440, gap: Space.m },
+  status: { alignSelf: 'center', width: '100%', maxWidth: 440, gap: Space.m, padding: Space.l, borderRadius: 12 },
   plan: { flexDirection: 'row', alignItems: 'center', gap: Space.m, padding: Space.m, borderWidth: 1, borderRadius: 8 },
   planText: { flex: 1, gap: Space.xs },
   input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: Space.m, fontSize: 17 },
-  camera: { minHeight: 48, borderRadius: 8, padding: Space.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.s },
 });
