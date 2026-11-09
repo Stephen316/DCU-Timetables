@@ -1,24 +1,24 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { deadlineSectionTitle, DeadlineRules, DeadlineSection } from '../../core/deadline';
+import { deadlineSectionTitle, DeadlineRules } from '../../core/deadline';
 import { startOfWeek } from '../../core/time';
 import { useModel, useNow, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Txt, useReduceMotion } from '../../ui/components';
+import { BarButton, EmptyState, Icon, IconButton, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt } from '../../ui/components';
 import { LoadingScreen } from '../../ui/LoadingScreen';
 import { DropdownMenu } from '../../ui/DropdownMenu';
 import { useTabBarClearance } from '../../ui/floatingBar';
-import { isNewUI } from '../../ui/newUI';
 import { CardSwap } from '../../ui/CardSwap';
-import { ContextMeter } from '../../ui/ContextMeter';
-import { RollingCounter } from '../../ui/RollingCounter';
-import { Slingshot } from '../../ui/Slingshot';
-import { CardInset, Radius, Space, Type, useTheme } from '../../ui/theme';
+import { Space, useTheme } from '../../ui/theme';
+import { DeadlineCard } from './DeadlineCard';
 import { DeadlineForm, DeadlineRow } from './DeadlineRows';
+import { canEdit } from './Moderation';
 import { DeadlinesModel } from './DeadlinesModel';
 import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
+import { PlusPrompt } from '../payment/PlusPrompt';
+import { plusModel } from '../payment/PlusModel';
 
 /**
  * Every assignment, quiz and exam the student's modules have, soonest first. The timetable
@@ -31,6 +31,7 @@ export function DeadlinesScreen() {
   const services = useServices();
   const week = useModel(useWeekModel());
   const model = useModel(useMemo(() => new DeadlinesModel(services), [services]));
+  const plus = useModel(plusModel(services));
   /** Modules to ask about, from the timetable that's already loaded. */
   const modules = week.loadedModuleKeys;
 
@@ -63,42 +64,28 @@ export function DeadlinesScreen() {
   const now = useNow();
   const showsThisWeek = !!week.weekLabel && week.weekStart?.getTime() === startOfWeek(now).getTime();
 
-  // A new deadline is brought into view and ringed for a moment: further down a long list,
-  // closing the form would otherwise leave the screen as it was, as if adding had failed.
-  // Each layout is relative to its parent, so a row's place in the list is the sum of three.
-  const reduceMotion = useReduceMotion();
-  const scroll = useRef<ScrollView>(null);
-  const viewport = useRef({ offsetY: 0, height: 0 });
-  const cardY = useRef(0);
-  const sectionY = useRef(new Map<DeadlineSection, number>());
-  const rowLayout = useRef(new Map<string, { y: number; height: number }>());
-  const toReveal = useRef<string | null>(null);
-  // The ring shows round the newest addition until its fade has run once.
-  const [ringDone, setRingDone] = useState<string | null>(null);
-  const ringed = model.justAdded !== ringDone ? model.justAdded : null;
-  const clearRing = useCallback(() => setRingDone(model.justAdded), [model.justAdded]);
-  const reveal = () => {
-    const id = toReveal.current;
-    const group = id ? model.sections.find((g) => g.deadlines.some((d) => d.id === id)) : undefined;
-    const row = id ? rowLayout.current.get(id) : undefined;
-    const top = group ? sectionY.current.get(group.section) : undefined;
-    if (!row || top === undefined) return; // Not laid out yet: the layout that is still to come calls this again.
-    toReveal.current = null;
-    const y = cardY.current + top + row.y;
-    const { offsetY, height } = viewport.current;
-    if (y >= offsetY && y + row.height <= offsetY + height) return;
-    scroll.current?.scrollTo({ y: Math.max(0, y - Space.l), animated: !reduceMotion });
-  };
+  // A new deadline is announced to a screen reader; it lands in Pending, at the top of its day.
   useEffect(() => {
     const id = model.justAdded;
     if (!id) return;
-    toReveal.current = id;
     const added = model.sections.flatMap((g) => g.deadlines).find((d) => d.id === id);
     if (added) AccessibilityInfo.announceForAccessibility(`Added ${added.title}`);
-    reveal();
     // Only a new id is a new arrival; the sections it reads are as they were when it was added.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.justAdded]);
+
+  // Pending and Completed are one list split by this student's own ticks.
+  const [tab, setTab] = useState<'pending' | 'completed'>('pending');
+  const [openId, setOpenId] = useState<string | null>(null);
+  const all = model.sections.flatMap((g) => g.deadlines);
+  const completedCount = all.filter((d) => model.isCompleted(d)).length;
+  const pendingCount = all.length - completedCount;
+  const groups = model.sections
+    .map((g) => ({ ...g, deadlines: g.deadlines.filter((d) => model.isCompleted(d) === (tab === 'completed')) }))
+    .filter((g) => g.deadlines.length > 0);
+  // Read from the model each render, so a deadline deleted from its sheet closes the sheet.
+  const open = openId ? all.find((d) => d.id === openId) ?? null : null;
+  const [editing, setEditing] = useState(false);
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + Space.s, borderBottomColor: theme.separator }]}>
@@ -174,13 +161,16 @@ export function DeadlinesScreen() {
     return (
       <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
         {header}
+        <PlusPrompt modules={modules} />
         <EmptyState
           icon="running"
           title="Nothing due"
           message={
-            modules.length === 0
-              ? 'Once your timetable loads, deadlines your classmates share will appear here.'
-              : 'Nobody has shared an assignment, quiz or exam for your modules yet. Tap + to add the first one.'
+            plus.locked
+              ? 'Deadlines you add appear here. Plus shows the ones your classmates share.'
+              : modules.length === 0
+                ? 'Once your timetable loads, deadlines your classmates share will appear here.'
+                : 'Nobody has shared an assignment, quiz or exam for your modules yet. Tap + to add the first one.'
           }
         />
       </View>
@@ -190,170 +180,140 @@ export function DeadlinesScreen() {
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       {header}
+      <View style={styles.tabs} accessibilityRole="tablist">
+        {(['pending', 'completed'] as const).map((key) => {
+          const on = tab === key;
+          const count = key === 'pending' ? pendingCount : completedCount;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => setTab(key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+              accessibilityLabel={`${key === 'pending' ? 'Pending' : 'Completed'}, ${count}`}
+              style={[styles.tabPill, on ? { backgroundColor: theme.accent } : { backgroundColor: theme.surface }]}
+            >
+              <Txt type="subheadline" color={on ? theme.onAccent : theme.ink} style={on ? styles.tabOn : undefined}>
+                {key === 'pending' ? 'Pending' : 'Completed'}
+              </Txt>
+              <Txt type="caption" color={on ? theme.onAccent : theme.inkSecondary} style={styles.tabCount}>{count}</Txt>
+            </Pressable>
+          );
+        })}
+      </View>
       <ListScroll
-        scrollRef={scroll}
-        onViewport={(offsetY, height) => {
-          viewport.current = { offsetY, height };
-        }}
         refreshing={model.isLoading}
         onRefresh={() => void model.reload()}
-        // The count is the point of the tab, so it stays on screen while the list scrolls.
-        footer={
-          <View style={[styles.summary, { backgroundColor: theme.surface, borderTopColor: theme.separator, paddingBottom: Space.s + clearance }]}>
-            {isNewUI() ? (
-              <View style={styles.upcoming} accessible accessibilityLabel={`${model.total} upcoming`}>
-                <RollingCounter value={model.total} color={theme.ink} style={[Type.caption, styles.count]} />
-                <Txt type="caption" color={theme.inkSecondary}>upcoming</Txt>
-              </View>
-            ) : (
-              <Txt type="caption" color={theme.inkSecondary}>{model.total} upcoming</Txt>
-            )}
-            {isNewUI() && model.total > 0 ? (
-              <ContextMeter
-                label="Done"
-                value={model.sections.reduce((n, g) => n + g.deadlines.filter((d) => model.isCompleted(d)).length, 0)}
-                total={model.total}
-                color={theme.tint.confirmed}
-              />
-            ) : null}
-            {model.testCount > 0 ? <Label icon="test" text={`${model.testCount} sat in class`} type="caption" color={theme.tint.test} /> : null}
-          </View>
-        }
+        contentStyle={{ paddingBottom: clearance }}
       >
-        {isNewUI() ? <Slingshot onRelease={() => void model.reload()} busy={model.isLoading} /> : null}
+        <PlusPrompt modules={modules} />
         {model.errorText ? (
           <Section>
             <Row><Label icon="warning" text={model.errorText} type="caption" color={theme.inkSecondary} /></Row>
           </Section>
         ) : null}
-        {/* One card, a section each, split by hairlines — the same panel as the desktop rail's. */}
-        <CardSwap swapKey={model.moduleFilter ?? 'all'}>
-        <View
-          style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}
-          onLayout={(e) => {
-            cardY.current = e.nativeEvent.layout.y;
-            reveal();
-          }}
-        >
-          {model.sections.map((group, i) => (
-            <View
-              key={group.section}
-              style={[styles.sectionBox, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator }]}
-              onLayout={(e) => {
-                sectionY.current.set(group.section, e.nativeEvent.layout.y);
-                reveal();
-              }}
-            >
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitle}>
-                  <Txt type="headline" accessibilityRole="header">{deadlineSectionTitle(group.section)}</Txt>
-                  {group.section === 'thisWeek' && showsThisWeek ? (
-                    <Txt type="footnote" color={theme.inkSecondary}>({week.weekLabel})</Txt>
-                  ) : null}
-                </View>
-                {isNewUI() ? (
-                  <RollingCounter
-                    value={group.deadlines.length}
-                    color={group.section === 'today' ? theme.tint.due : theme.accent}
-                    style={[Type.subheadline, styles.count]}
-                    accessibilityLabel={`${group.deadlines.length} due`}
-                  />
-                ) : (
-                  <Txt
-                    type="subheadline"
-                    color={group.section === 'today' ? theme.tint.due : theme.accent}
-                    style={styles.count}
-                    accessibilityLabel={`${group.deadlines.length} due`}
-                  >
-                    {group.deadlines.length}
-                  </Txt>
-                )}
+        <CardSwap swapKey={`${model.moduleFilter ?? 'all'}-${tab}`}>
+          <View style={styles.list}>
+            {groups.length === 0 ? (
+              <View style={styles.none}>
+                <Txt type="title3">{tab === 'pending' ? 'All caught up' : 'Nothing completed yet'}</Txt>
+                <Txt type="subheadline" color={theme.inkSecondary}>
+                  {tab === 'pending' ? 'Nothing left to hand in.' : 'Tick off a deadline with its circle and it moves here.'}
+                </Txt>
               </View>
-              {group.deadlines.map((d) => (
-                <View
-                  key={d.id}
-                  onLayout={(e) => {
-                    const { y, height } = e.nativeEvent.layout;
-                    rowLayout.current.set(d.id, { y, height });
-                    reveal();
-                  }}
-                >
-                <DeadlineRow
-                  deadline={d}
-                  moduleName={week.moduleName(d.moduleKey)}
-                  standing={model.standing(d)}
-                  isMine={model.isMine(d)}
-                  variant="schedule"
-                  showDate={group.section !== 'today' && group.section !== 'tomorrow'}
-                  actions={{
-                    onConfirm: () => void model.toggleConfirmation(d),
-                    onDispute: () => void model.toggleDispute(d),
-                    onEdit: (fields, details) => void model.edit(d, fields, details),
-                    onRename: (label) => void model.rename(d, label),
-                    onDelete: () => void model.remove(d),
-                    onReport: (reason) => void model.report(d, reason),
-                    onHideAuthor: () => void model.hideAuthor(d),
-                    onSaveDetails: (text) => void model.details.save(d, text),
-                    onReportDetails: () => void model.details.report(d),
-                    onVerify: () => void model.toggleVerified(d),
-                    onToggleCompleted: () => model.toggleCompleted(d),
-                  }}
-                  detailsProblem={model.details.problem(d)}
-                  detailsReported={model.details.reported.has(d.id)}
-                  moderation={model.moderation}
-                  completed={model.isCompleted(d)}
-                />
-                {ringed === d.id ? <NewRowRing onDone={clearRing} /> : null}
+            ) : null}
+            {groups.map((group) => (
+              <View key={group.section}>
+                <View style={styles.sectionHeader}>
+                  <Txt type="footnote" color={theme.inkSecondary} accessibilityRole="header" style={styles.sectionTitle}>
+                    {deadlineSectionTitle(group.section).toUpperCase()}
+                    {group.section === 'thisWeek' && showsThisWeek ? `  (${week.weekLabel})` : ''}
+                  </Txt>
                 </View>
-              ))}
-            </View>
-          ))}
-        </View>
+                {group.deadlines.map((d) => (
+                  <DeadlineCard
+                    key={d.id}
+                    deadline={d}
+                    moduleName={week.moduleName(d.moduleKey)}
+                    completed={model.isCompleted(d)}
+                    onToggle={() => model.toggleCompleted(d)}
+                    onOpen={() => setOpenId(d.id)}
+                  />
+                ))}
+              </View>
+            ))}
+          </View>
         </CardSwap>
       </ListScroll>
-    </View>
-  );
-}
 
-/**
- * A ring that lights round a just-added row and fades, once the list has had a moment to
- * scroll it into view. A fade rather than movement, so it stays with Reduce Motion on.
- */
-function NewRowRing({ onDone }: { onDone: () => void }) {
-  const theme = useTheme();
-  const [opacity] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    const ring = Animated.sequence([
-      Animated.delay(250),
-      Animated.timing(opacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: false }),
-      Animated.delay(1200),
-      Animated.timing(opacity, { toValue: 0, duration: 800, easing: Easing.in(Easing.quad), useNativeDriver: false }),
-    ]);
-    ring.start(({ finished }) => finished && onDone());
-    return () => ring.stop();
-  }, [opacity, onDone]);
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[styles.ring, { borderColor: theme.accent, opacity }]}
-    />
+      {/* The card, opened: every setting the deadline has, for a student, for its poster and for an admin. */}
+      <Sheet
+        visible={open !== null}
+        title="Deadline"
+        onClose={() => setOpenId(null)}
+        left={open && canEdit(model.moderation, model.isMine(open)) ? <BarButton title="Edit" onPress={() => setEditing(true)} /> : undefined}
+        right={<BarButton title="Done" bold onPress={() => setOpenId(null)} />}
+      >
+        <ListScroll>
+          {open ? (
+            <View style={styles.sheetBody}>
+              <DeadlineRow
+                deadline={open}
+                moduleName={week.moduleName(open.moduleKey)}
+                standing={model.standing(open)}
+                isMine={model.isMine(open)}
+                variant="schedule"
+                actions={{
+                  onConfirm: () => void model.toggleConfirmation(open),
+                  onDispute: () => void model.toggleDispute(open),
+                  onEdit: (fields, details) => void model.edit(open, fields, details),
+                  onRename: (label) => void model.rename(open, label),
+                  onDelete: () => void model.remove(open),
+                  onReport: (reason) => void model.report(open, reason),
+                  onHideAuthor: () => void model.hideAuthor(open),
+                  onSaveDetails: (text) => void model.details.save(open, text),
+                  onReportDetails: () => void model.details.report(open),
+                  onVerify: () => void model.toggleVerified(open),
+                  onToggleCompleted: () => model.toggleCompleted(open),
+                }}
+                detailsProblem={model.details.problem(open)}
+                detailsReported={model.details.reported.has(open.id)}
+                moderation={model.moderation}
+                completed={model.isCompleted(open)}
+              />
+            </View>
+          ) : null}
+        </ListScroll>
+        {open && canEdit(model.moderation, model.isMine(open)) ? (
+          <DeadlineForm
+            visible={editing}
+            editing={{ deadline: open, standing: model.standing(open) }}
+            confirms={model.moderation.canVerify}
+            onClose={() => setEditing(false)}
+            onSubmit={(fields, details) => void model.edit(open, fields, details)}
+          />
+        ) : null}
+      </Sheet>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  ring: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: Radius.control, borderWidth: 2 },
   header: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingBottom: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   filter: { maxWidth: '80%' },
   // Level with the title, as ⋯ is on the timetable.
   add: { position: 'absolute', right: Space.s, bottom: 0 },
-  card: { marginHorizontal: Space.l, marginTop: Space.l, borderRadius: Radius.card, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  sectionBox: { paddingHorizontal: CardInset.x, paddingVertical: CardInset.y, gap: Space.s },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.s },
-  sectionTitle: { flexDirection: 'row', alignItems: 'baseline', gap: Space.xs, flexShrink: 1 },
-  count: { fontWeight: '600', fontVariant: ['tabular-nums'] },
-  upcoming: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  // Pills as the weekday pills of the design this is after: a white capsule, the selected one filled.
+  tabs: { flexDirection: 'row', gap: Space.s, paddingHorizontal: Space.l, paddingTop: Space.m },
+  tabPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 40, borderRadius: 999 },
+  tabOn: { fontWeight: '600' },
+  tabCount: { fontWeight: '600', fontVariant: ['tabular-nums'] },
+  list: { paddingHorizontal: Space.l, paddingTop: Space.m },
+  sectionHeader: { paddingVertical: Space.s },
+  sectionTitle: { fontWeight: '600', letterSpacing: 0.4 },
+  none: { paddingVertical: Space.xl, gap: Space.xs },
+  sheetBody: { padding: Space.l },
   filterLabel: { flexDirection: 'row', alignItems: 'center', gap: Space.xxs },
   shrink: { flexShrink: 1 },
-  summary: { flexDirection: 'row', justifyContent: 'center', gap: Space.l, paddingVertical: Space.s, borderTopWidth: StyleSheet.hairlineWidth },
 });

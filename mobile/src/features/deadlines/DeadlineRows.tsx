@@ -272,7 +272,7 @@ function CompletedButton({ completed, onPress }: { completed: boolean; onPress: 
  * The green wash Mark done leaves behind, drawn left to right with a tick riding its leading
  * edge. The edge fades as it reaches the far side, so the row lands on its completed colours.
  */
-function CompletionSweep({ progress }: { progress: Animated.Value }) {
+export function CompletionSweep({ progress }: { progress: Animated.Value }) {
   const theme = useTheme();
   const done = theme.tint.confirmed;
   const width = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
