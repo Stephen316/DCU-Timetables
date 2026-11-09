@@ -95,8 +95,6 @@ export function Ask() {
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
-  // What to do with the file if it is a class list: chosen here, with the file, and sent with it.
-  const [rosterMode, setRosterMode] = useState<"auto" | "replace" | "add">("auto");
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   // What is being waited on, and since when — drives the progress line in the transcript.
@@ -222,7 +220,7 @@ export function Ask() {
     form.set("programme", programme);
     form.set("module", moduleKey);
     form.set("history", JSON.stringify(historyBefore));
-    if (sending) { form.set("file", sending); form.set("rosterMode", rosterMode); }
+    if (sending) form.set("file", sending);
     if (correcting) form.set("document", JSON.stringify(correcting.proposal));
     setDraft("");
     choose(null);
@@ -448,7 +446,7 @@ export function Ask() {
                   <span className="attach-actions">
                     <button type="button" className="link" onClick={() => setPreviewing(true)}
                       aria-label={`Preview ${file.name}`}>Preview</button>
-                    <button type="button" className="link" onClick={() => { choose(null); setRosterMode("auto"); }} disabled={busy}
+                    <button type="button" className="link" onClick={() => choose(null)} disabled={busy}
                       aria-label={`Remove ${file.name}`}>Remove</button>
                   </span>
                   {previewing && <FilePreview file={file} onClose={() => setPreviewing(false)} />}
@@ -457,24 +455,6 @@ export function Ask() {
                 <span>{fileError}</span>
               )}
             </div>
-          )}
-          {file && (
-            <fieldset className="attach-mode" disabled={busy}>
-              <legend>If this is a class list</legend>
-              <label className="choice">
-                <input type="radio" name="roster-mode" checked={rosterMode === "auto"} onChange={() => setRosterMode("auto")} />
-                <span>Decide for me — add when the file has no lab groups, otherwise replace</span>
-              </label>
-              <label className="choice">
-                <input type="radio" name="roster-mode" checked={rosterMode === "replace"} onChange={() => setRosterMode("replace")} />
-                <span>Replace the programme&rsquo;s class list — students not in this file are removed</span>
-              </label>
-              <label className="choice">
-                <input type="radio" name="roster-mode" checked={rosterMode === "add"} onChange={() => setRosterMode("add")} />
-                <span>Add to the existing list — students are matched by ID, then name; what the file gives replaces
-                  what was there, what it leaves empty is kept, and anyone new is added</span>
-              </label>
-            </fieldset>
           )}
           {activeDoc && !file && (
             <p className="correcting">
@@ -588,7 +568,7 @@ function ProposalCard({ item, others, onAccept, onChange, onDiscard, disabled }:
       {open && (
         <div className="saved-body">
           {p.kind === "split" ? <SplitPanel p={p} />
-            : p.kind === "roster" ? <RosterPanel p={p} locked={item.status !== "open"}
+            : p.kind === "roster" ? <RosterPanel p={p} locked={item.status !== "open"} onMode={(mode) => onChange({ ...p, mode })}
               onMatches={(matches) => onChange({ ...p, matches })} />
             : p.kind === "change" ? <ChangePanel p={p} />
             : p.kind === "heading" ? <HeadingPanel p={p} />
@@ -787,8 +767,8 @@ function SchedulePanel({ p }: { p: Extract<Proposal, { kind: "schedule" }> }) {
 
 /// Names are shown here, to the administrator, and nowhere else: what is saved is each name
 /// reduced to a key, and what a phone downloads has no names at all.
-function RosterPanel({ p, locked, onMatches }: {
-  p: Extract<Proposal, { kind: "roster" }>; locked: boolean;
+function RosterPanel({ p, locked, onMode, onMatches }: {
+  p: Extract<Proposal, { kind: "roster" }>; locked: boolean; onMode: (m: "replace" | "add") => void;
   onMatches: (m: Record<number, string>) => void;
 }) {
   // When adding, the names that look like students already saved. Asked for here rather than
@@ -818,11 +798,21 @@ function RosterPanel({ p, locked, onMatches }: {
         {p.courseKey || <span className="tag off">no programme</span>}{" "}
         <span className="dim">class list · {p.rows.length} students · {p.fileName} · {p.readBy}</span>
       </h2>
-      <p className="dim" style={{ margin: "8px 0" }}>
-        {p.mode === "add"
-          ? "Saving adds these students to the existing class list and leaves everyone else as they are."
-          : "Saving replaces the whole class list — students not in this file are removed."}
-      </p>
+      <fieldset disabled={locked} style={{ border: 0, padding: 0, margin: "8px 0" }}>
+        <legend className="dim">When saved</legend>
+        <label className="choice">
+          <input type="radio" name={`mode-${p.courseKey}-${p.fileName}`} checked={p.mode === "replace"} onChange={() => onMode("replace")} />
+          <span>Replace {p.courseKey || "the"} class list — students not in this file are removed</span>
+        </label>
+        <label className="choice">
+          <input type="radio" name={`mode-${p.courseKey}-${p.fileName}`} checked={p.mode === "add"} onChange={() => onMode("add")} />
+          <span>Add to the existing list — students are matched by ID, then name; what this file gives replaces
+            what was there, what it leaves empty is kept, and anyone new is added</span>
+        </label>
+      </fieldset>
+      {p.mode === "replace" && !hasGroup && !locked && (
+        <p className="tag warn">This file has no lab groups, so replacing removes every student&rsquo;s lab group. Choose Add to keep them.</p>
+      )}
       {p.mode === "add" && nearError && <p className="tag warn">{nearError}</p>}
       {p.mode === "add" && near && near.length > 0 && (
         <div style={{ margin: "8px 0" }}>
