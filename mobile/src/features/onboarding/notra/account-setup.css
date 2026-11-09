@@ -69,9 +69,6 @@
   font-weight: 400;
   cursor: pointer;
 }
-.account-setup-plan[role="button"]:hover .account-setup-explore {
-  text-decoration: underline;
-}
 .account-setup-plan[role="button"]:focus-visible {
   outline: 2px solid var(--notra-ring);
   outline-offset: 4px;
@@ -86,4 +83,28 @@
 
 .account-setup-plan[role="button"] {
   cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.account-setup-plan[role="button"]:hover,
+.account-setup-plan[role="button"]:focus-visible {
+  background-color: var(--notra-primary);
+  border-color: var(--notra-primary);
+}
+
+.account-setup-plan[role="button"]:active {
+  background-color: color-mix(in srgb, var(--notra-primary), black 15%);
+  border-color: var(--notra-primary);
+}
+
+.account-setup-plan[role="button"]:is(:hover, :active, :focus-visible),
+.account-setup-plan[role="button"]:is(:hover, :active, :focus-visible) [data-slot="card-description"],
+.account-setup-plan[role="button"]:is(:hover, :active, :focus-visible) .account-setup-explore {
+  color: var(--notra-primary-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-setup-plan[role="button"] {
+    transition: none;
+  }
 }
