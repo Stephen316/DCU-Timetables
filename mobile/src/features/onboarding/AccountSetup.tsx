@@ -146,11 +146,13 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
               <SetupButton variant="outline" title="Use camera" disabled={saving} onPress={() => setCamera(true)} />
             </>
           ) : (
-            <>
-              <Txt type="title3" accessibilityRole="header">Take a photo of your student ID</Txt>
-              <SetupButton title="Open camera" icon={<Ionicons name="camera-outline" size={18} />} onPress={() => setCamera(true)} />
-              <SetupButton variant="outline" title="Other methods" onPress={() => setManual(true)} />
-            </>
+            <View style={styles.cameraStep}>
+              <Txt type="title3" accessibilityRole="header" style={styles.cameraTitle}>Take a photo of your student ID</Txt>
+              <View style={styles.cameraActions}>
+                <SetupButton title="Open camera" icon={<Ionicons name="camera-outline" size={18} color={theme.onAccent} />} onPress={() => setCamera(true)} />
+                <SetupButton variant="outline" title="Other methods" onPress={() => setManual(true)} />
+              </View>
+            </View>
           )}
         </Step>
         <Step title="Review">
@@ -168,6 +170,9 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
 }
 
 const styles = StyleSheet.create({
+  cameraStep: { alignItems: 'center', gap: Space.l, paddingVertical: Space.s },
+  cameraTitle: { textAlign: 'center', fontSize: 17, lineHeight: 22 },
+  cameraActions: { width: '100%', maxWidth: 240, gap: Space.s },
   signOut: { alignSelf: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: Space.l },
   status: { alignSelf: 'center', width: '100%', maxWidth: 440, gap: Space.m, padding: Space.l, borderRadius: 12 },
 });
