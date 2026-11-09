@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ask, accept, type Turn, type AskResult } from "./actions";
+import { ask, accept, previewMerge, type Turn, type AskResult, type NearMatch } from "./actions";
 import type { Proposal } from "@/lib/proposals/types";
 import { PROGRAMMES, modulesFor } from "@/lib/proposals/courses";
 import type { CourseOption } from "@/lib/proposals/catalogue";
@@ -536,7 +536,8 @@ function ProposalCard({ item, others, onAccept, onChange, onDiscard, disabled }:
       {open && (
         <div className="saved-body">
           {p.kind === "split" ? <SplitPanel p={p} />
-            : p.kind === "roster" ? <RosterPanel p={p} locked={item.status !== "open"} onMode={(mode) => onChange({ ...p, mode })} />
+            : p.kind === "roster" ? <RosterPanel p={p} locked={item.status !== "open"} onMode={(mode) => onChange({ ...p, mode })}
+              onMatches={(matches) => onChange({ ...p, matches })} />
             : p.kind === "change" ? <ChangePanel p={p} />
             : p.kind === "heading" ? <HeadingPanel p={p} />
             : <RotationPanel p={p} />}
@@ -697,9 +698,28 @@ function RotationPanel({ p }: { p: Extract<Proposal, { kind: "rotation" }> }) {
 
 /// Names are shown here, to the administrator, and nowhere else: what is saved is each name
 /// reduced to a key, and what a phone downloads has no names at all.
-function RosterPanel({ p, locked, onMode }: {
+function RosterPanel({ p, locked, onMode, onMatches }: {
   p: Extract<Proposal, { kind: "roster" }>; locked: boolean; onMode: (m: "replace" | "add") => void;
+  onMatches: (m: Record<number, string>) => void;
 }) {
+  // When adding, the names that look like students already saved. Asked for here rather than
+  // at save time so the administrator sees them first; saving checks again.
+  const [near, setNear] = useState<NearMatch[] | null>(null);
+  const [nearError, setNearError] = useState<string | null>(null);
+  useEffect(() => {
+    if (p.mode !== "add" || !p.courseKey || locked) { setNear(null); setNearError(null); return; }
+    let cancelled = false;
+    setNear(null);
+    previewMerge(p)
+      .then((r) => { if (!cancelled) { if (r.ok) { setNear(r.near); setNearError(null); } else setNearError(r.error); } })
+      .catch(() => { if (!cancelled) setNearError("Couldn't check for similar names."); });
+    return () => { cancelled = true; };
+    // `matches` is left out on purpose: answering a question must not ask it again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.mode, p.rows, p.courseKey, locked]);
+  const answered = (row: number) => p.matches?.[row];
+  const undecided = (near ?? []).filter((n) => answered(n.row) === undefined).length;
+  const answer = (row: number, key: string) => onMatches({ ...(p.matches ?? {}), [row]: key });
   const has = (f: "studentId" | "subgroup" | "day" | "workshop" | "drawing") => p.rows.some((r) => r[f]);
   const extras = extraKeysOf(p.rows);
   const hasGroup = p.rows.some((r) => r.group);
@@ -721,6 +741,40 @@ function RosterPanel({ p, locked, onMode }: {
           gives replaces what was there, what it leaves empty is kept, and anyone new is added
         </label>
       </fieldset>
+      {p.mode === "add" && nearError && <p className="tag warn">{nearError}</p>}
+      {p.mode === "add" && near && near.length > 0 && (
+        <div style={{ margin: "8px 0" }}>
+          <p className={undecided ? "tag warn" : "tag ok"}>
+            {near.length} name{near.length === 1 ? "" : "s"} in this file look{near.length === 1 ? "s" : ""} like
+            {near.length === 1 ? " a student" : " students"} already on the list.
+            {undecided ? " Say whether each is the same person before saving." : " All answered."}
+          </p>
+          {near.map((n) => {
+            const r = p.rows.find((x) => x.row === n.row);
+            const who = r ? [r.given, r.surname].filter(Boolean).join(" ") : `row ${n.row}`;
+            const current = answered(n.row);
+            return (
+              <fieldset key={n.row} disabled={locked} style={{ border: 0, padding: 0, margin: "6px 0" }}>
+                <legend>Row {n.row}: <strong>{who}</strong></legend>
+                {n.candidates.map((c) => (
+                  <label key={c.key} style={{ display: "block" }}>
+                    <input type="radio" name={`near-${p.courseKey}-${n.row}`} checked={current === c.key} onChange={() => answer(n.row, c.key)} />{" "}
+                    Same person as <span className="mono">{c.key}</span>
+                    {c.group ? ` (group ${c.group}${c.subgroup ? `, ${c.subgroup}` : ""})` : " (no lab group)"} — {c.reason}
+                  </label>
+                ))}
+                <label style={{ display: "block" }}>
+                  <input type="radio" name={`near-${p.courseKey}-${n.row}`} checked={current === ""} onChange={() => answer(n.row, "")} />{" "}
+                  A different person — add as a new student
+                </label>
+              </fieldset>
+            );
+          })}
+        </div>
+      )}
+      {p.mode === "add" && near === null && !nearError && !locked && p.courseKey && (
+        <p className="dim">Checking for names that look like students already on the list…</p>
+      )}
       <div className="row" style={{ margin: "8px 0" }}>
         <button type="button" onClick={() => downloadCsv(p)}>Download as CSV</button>
       </div>

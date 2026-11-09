@@ -31,6 +31,10 @@ export type Proposal =
        *  already on it. Chosen on the panel; replacing is the default unless the list has
        *  no lab group to replace them with. */
       mode: "replace" | "add";
+      /** When adding: for a row whose name looks like a saved student's, the administrator's
+       *  answer, keyed by the row's source line — the saved student's name key if it is the
+       *  same person, "" if it is someone new. A row with no answer blocks saving. */
+      matches?: Record<number, string>;
       rows: RosterRow[]; findings: Finding[]; log?: Finding[] }
   | { kind: "change"; scope: Scope;
       /** The class and its dates. Who it is for is `groups`, so this alone can't be saved. */

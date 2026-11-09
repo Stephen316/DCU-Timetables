@@ -342,6 +342,15 @@ Accepting a roster proposal is either:
   saved, what it leaves empty is kept, `extra` merges key by key; unknown students are added;
   nobody is removed. A name matching two saved students is refused: add student IDs.
 
+Names that nearly match (phase 47): a name written differently in the two files — a middle name
+added, a stray initial, one wrong letter, surname first — would match nobody and be added as a
+second, group-less copy of the student. So in Add mode `roster_merge_preview` lists, for each
+unmatched row, the saved students whose name key is the same letters reordered, within 1–2
+letters, or has the same start and end with something between. The panel asks "same person?" for
+each, and saving is refused until every one is answered; an answer only counts if it names a
+candidate the database itself offered. The check is rules in SQL, not a model, because the saved
+names are stored as keys and should not be sent to a third party to be compared.
+
 A file with no lab groups at all is set to **Add** when proposed, since replacing would wipe
 the lab groups already saved.
 

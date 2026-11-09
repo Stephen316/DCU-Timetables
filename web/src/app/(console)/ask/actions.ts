@@ -524,7 +524,8 @@ function documentFrom(raw: string): DocProposal | null {
       .filter((r: RosterRow) => Number.isInteger(r.row));
     return {
       kind: "roster", scope, courseKey: String(p.courseKey ?? ""), fileName: String(p.fileName ?? ""),
-      readBy: String(p.readBy ?? ""), mode: p.mode === "add" ? "add" : "replace", rows, log, findings: [],
+      readBy: String(p.readBy ?? ""), mode: p.mode === "add" ? "add" : "replace",
+      matches: matchesFrom(p.matches), rows, log, findings: [],
     };
   }
   if (p?.kind === "rotation" && Array.isArray(p.sessions)) {
@@ -537,6 +538,17 @@ function documentFrom(raw: string): DocProposal | null {
     return { kind: "rotation", scope, courseKey: String(p.courseKey ?? ""), title: str(p.title), sessions, log, findings: [] };
   }
   return null;
+}
+
+/// The administrator's answers about near-miss names, as sent back: source line -> a saved
+/// student's name key, or "" for "someone new". Anything else is dropped.
+function matchesFrom(v: unknown): Record<number, string> {
+  const out: Record<number, string> = {};
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return out;
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if (/^\d{1,6}$/.test(k) && typeof x === "string" && /^[a-z]{0,100}$/.test(x)) out[Number(k)] = x;
+  }
+  return out;
 }
 
 /// The further groupings on a row as the browser sent them back: short keys, text values.
@@ -579,8 +591,9 @@ function rosterScope(scope: Scope) {
 }
 
 /// Only what the database needs: the name reduced to its key, never the name as written.
-function members(rows: RosterRow[]) {
+function members(rows: RosterRow[], matches?: Record<number, string>) {
   return rows.map((r) => ({
+    ...(matches?.[r.row] ? { match_name_key: matches[r.row] } : {}),
     name_key: nameKey(r.given, r.surname),
     student_id: r.studentId,
     group: r.group,
@@ -590,6 +603,42 @@ function members(rows: RosterRow[]) {
     drawing: r.drawing,
     extra: r.extra,
   }));
+}
+
+/// A name in an added file that looks like a saved student's without matching it: an extra
+/// middle name, a stray initial, one wrong letter, surname first. The database only finds the
+/// candidates (roster_merge_preview); nothing is merged until the administrator says so.
+export type NearMatch = {
+  row: number;
+  candidates: { key: string; group: string | null; subgroup: string | null; reason: string }[];
+};
+
+type Db = Awaited<ReturnType<typeof supabaseServer>>;
+
+async function nearMatches(
+  db: Db, proposal: Extract<Proposal, { kind: "roster" }>,
+): Promise<{ ok: true; near: NearMatch[] } | { ok: false; error: string }> {
+  const { data, error } = await db.rpc("roster_merge_preview", {
+    p_course_key: proposal.courseKey,
+    p_members: members(proposal.rows),
+  });
+  if (error) return { ok: false, error: error.message };
+  const byRow = new Map<number, NearMatch>();
+  for (const r of (data ?? []) as Untyped[]) {
+    const row = proposal.rows[Number(r.ord) - 1]?.row;
+    if (row === undefined) continue;
+    const n = byRow.get(row) ?? { row, candidates: [] };
+    n.candidates.push({ key: String(r.candidate), group: r.grp ?? null, subgroup: r.subgroup ?? null, reason: String(r.reason) });
+    byRow.set(row, n);
+  }
+  return { ok: true, near: [...byRow.values()] };
+}
+
+/// For the panel: the rows of an added file that look like students already saved.
+export async function previewMerge(proposal: Proposal): Promise<{ ok: true; near: NearMatch[] } | { ok: false; error: string }> {
+  if (!(await consoleOpen())) return { ok: false, error: "The console is locked, or this account isn't an admin." };
+  if (proposal.kind !== "roster" || proposal.mode !== "add" || !proposal.courseKey) return { ok: true, near: [] };
+  return nearMatches(await supabaseServer(), proposal);
 }
 
 /// Saving re-checks what is being saved, rather than trusting that it is the thing that was
@@ -648,11 +697,31 @@ export async function accept(proposal: Proposal) {
       .find((f) => f.level === "error");
     if (blocker) return { ok: false, error: blocker.message };
 
+    // Adding: every name that looks like a saved student's needs an answer, and an answer
+    // only counts if it names one of the candidates the database itself offered for that row.
+    const chosen: Record<number, string> = {};
+    if (proposal.mode === "add") {
+      const found = await nearMatches(db, proposal);
+      if (!found.ok) return { ok: false, error: found.error };
+      const undecided = found.near.filter((n) => proposal.matches?.[n.row] === undefined);
+      if (undecided.length) {
+        return {
+          ok: false,
+          error: `${undecided.length} name${undecided.length === 1 ? " looks" : "s look"} like ${undecided.length === 1 ? "a student" : "students"} already on the list. ` +
+            `Say whether each is the same person (row${undecided.length === 1 ? "" : "s"} ${undecided.map((n) => n.row).join(", ")}).`,
+        };
+      }
+      for (const n of found.near) {
+        const answer = proposal.matches?.[n.row];
+        if (answer && n.candidates.some((c) => c.key === answer)) chosen[n.row] = answer;
+      }
+    }
+
     const programme = programmeFor(proposal.courseKey);
     const { error } = await db.rpc("save_roster", {
       p_course_key: proposal.courseKey,
       p_title: programme?.name ?? null,
-      p_members: members(proposal.rows),
+      p_members: members(proposal.rows, chosen),
       p_mode: proposal.mode === "add" ? "add" : "replace",
     });
     return error ? { ok: false, error: error.message } : { ok: true };
