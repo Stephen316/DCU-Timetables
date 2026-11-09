@@ -2,7 +2,7 @@
 :root {
   --bg: #131316; --bg-2: #18181d; --card: #1c1c21; --card-2: #26252d;
   --line: rgba(255,255,255,.09); --text: #fafafa; --muted: #b4b1c7;
-  --accent: #a78bfa; --accent-2: #8b5cf6; --on-accent: #131316;
+  --accent: #8b5cf6; --accent-2: #7c3aed; --on-accent: #ffffff;
   --glow: rgba(139,92,246,.55); --blob-a: #7c4dff; --blob-b: #ec4899; --blob-c: #06b6d4;
   --due: #fbbf24; --off: #fb923c; --ok: #34d399; --test: #60a5fa;
   --shadow: 0 30px 80px -20px rgba(0,0,0,.7);
@@ -12,8 +12,8 @@
   :root {
     --bg: #f6f5fb; --bg-2: #efedf9; --card: #ffffff; --card-2: #efedf9;
     --line: rgba(23,23,40,.10); --text: #171717; --muted: #55526b;
-    --accent: #7c4dff; --accent-2: #6a3af0; --on-accent: #ffffff;
-    --glow: rgba(124,77,255,.4); --blob-a: #c4b5fd; --blob-b: #f9a8d4; --blob-c: #67e8f9;
+    --accent: #7c3aed; --accent-2: #6d28d9; --on-accent: #ffffff;
+    --glow: rgba(124,58,237,.4); --blob-a: #c4b5fd; --blob-b: #f9a8d4; --blob-c: #67e8f9;
     --due: #b45309; --off: #ea580c; --ok: #059669; --test: #2563eb;
     --shadow: 0 30px 70px -25px rgba(60,40,140,.35);
     --nav-bg: rgba(246,245,251,.78);
