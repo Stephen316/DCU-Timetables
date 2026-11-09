@@ -108,7 +108,7 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
         onStepChange={setStep}
         onFinalStepCompleted={() => void saveNumber()}
         backButtonText="Back"
-        nextButtonText={step === 4 ? 'Complete setup' : step === 2 && hasPlus ? 'Continue with Plus' : 'Continue'}
+        nextButtonText={step === 4 ? 'Complete' : step === 2 && hasPlus ? 'Continue with Plus' : 'Continue'}
         showNext={step !== 3 || manual}
         nextDisabled={(step === 2 && plan === 'checking') || (step === 3 && number === null)}
         busy={saving}
@@ -143,7 +143,7 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
           ) : null}
           {linkError ? <Txt accessibilityLiveRegion="polite">Couldn’t open the Plus page. Try again.</Txt> : null}
         </Step>
-        <Step title="Student ID">
+        <Step title="Profile">
           {manual ? (
             <>
               <Txt type="title3" accessibilityRole="header">Enter your student number</Txt>
@@ -172,9 +172,9 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
           )}
         </Step>
         <Step title="Review">
-          <Txt type="title3" accessibilityRole="header">Review your setup</Txt>
+          <Txt type="title3" accessibilityRole="header">Looking good</Txt>
           <Txt color={theme.inkSecondary}>{hasPlus ? 'Plus plan' : plan === 'standard' ? 'Standard plan' : 'Plan unavailable'}</Txt>
-          <Txt color={theme.inkSecondary}>Student number {number}</Txt>
+          <Txt color={theme.inkSecondary}>Student number {number}. Complete setup to choose your programme.</Txt>
           {saveError ? <Txt accessibilityLiveRegion="polite">{saveError}</Txt> : null}
         </Step>
       </Stepper>

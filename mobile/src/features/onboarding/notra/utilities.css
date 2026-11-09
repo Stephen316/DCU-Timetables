@@ -3,7 +3,6 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 @source "./button";
-@source "./icon-tabs";
 @custom-variant dark (&:where(.notra-dark, .notra-dark *));
 @theme inline {
   --color-background: var(--notra-background);
@@ -68,7 +67,7 @@
   }
 }
 
-.notra-setup, .notra-setup-button {
+.notra-setup-button {
   --notra-background: #fff;
   --notra-foreground: #18181b;
   --notra-primary: #6d42cf;
@@ -82,7 +81,7 @@
   /* Notra's depth gradient references this token directly. */
   --color-primary: var(--notra-primary);
 }
-.notra-setup.notra-dark, .notra-setup-button.notra-dark {
+.notra-setup-button.notra-dark {
   --notra-background: #222126;
   --notra-foreground: #fafafa;
   --notra-primary: #8055dc;
@@ -92,59 +91,10 @@
   --notra-input: #39383f;
   --notra-secondary: #303036;
 }
-.notra-setup, .notra-setup-button {
+.notra-setup-button {
+  box-sizing: border-box;
   font-family: system-ui, sans-serif;
   color: var(--notra-foreground);
-}
-.notra-setup *, .notra-setup-button {
-  box-sizing: border-box;
-}
-.notra-setup [data-slot="icon-tabs-trigger"], .notra-setup-button {
-  font-family: system-ui, sans-serif;
-}
-.notra-setup [data-slot="icon-tabs-trigger"] {
-  border: 0;
-  background: transparent;
-}
-.notra-setup {
-  align-self: center;
-  width: min(100%, calc(100vw - 32px), 480px);
-  padding: 12px;
-  border: 1px solid var(--notra-border);
-  border-radius: 16px;
-  background: var(--notra-background);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 20%);
-}
-.notra-setup [data-slot="icon-tabs-list"] {
-  width: 100%;
-  height: auto;
-  min-height: 36px;
-}
-.notra-setup [data-slot="icon-tabs-trigger"] {
-  min-width: 0;
-  min-height: 32px;
-  padding-inline: 4px;
-}
-.notra-setup [data-slot="icon-tabs-trigger"]:disabled {
-  opacity: 0.6;
-}
-.notra-setup-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 8px 4px;
-}
-.notra-setup-footer > :last-child {
-  margin-inline-start: auto;
-}
-.notra-setup-number {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-@media (max-width: 375px) {
-  .notra-setup [data-slot="icon-tabs-trigger"] {
-    font-size: 12px;
-  }
 }
 
 @layer theme {

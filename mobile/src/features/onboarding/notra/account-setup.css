@@ -1,0 +1,21 @@
+.account-setup-stepper {
+  align-self: center;
+  max-width: calc(100vw - 32px);
+  font-family: system-ui, sans-serif;
+}
+
+.account-setup-stepper .stepper__step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-setup-stepper .stepper__step > [role="heading"] {
+  color: var(--stepper-ink);
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.account-setup-stepper .account-setup-next-hidden {
+  visibility: hidden;
+}
