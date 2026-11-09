@@ -59,6 +59,8 @@ function blocking(p: Proposal): boolean {
   return (p.kind === "split" ? p.problems : p.findings).some((f) => f.level === "error");
 }
 
+const SCOPE_KEY = "ask.scope";
+
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx,.csv,.tsv,.txt,.md";
 
 /// The fixed courses, offered at once while DCU's list loads — and alone if it never does.
@@ -112,6 +114,31 @@ export function Ask() {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns, busy]);
+
+  // The programme and module chosen last time, so a refresh doesn't empty the Saved list
+  // (it shows nothing without a module). Restored after mount rather than in the initial
+  // state, which the server renders first: reading storage there would not match. Nothing
+  // is written until the restore has run, or the defaults would overwrite what was saved.
+  const [scopeReady, setScopeReady] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SCOPE_KEY) ?? "null");
+      const p = typeof saved?.programme === "string" && saved.programme.length <= 40 ? saved.programme : "";
+      if (p) {
+        const m = typeof saved?.module === "string" && saved.module.length <= 40 ? saved.module : "";
+        const fixed = fixedModules(p);
+        setProgramme(p);
+        // A fixed course's module is checked against its list; a DCU course's list isn't
+        // loaded yet, so its module is trusted and shown as it was.
+        setModuleKey(fixed ? (fixed.some((x) => x.code === m) ? m : "") : m);
+      }
+    } catch { /* storage blocked or unreadable: start from the defaults */ }
+    setScopeReady(true);
+  }, []);
+  useEffect(() => {
+    if (!scopeReady) return;
+    try { localStorage.setItem(SCOPE_KEY, JSON.stringify({ programme, module: moduleKey })); } catch { /* not worth failing for */ }
+  }, [scopeReady, programme, moduleKey]);
 
   useEffect(() => {
     let current = true;
