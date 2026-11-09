@@ -7,7 +7,7 @@ import { MacShell } from './macShell';
 import { createPreviewServices } from './preview';
 import { createServices, Services } from './services';
 import { SecretStore } from './session';
-import { AsyncKV } from './storage';
+import { AsyncKV, PrefKey } from './storage';
 
 /**
  * The student's Supabase tokens, in the Keychain (iOS) or Keystore (Android): a token is a
@@ -48,14 +48,22 @@ function env(): Record<string, string | undefined> {
 /**
  * `EXPO_PUBLIC_PREVIEW=1` opens the app on fixture data — a signed-in student with a week of
  * classes, reports and deadlines — so a screen can be checked without a network or account.
+ * Use `EXPO_PUBLIC_PREVIEW=setup` to start with a newly created fixture account.
  */
 export function isPreview(): boolean {
-  return process.env.EXPO_PUBLIC_PREVIEW === '1';
+  return process.env.EXPO_PUBLIC_PREVIEW === '1' || process.env.EXPO_PUBLIC_PREVIEW === 'setup';
 }
 
-export function createAppServices(): Promise<Services> {
+export async function createAppServices(): Promise<Services> {
   const kv = AsyncStorage as unknown as AsyncKV;
-  if (isPreview()) return createPreviewServices(kv, RNPlatform.OS === 'web' && !MacShell.isPresent() ? null : undefined);
+  if (isPreview()) {
+    const services = await createPreviewServices(kv, RNPlatform.OS === 'web' && !MacShell.isPresent() ? null : undefined);
+    if (process.env.EXPO_PUBLIC_PREVIEW === 'setup') {
+      services.prefs.set(PrefKey.studentID, null);
+      services.prefs.set(PrefKey.selectedProgramme, null);
+    }
+    return services;
+  }
   if (RNPlatform.OS === 'web') return createWebServices(kv);
   return createServices({ kv, secrets: keychain, env: env(), alerts: new ExpoAlertScheduler() });
 }
