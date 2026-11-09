@@ -121,15 +121,12 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
         <Step title="Plan">
           <Txt type="title3" accessibilityRole="header">Choose a plan</Txt>
           <SetupPlan title="Standard" description="Free · Your timetable and class updates" selected={plan === 'standard'} />
-          <SetupPlan title="Plus" description="Full deadlines list and class alerts" selected={hasPlus} />
+          <SetupPlan title="Plus" description="Full deadlines list and class alerts" selected={hasPlus} onExplore={!hasPlus && plan !== 'checking' ? () => {
+            setLinkError(false);
+            void Linking.openURL(PLUS_PROMO).catch(() => setLinkError(true));
+          } : undefined} />
           {plan === 'checking' ? <Txt type="footnote" accessibilityLiveRegion="polite">Checking your plan…</Txt> : null}
           {plan === 'unavailable' ? <Txt type="footnote" accessibilityLiveRegion="polite">Couldn’t check your plan. You can still continue setup.</Txt> : null}
-          {!hasPlus && plan !== 'checking' ? (
-            <SetupButton variant="outline" title="Explore Plus" onPress={() => {
-              setLinkError(false);
-              void Linking.openURL(PLUS_PROMO).catch(() => setLinkError(true));
-            }} />
-          ) : null}
           {linkError ? <Txt accessibilityLiveRegion="polite">Couldn’t open the Plus page. Try again.</Txt> : null}
         </Step>
         <Step title="Profile">

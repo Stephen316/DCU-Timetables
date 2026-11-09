@@ -1,15 +1,18 @@
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Icon, Txt } from '../../ui/components';
 import { Space, useTheme } from '../../ui/theme';
 
 import type { SetupPlanProps, StudentNumberFieldProps } from './SetupFields.types';
 
-export function SetupPlan({ title, description, selected }: SetupPlanProps) {
+export function SetupPlan({ title, description, selected, onExplore }: SetupPlanProps) {
   const theme = useTheme();
   return (
     <View style={[styles.plan, { backgroundColor: theme.canvas, borderColor: selected ? theme.accent : theme.separator }]}>
       <View style={styles.planText}>
-        <Txt type="headline">{selected ? `${title} · Selected` : title}</Txt>
+        <View style={styles.planHeading}>
+          <Txt type="headline">{selected ? `${title} · Selected` : title}</Txt>
+          {onExplore ? <Pressable accessibilityRole="button" onPress={onExplore} hitSlop={8}><Txt type="subheadline" color={theme.inkSecondary}>› Explore plus</Txt></Pressable> : null}
+        </View>
         <Txt color={theme.inkSecondary}>{description}</Txt>
       </View>
       {selected ? <Icon name="check" color={theme.accent} /> : null}
@@ -37,6 +40,7 @@ export function StudentNumberField({ value, disabled, onChange, onSubmit }: Stud
 }
 
 const styles = StyleSheet.create({
+  planHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.s },
   plan: { flexDirection: 'row', alignItems: 'center', gap: Space.m, padding: Space.m, borderWidth: 1, borderRadius: 8 },
   planText: { flex: 1, gap: Space.xs },
   input: { minHeight: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: Space.m, fontSize: 17 },

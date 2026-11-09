@@ -4,12 +4,13 @@ import type { SetupPlanProps, StudentNumberFieldProps } from './SetupFields.type
 import { Card, CardDescription, CardHeader, CardTitle } from './notra/shadcn-card';
 import { Input } from './notra/shadcn-input';
 
-export function SetupPlan({ title, description, selected }: SetupPlanProps) {
+export function SetupPlan({ title, description, selected, onExplore }: SetupPlanProps) {
   return (
     <Card className="account-setup-plan" data-selected={selected || undefined} size="sm">
       <CardHeader>
         <CardTitle>
           {title}
+          {onExplore ? <button type="button" className="account-setup-explore" onClick={onExplore}>› Explore plus</button> : null}
           {selected ? <span className="account-setup-selected"><HugeiconsIcon icon={Tick02Icon} size={14} /> Selected</span> : null}
         </CardTitle>
         <CardDescription>{description}</CardDescription>

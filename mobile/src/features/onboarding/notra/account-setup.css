@@ -58,3 +58,21 @@
   color: var(--notra-foreground);
   font-family: inherit;
 }
+
+.account-setup-explore {
+  margin-inline-start: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--notra-muted-foreground);
+  font: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+.account-setup-explore:hover {
+  text-decoration: underline;
+}
+.account-setup-explore:focus-visible {
+  outline: 2px solid var(--notra-ring);
+  outline-offset: 4px;
+}
