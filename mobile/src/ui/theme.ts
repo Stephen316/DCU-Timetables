@@ -4,16 +4,14 @@ import { Platform } from 'react-native';
 /**
  * The app's design tokens: colour, space, shape and type, defined once.
  *
- * The palette is deliberately monochrome — five slates of one cool blue-grey, and an
- * accent lifted from the same hue. Colour that isn't slate is news: orange for a
+ * The look follows Notra (usenotra.com): a violet accent on near-white or near-black
+ * neutrals, 10pt controls and soft cards, with soft, clean module colours (blue, green, purple, teal, indigo) drawn solid under white text. Meaning
+ * still has its own colours — five slates of one cool blue-grey, and an accent lifted from the same hue. Colour that isn't slate is news: orange for a
  * cancellation, amber for something due, blue for a test, green for a confirmed date
  * (`tint`). Keeping everything else grey is what lets those four be seen at a glance on a
  * phone held at arm's length on the way to a lecture.
  *
- * Light is Solarized Light, as VS Code draws it: base2 canvas, base3 rows, the theme's
- * #DDD6C1 chrome. Ink steps down from base02 so the faintest tier is still the editor's
- * body text. The accent is violet because Solarized's yellow, blue and green are taken by
- * `tint`. Dark is the iOS app's asset-catalog colours.
+ * Light is a violet-tinted white; dark is #131316 with #1C1C21 cards, as Notra draws it.
  */
 export interface Palette {
   scheme: 'light' | 'dark';
@@ -63,40 +61,40 @@ export interface Palette {
 
 export const light: Palette = {
   scheme: 'light',
-  canvas: '#EEE8D5',
-  surface: '#FDF6E3',
-  raised: '#DDD6C1',
-  band: '#E5DECA',
-  separator: '#D3CBB7',
-  rail: '#93A1A1',
-  ink: '#073642',
-  inkSecondary: '#586E75',
-  inkTertiary: '#657B83',
-  accent: '#6C71C4',
-  onAccent: '#FDF6E3',
-  destructive: '#DC322F',
-  now: '#DC322F',
-  tint: { due: '#B58900', test: '#268BD2', off: '#CB4B16', confirmed: '#859900', offFill: '#CB4B16', online: '#4E9A3C' },
-  modules: ['#268BD2', '#859900', '#D33682', '#2AA198', '#6C71C4', '#DC322F', '#AC9D57'],
+  canvas: '#F6F5FB',
+  surface: '#FFFFFF',
+  raised: '#EFEDF9',
+  band: '#ECE9F7',
+  separator: '#E3E0F0',
+  rail: '#B9B4D6',
+  ink: '#171717',
+  inkSecondary: '#55526B',
+  inkTertiary: '#6B6885',
+  accent: '#7C4DFF',
+  onAccent: '#FFFFFF',
+  destructive: '#E11D48',
+  now: '#F43F5E',
+  tint: { due: '#B45309', test: '#2563EB', off: '#EA580C', confirmed: '#059669', offFill: '#C2410C', online: '#16A34A' },
+  modules: ['#406AC3', '#6AA75E', '#8953BA', '#6AA0B4', '#4D4CB0', '#C14D6B', '#D2853A'],
 };
 
 export const dark: Palette = {
   scheme: 'dark',
-  canvas: '#212129',
-  surface: '#323949',
-  raised: '#3D3E51',
-  band: '#18181E',
-  separator: '#40445A',
-  rail: '#4C5265',
-  ink: '#ECEDF3',
-  inkSecondary: '#AEB2C4',
-  inkTertiary: '#8A8FA5',
-  accent: '#AFB8F2',
-  onAccent: '#212129',
-  destructive: '#FF6B6B',
-  now: '#FF453A',
+  canvas: '#131316',
+  surface: '#1C1C21',
+  raised: '#26252D',
+  band: '#0E0E11',
+  separator: '#2C2B34',
+  rail: '#3E3C4C',
+  ink: '#FAFAFA',
+  inkSecondary: '#B4B1C7',
+  inkTertiary: '#8A879F',
+  accent: '#A78BFA',
+  onAccent: '#131316',
+  destructive: '#FF6B81',
+  now: '#FF4D6A',
   tint: { due: '#FBBF24', test: '#60A5FA', off: '#FB923C', confirmed: '#34D399', offFill: '#C2410C', online: '#4ADE80' },
-  modules: ['#0A84FF', '#30D158', '#BF5AF2', '#40C8E0', '#5E5CE6', '#FF375F', '#AC8E68'],
+  modules: ['#4C7BDC', '#6DBB62', '#9A62CC', '#5FB0C6', '#5E5CC8', '#D25A78', '#DB9040'],
 };
 
 /** A 4-point scale. Views take their padding from here rather than inventing numbers. */
@@ -107,8 +105,8 @@ export const Space = { xxs: 2, xs: 4, s: 8, m: 12, l: 16, xl: 24, xxl: 32 } as c
  * your thumb aims at. Dialogs and panels are built from those and the padding inside them,
  * so their corners curve round the same centre as what's in them (see `concentric`).
  */
-const CONTROL = 8;
-const CARD = 12;
+const CONTROL = 10;
+const CARD = 16;
 
 /**
  * How far a card's contents sit in from its edges: far enough that a line of text or a chip
@@ -117,7 +115,7 @@ const CARD = 12;
 export const CardInset = { x: 20, y: 14 } as const;
 
 export const Radius = {
-  block: 4,
+  block: 8,
   control: CONTROL,
   /**
    * A grouped card. Kept tighter than its controls plus `CardInset.x` would make it — that

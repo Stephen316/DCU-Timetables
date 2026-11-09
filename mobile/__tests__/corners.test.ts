@@ -5,7 +5,7 @@ describe('Corner concentricity', () => {
     expect(concentric(47, Space.l)).toBe(31);
     // A dialog drawn round its buttons: their radius plus the inset gives the dialog's.
     expect(concentric(Radius.control + Space.xl, Space.xl)).toBe(Radius.control);
-    expect(concentric(Radius.block, 1)).toBe(3);
+    expect(concentric(Radius.block, 1)).toBe(Radius.block - 1);
   });
 
   test("a gap wider than the curve can't share its centre, so the inner shape keeps its own radius", () => {

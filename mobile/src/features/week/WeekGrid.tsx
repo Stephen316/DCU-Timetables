@@ -68,14 +68,17 @@ export function WeekGridView({
     if (all.length === 0) return range(9, 18);
     const low = Math.min(...all.map((e) => e.start.getHours()));
     const high = Math.max(...all.map((e) => (e.end.getMinutes() > 0 ? e.end.getHours() + 1 : e.end.getHours())), low + 1);
-    return range(low, high);
+    // One empty hour above the first class, so the week doesn't start flush against the day names.
+    return range(Math.max(0, low - 1), high);
   })();
   const gridHeight = hours.length * HOUR_HEIGHT;
 
   const offsetY = (date: Date) => ((date.getHours() - hours[0]) * 60 + date.getMinutes()) / 60 * HOUR_HEIGHT;
 
   return (
-    <View ref={gridTarget} collapsable={false} style={[styles.fill, { backgroundColor: theme.canvas }, onMac && styles.macSides]}>
+    <View ref={gridTarget} collapsable={false} style={[styles.fill, { backgroundColor: theme.canvas }, styles.cardSides, onMac && styles.macSides]}>
+      {/* The week sits in a rounded card on the canvas, as a calendar page would. */}
+      <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.separator }]}>
       <GridBody
         days={days}
         hours={hours}
@@ -106,6 +109,7 @@ export function WeekGridView({
           });
         }}
       />
+      </View>
       {/* Out of term DCU timetables nothing, and a bare grid reads as the app having broken. */}
       {isLoaded && all.length === 0 ? (
         <View pointerEvents="none" style={styles.emptyWeek}>
@@ -145,7 +149,9 @@ function GridBody({
             <View key={day.getTime()} style={[styles.dayHead, { width: dayWidth }]} accessible accessibilityRole="header"
               accessibilityLabel={formatWeekdayDayMonth(day)} accessibilityState={{ selected: today }}>
               <Txt type="caption2" color={theme.inkSecondary}>{weekdayShort(day)}</Txt>
-              <Txt type="footnote" color={today ? theme.accent : theme.ink} style={today ? styles.bold : undefined}>{day.getDate()}</Txt>
+              <View style={today ? [styles.todayDisc, { backgroundColor: theme.accent }] : styles.dayDisc}>
+                <Txt type="footnote" color={today ? theme.onAccent : theme.ink} style={today ? styles.bold : undefined}>{day.getDate()}</Txt>
+              </View>
             </View>
           );
         })}
@@ -161,7 +167,7 @@ function GridBody({
           </View>
           {width > 0
             ? days.map((day) => (
-                <View key={day.getTime()} style={[styles.column, { width: dayWidth, height: gridHeight, borderLeftColor: theme.separator }]}>
+                <View key={day.getTime()} style={[styles.column, { width: dayWidth, height: gridHeight }]}>
                   {hours.map((hour) => (
                     <View key={hour} pointerEvents="none" style={[styles.hourLine, { top: (hour - hours[0]) * HOUR_HEIGHT, backgroundColor: theme.separator }]} />
                   ))}
@@ -194,7 +200,7 @@ function NowLine({ days, hours, dayWidth, now }: { days: Date[]; hours: number[]
       <View style={[styles.nowToday, { left: todayLeft, width: dayWidth, backgroundColor: theme.now }]} />
       <View style={[styles.nowDot, { left: todayLeft - NOW_DOT / 2, backgroundColor: theme.now }]} />
       {/* On the canvas, so it covers the hour label it lands on. */}
-      <Txt type="caption2" color={theme.now} style={[styles.nowTime, { backgroundColor: theme.canvas }]} maxFontSizeMultiplier={1.2}>
+      <Txt type="caption2" color={theme.now} style={[styles.nowTime, { backgroundColor: theme.surface }]} maxFontSizeMultiplier={1.2}>
         {formatTime(now)}
       </Txt>
     </View>
@@ -227,7 +233,8 @@ function Block({
   const tint = cancelled ? theme.inkTertiary : moduleTint(theme, event.activity.moduleCode ?? titleOf(event));
   // A highlight outranks a clash outline: not running, or a deadline today, matters more
   // than an overlap the student has already seen.
-  const border = cancelled ? withAlpha(theme.inkTertiary, 0.5) : highlight ? highlightTint(highlight, theme) : isClashing ? withAlpha(theme.tint.off, 0.55) : 'transparent';
+  const border = withAlpha(theme.inkTertiary, 0.5);
+  const solid = !ghost && !cancelled;
   const first = parsedLocations(event)[0];
   const room = first ? first.buildingName ?? first.code : null;
   // The title wraps into whatever height the class has; the room takes the last line only
@@ -260,22 +267,24 @@ function Block({
           width: Math.max(width - 2, 10),
           height: height - 2,
           // A ghost is only an outline: there, but not yet the student's.
-          backgroundColor: withAlpha(tint, ghost ? 0.05 : cancelled ? 0.1 : 0.18),
-          borderColor: ghost ? withAlpha(tint, 0.7) : border,
-          borderWidth: highlight && !cancelled ? 2 : 1.5,
+          // A live class is a solid block of its module's colour, as a paper timetable is coloured in.
+          backgroundColor: ghost ? withAlpha(tint, 0.05) : cancelled ? withAlpha(tint, 0.1) : tint,
+          // No outline on a coloured block: a state is a white badge in its corner instead, which
+          // reads on every module colour where a coloured line fought with them.
+          borderColor: ghost ? withAlpha(tint, 0.7) : cancelled ? border : 'transparent',
+          borderWidth: ghost || cancelled ? 1.5 : 0,
           borderStyle: ghost ? 'dashed' : 'solid',
           opacity: pressed ? 0.7 : 1,
         },
       ]}
     >
       {isOnline(event) ? <Hatch color={withAlpha(theme.tint.online, 0.28)} spacing={7} origin={{ x: item.column * width + 1, y: top + 1 }} /> : null}
-      {ghost ? null : <View style={[styles.bar, { backgroundColor: tint }]} />}
-      <View style={[styles.blockText, (ghost || cancelled) && styles.faded]}>
-        <Txt type="caption2" numberOfLines={titleLines} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.bold} maxFontSizeMultiplier={1.4}>
+            <View style={[styles.blockText, (ghost || cancelled) && styles.faded]}>
+        <Txt type="caption2" numberOfLines={titleLines} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.bold} color={solid ? '#FFFFFF' : undefined} maxFontSizeMultiplier={1.4}>
           {compactTitleOf(event)}
         </Txt>
         {showsRoom ? (
-          <Txt type="caption2" numberOfLines={1} color={theme.inkSecondary} maxFontSizeMultiplier={1.4}>{room}</Txt>
+          <Txt type="caption2" numberOfLines={1} color={solid ? '#FFFFFFCC' : theme.inkSecondary} maxFontSizeMultiplier={1.4}>{room}</Txt>
         ) : null}
       </View>
       {edit ? (
@@ -286,11 +295,15 @@ function Block({
       {/* The "!" wins the corner: the border already says a class is off or greyed out, but only this says something's due. */}
       {due.length > 0 ? (
         <View style={styles.corner}>
-          <DeadlineMark size={12} />
+          <DeadlineMark size={16} />
         </View>
       ) : highlight ? (
-        <View style={styles.corner}>
+        <View style={[styles.corner, styles.badge, { backgroundColor: solid ? '#FFFFFF' : 'transparent' }]}>
           <Icon name={highlightIcon(highlight)} size={11} color={highlightTint(highlight, theme)} />
+        </View>
+      ) : isClashing ? (
+        <View style={[styles.corner, styles.badge, { backgroundColor: '#FFFFFF' }]}>
+          <Icon name="alert" size={11} color={theme.tint.off} />
         </View>
       ) : null}
     </Pressable>
@@ -309,10 +322,15 @@ function hourLabel(hour: number): string {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  cardSides: { paddingHorizontal: Space.m, paddingTop: Space.xs },
+  card: { flex: 1, borderRadius: Radius.card + Space.xs, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
+          shadowColor: '#171728', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } },
   macSides: { paddingHorizontal: MAC_SIDE },
   header: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth },
   dayHead: { alignItems: 'center', gap: 1 },
   bold: { fontWeight: '700' },
+  dayDisc: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  todayDisc: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   centred: { textAlign: 'center' },
   // Over the hours, clear of the day headings, with the canvas behind it so the hour lines don't run through the text.
   emptyWeek: { position: 'absolute', left: 0, right: 0, bottom: 0, top: 48, alignItems: 'center', justifyContent: 'center', padding: Space.xl },
@@ -321,12 +339,14 @@ const styles = StyleSheet.create({
   gridRow: { flexDirection: 'row' },
   // Placed like the hour lines, centred on its own line, so nothing accumulates down the column.
   hourLabel: { position: 'absolute', left: 0, right: 0, textAlign: 'right', paddingRight: Space.xs },
-  column: { borderLeftWidth: StyleSheet.hairlineWidth },
+  column: {},
   hourLine: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth },
-  block: { position: 'absolute', borderRadius: Radius.block, overflow: 'hidden', flexDirection: 'row' },
+  block: { position: 'absolute', borderRadius: Radius.block, overflow: 'hidden', flexDirection: 'row',
+          shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
   bar: { width: 2.5 },
-  blockText: { flex: 1, paddingHorizontal: 3, paddingVertical: 2 },
-  corner: { position: 'absolute', top: 1, right: 1 },
+  blockText: { flex: 1, paddingHorizontal: 5, paddingVertical: 3 },
+  corner: { position: 'absolute', top: 3, right: 3 },
+  badge: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   faded: { opacity: 0.5 },
   // Bottom right, clear of the title: the end of the room is the least a block would lose.
   // Round, but for the corner it shares with the block: that one curves round the block's own

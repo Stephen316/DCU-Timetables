@@ -15,6 +15,7 @@ import { CardInset, concentric, Desktop, MIN_TARGET, Radius, screenCorner, Space
  */
 const ICONS = {
   calendar: 'calendar-outline',
+  today: 'today-outline',
   list: 'list-outline',
   checklist: 'list',
   alert: 'alert-circle',
