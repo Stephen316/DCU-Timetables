@@ -4,7 +4,7 @@ import { PrefKey } from '../data/storage';
 import { NewPassword } from '../features/onboarding/NewPassword';
 import { ProgrammePicker } from '../features/onboarding/ProgrammePicker';
 import { SignIn } from '../features/onboarding/SignIn';
-import { StudentID } from '../features/onboarding/StudentID';
+import { AccountSetup } from '../features/onboarding/AccountSetup';
 import { useServices } from '../state/hooks';
 import { useRoot } from '../state/root';
 
@@ -24,7 +24,7 @@ export default function LoginRoute() {
     case 'newPassword':
       return <NewPassword address={user?.address ?? ''} onDone={passwordResetDone} />;
     case 'studentID':
-      return <StudentID onSaved={onSaved} onSignOut={signOut} />;
+      return <AccountSetup key={user?.id} onSaved={onSaved} onSignOut={signOut} />;
     case 'programmePicker':
       return <ProgrammePicker onSelect={onSelect} onSignOut={signOut} />;
     case 'shell':

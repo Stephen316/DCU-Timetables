@@ -3,15 +3,15 @@ import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Animated, Easing, Linking, Platform, Pressable, StyleSheet, Text, TextInput,
+  ActivityIndicator, Animated, Easing, Linking, Platform, Pressable, StyleSheet, Text,
   useWindowDimensions, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StudentNumber } from '../../core/identity';
 import { errorMessage, isNotSignedIn } from '../../data/rest';
 import { useServices } from '../../state/hooks';
-import { ActionRow, BarButton, ListScroll, PrimaryButton, Row, SecondaryButton, Section, Sheet, Txt, useReduceMotion } from '../../ui/components';
-import { Space, useTheme } from '../../ui/theme';
+import { SecondaryButton, Txt, useReduceMotion } from '../../ui/components';
+import { Space } from '../../ui/theme';
 
 /** The guide frame's width as a share of the screen's. */
 const GUIDE_WIDTH_FRACTION = 0.88;
@@ -37,9 +37,9 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 
 /**
  * Between signing in and the timetable: the student's number, read from the barcode on
- * their card. "See other options" lets them type it instead.
+ * their card. "Other methods" returns to account setup for manual entry.
  *
- * A number is saved the moment it's read or entered, and `SavedOverlay` confirms it over
+ * A number is saved the moment it's read, and `SavedOverlay` confirms it over
  * the camera. There's no "is this right?" step, and the number can be set only once —
  * after that only an admin can change it — so a misread is stopped before it gets here:
  * `StudentNumber.fromBarcode` refuses anything not shaped like a card's barcode, and a
@@ -50,59 +50,32 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
  * photo of the card could never be decoded; the shutter instead waits for the live scanner
  * and says so when nothing comes. No photo is taken, so none is ever stored.
  */
-export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) => void; onSignOut: () => void }) {
+export function StudentID({ onSaved, onSignOut, onOtherMethods }: { onSaved: (number: string) => void; onSignOut: () => void; onOtherMethods: () => void }) {
   const { profiles } = useServices();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const reduceMotion = useReduceMotion();
 
-  /** The server is asked first: a reinstall or a second phone already has a number there. */
-  const [checking, setChecking] = useState(true);
   const [cameraReady, setCameraReady] = useState(false);
   const [mountFailed, setMountFailed] = useState(false);
   /** The shutter was pressed and is waiting on the live scanner. */
   const [capturing, setCapturing] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const [showingOptions, setShowingOptions] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   /** The number the last frames agreed on, and how many of them. */
   const liveRead = useRef<{ number: string; frames: number } | null>(null);
   /** A number is being saved — for callbacks that run before the next render. */
   const busy = useRef(false);
-  const finished = useRef(false);
   const shutterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The shutter's window saw a Code 39 barcode that wasn't a student card's. */
   const sawOtherBarcode = useRef(false);
-  /** A typed number, saved once the sheet has gone so the confirmation plays in view. */
-  const typed = useRef<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    profiles
-      .myProfile()
-      .then((profile) => {
-        if (!cancelled && profile?.studentID) {
-          finished.current = true;
-          onSaved(profile.studentID);
-        }
-      })
-      .catch((error) => {
-        // Signed in on this phone, but with no session to act as. Nothing can be saved
-        // without one, so back to sign-in rather than a scan whose save can only fail.
-        if (!cancelled && isNotSignedIn(error)) onSignOut();
-      })
-      .finally(() => !cancelled && setChecking(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [profiles, onSaved, onSignOut]);
-
-  useEffect(() => {
-    if (!checking && permission && !permission.granted && permission.canAskAgain) void requestPermission();
-  }, [checking, permission, requestPermission]);
+    if (permission && !permission.granted && permission.canAskAgain) void requestPermission();
+  }, [permission, requestPermission]);
 
   useEffect(() => () => {
     if (shutterTimer.current) clearTimeout(shutterTimer.current);
@@ -113,9 +86,9 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
       : permission && !permission.granted && !permission.canAskAgain ? 'denied'
         : cameraReady ? 'running'
           : 'starting';
-  const scanning = !checking && permission?.granted === true && !mountFailed && confirmation === null && !showingOptions;
+  const scanning = permission?.granted === true && !mountFailed && confirmation === null;
   /** The card outline, while there's a camera to line a card up in and nothing read yet. */
-  const showsGhost = !checking && permission !== null && confirmation === null && (status === 'starting' || status === 'running');
+  const showsGhost = permission !== null && confirmation === null && (status === 'starting' || status === 'running');
 
   const endShutter = () => {
     if (shutterTimer.current) clearTimeout(shutterTimer.current);
@@ -123,9 +96,8 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
     setCapturing(false);
   };
 
-  /** Back to lining up a card, after a failed save or a sheet closed. */
+  /** Back to lining up a card, after a failed save. */
   const resume = () => {
-    if (finished.current) return;
     busy.current = false;
     liveRead.current = null;
     setProblem(null);
@@ -144,7 +116,6 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
       setConfirmation({ number, saved: true });
       if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await wait(CONFIRMATION_HOLD_MS);
-      finished.current = true;
       onSaved(number);
     } catch (error) {
       if (isNotSignedIn(error)) {
@@ -183,19 +154,11 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
     }, SHUTTER_WINDOW_MS);
   };
 
-  const saveTyped = (number: string) => {
-    // Started any sooner, the confirmation plays out underneath the sheet as it slides
-    // away. It waits for the sheet to go (`onDismissed`, iOS), with a fallback for where
-    // that callback doesn't come.
-    typed.current = number;
-    setShowingOptions(false);
-    setTimeout(runTyped, 700);
-  };
-
-  const runTyped = () => {
-    const number = typed.current;
-    typed.current = null;
-    if (number) void save(number);
+  const otherMethods = () => {
+    if (busy.current) return;
+    busy.current = true;
+    endShutter();
+    onOtherMethods();
   };
 
   // The guide's place on the full screen, a little above the middle to leave room for the shutter.
@@ -211,7 +174,7 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
     <View style={styles.screen}>
       {/* Dark over the camera whatever the setting, as the Camera app is. */}
       <StatusBar style="light" hidden />
-      {!checking && permission?.granted ? (
+      {permission?.granted ? (
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
@@ -233,11 +196,11 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
 
       {confirmation === null ? (
         <View style={[styles.frameMessage, { left: guide.x, top: guide.y, width: guide.w, height: guide.h }]}>
-          {checking || (status === 'starting' && permission === null) ? <ActivityIndicator color="#FFFFFF" /> : null}
-          {!checking && status === 'unavailable' ? (
+          {status === 'starting' && permission === null ? <ActivityIndicator color="#FFFFFF" /> : null}
+          {status === 'unavailable' ? (
             <Txt type="subheadline" color="#FFFFFF" style={styles.center}>{"There's no camera to use here. Type your student number instead."}</Txt>
           ) : null}
-          {!checking && status === 'denied' ? (
+          {status === 'denied' ? (
             <Txt type="subheadline" color="#FFFFFF" style={styles.center}>Camera access is off for DCU Timetable. Turn it on in Settings, or type your student number instead.</Txt>
           ) : null}
         </View>
@@ -251,38 +214,27 @@ export function StudentID({ onSaved, onSignOut }: { onSaved: (number: string) =>
         {status === 'denied' ? (
           <SecondaryButton title="Open Settings" onPress={() => void Linking.openSettings()} />
         ) : status === 'unavailable' ? (
-          <SecondaryButton title="Type your student number" onPress={() => setShowingOptions(true)} />
+          <SecondaryButton title="Type your student number" onPress={otherMethods} />
         ) : (
           <Pressable
             onPress={capture}
-            disabled={checking || status !== 'running' || capturing}
+            disabled={status !== 'running' || capturing}
             accessibilityRole="button"
             accessibilityLabel="Take photo"
-            style={[styles.shutter, { opacity: checking || status !== 'running' ? 0.4 : 1 }]}
+            style={[styles.shutter, { opacity: status !== 'running' ? 0.4 : 1 }]}
           >
             <View style={[styles.shutterFill, { opacity: capturing ? 0.4 : 1 }]} />
             {capturing ? <ActivityIndicator color="#000000" style={StyleSheet.absoluteFill} /> : null}
           </Pressable>
         )}
-        <Pressable onPress={() => { setSaveError(null); endShutter(); setShowingOptions(true); }} accessibilityRole="button" style={styles.options}>
-          <Txt type="footnote" color="rgba(255,255,255,0.8)">See other options</Txt>
+        <Pressable onPress={otherMethods} accessibilityRole="button" style={styles.options}>
+          <Txt type="footnote" color="rgba(255,255,255,0.8)">Other methods</Txt>
         </Pressable>
       </View>
 
       {confirmation ? (
         <SavedOverlay guide={guide} number={confirmation.number} saved={confirmation.saved} reduceMotion={reduceMotion} />
       ) : null}
-
-      <OtherOptions
-        visible={showingOptions}
-        onSave={saveTyped}
-        onSignOut={onSignOut}
-        onClose={() => {
-          setShowingOptions(false);
-          resume();
-        }}
-        onDismissed={runTyped}
-      />
     </View>
   );
 }
@@ -447,63 +399,6 @@ function SavedOverlay({ guide, number, saved, reduceMotion }: { guide: Box; numb
   );
 }
 
-/**
- * Typing the number instead, for a card that won't scan, a camera that isn't allowed, or
- * no card to hand. And the way out, for someone who signed in with the wrong account.
- *
- * Save closes the sheet and hands the number back, so the confirmation plays on the camera
- * screen like a scanned one, and a failure is reported there too.
- */
-function OtherOptions({
-  visible, onSave, onSignOut, onClose, onDismissed,
-}: { visible: boolean; onSave: (number: string) => void; onSignOut: () => void; onClose: () => void; onDismissed: () => void }) {
-  const theme = useTheme();
-  const [entry, setEntry] = useState('');
-  const number = StudentNumber.fromTyped(entry);
-  const caption =
-    entry.trim().length === 0
-      ? 'It\'s on your student card, after "Student Number": a letter and eight digits. Once it\'s saved, only an admin can change it.'
-      : number === null
-        ? 'A student number is a letter and eight digits, like A00000000.'
-        : `Saves as ${number}. Once it's saved, only an admin can change it.`;
-  return (
-    <Sheet
-      visible={visible}
-      title="Other options"
-      onClose={onClose}
-      onDismissed={onDismissed}
-      left={<BarButton title="Cancel" onPress={onClose} />}
-    >
-      <ListScroll>
-        <Section header="Enter your student number">
-          <Row>
-            <TextInput
-              value={entry}
-              onChangeText={setEntry}
-              placeholder="A00000000"
-              placeholderTextColor={theme.inkTertiary}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'default'}
-              returnKeyType="done"
-              onSubmitEditing={() => number && onSave(number)}
-              style={[styles.input, styles.mono, { color: theme.ink }]}
-              accessibilityLabel="Student number"
-            />
-            <Txt type="caption" color={theme.inkSecondary}>{caption}</Txt>
-          </Row>
-        </Section>
-        <Section bare>
-          <PrimaryButton title="Save" disabled={number === null} onPress={() => number && onSave(number)} />
-        </Section>
-        <Section>
-          <ActionRow title="Sign out" icon="signOut" destructive onPress={onSignOut} />
-        </Section>
-      </ListScroll>
-    </Sheet>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#000000' },
   center: { textAlign: 'center' },
@@ -547,6 +442,5 @@ const styles = StyleSheet.create({
   // The classic tick: two sides of a box, turned 45°, nudged up to sit in the ring's centre.
   tick: { borderRightWidth: 6, borderBottomWidth: 6, borderColor: '#FFFFFF', marginTop: -8, borderRadius: 2 },
   savedText: { alignItems: 'center', gap: Space.xs },
-  input: { fontSize: 17, minHeight: 40 },
   mono: { fontVariant: ['tabular-nums'], letterSpacing: 1 },
 });
