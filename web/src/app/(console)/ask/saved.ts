@@ -38,7 +38,7 @@ export type SavedView = {
     title: string | null; version: number; members: number; savedAt: string;
     groups: ClassGroup[];
     /** Further groupings beside the lab group — project teams, say — and how big they are. */
-    extras: { key: string; values: number; students: number }[];
+    extras: { key: string; students: number; values: { value: string; count: number }[] }[];
   } | null;
   heading: { title: string; savedAt: string } | null;
   /// The module's removals and additions, one row per programme or group. Ask saves them
@@ -105,17 +105,20 @@ export async function listSaved(programme: string, module: string):
       if (g) g.count++;
       else counts.set(k, { group: r.grp, subgroup: r.subgroup, count: 1, day: r.day, workshop: r.workshop, drawing: r.drawing });
     }
-    const extraSeen = new Map<string, { values: Set<string>; students: number }>();
+    const extraSeen = new Map<string, Map<string, number>>();
     for (const r of rows ?? []) {
       for (const [key, value] of Object.entries((r.extra ?? {}) as Record<string, string>)) {
-        const e = extraSeen.get(key) ?? { values: new Set<string>(), students: 0 };
-        e.values.add(value);
-        e.students++;
-        extraSeen.set(key, e);
+        const counts = extraSeen.get(key) ?? new Map<string, number>();
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+        extraSeen.set(key, counts);
       }
     }
     classList = {
-      extras: [...extraSeen].sort(([a], [b]) => a.localeCompare(b)).map(([key, e]) => ({ key, values: e.values.size, students: e.students })),
+      extras: [...extraSeen].sort(([a], [b]) => a.localeCompare(b)).map(([key, counts]) => ({
+        key,
+        students: [...counts.values()].reduce((a, b) => a + b, 0),
+        values: [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true })),
+      })),
       title: roster.data.title, version: roster.data.version, members: roster.data.members,
       savedAt: roster.data.created_at,
       groups: [...counts.values()].sort((a, b) =>

@@ -170,15 +170,13 @@ export function SavedPanel({ programme, programmeName: name, module, refresh }: 
       {module && view?.classList && (
         <Entry
           title="Class list"
-          meta={`${view.classList.members} students · v${view.classList.version} · ${when(view.classList.savedAt)}`}
+          meta={`${view.classList.members} students${view.classList.extras.map((e) => ` · ${e.values.length} ${e.key.replace(/_/g, " ")}${e.values.length === 1 ? "" : "s"}`).join("")} · v${view.classList.version} · ${when(view.classList.savedAt)}`}
           deleting={deleting === "classList"}
           onDelete={() => remove("classList", { kind: "classList", programme },
             `Delete the class list for ${programmeName}? All ${view.classList!.members} students lose their group, and phones set up from it go back to the profile screen on their next launch. This can't be undone.`)}
         >
           <p className="dim" style={{ fontSize: 12, marginBottom: 6 }}>
             Counts only — names are stored as keys and can&rsquo;t be shown.
-            {view.classList.extras.map((e) =>
-              ` ${e.key.replace(/_/g, " ")}: ${e.values} across ${e.students} students.`).join("")}
           </p>
           <div className="saved-scroll">
             <table>
@@ -193,6 +191,21 @@ export function SavedPanel({ programme, programmeName: name, module, refresh }: 
               </tbody>
             </table>
           </div>
+          {view.classList.extras.map((e) => (
+            <div key={e.key} style={{ marginTop: 10 }}>
+              <p className="dim" style={{ fontSize: 12, marginBottom: 6 }}>
+                {e.key.replace(/_/g, " ")} · {e.values.length} across {e.students} students
+              </p>
+              <div className="saved-scroll">
+                <table>
+                  <thead><tr><th>{e.key.replace(/_/g, " ")}</th><th>Students</th></tr></thead>
+                  <tbody>
+                    {e.values.map((v) => <tr key={v.value}><td className="mono">{v.value}</td><td>{v.count}</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </Entry>
       )}
     </section>
