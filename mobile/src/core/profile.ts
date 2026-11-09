@@ -16,11 +16,15 @@ export interface Allocation {
   drawing: string | null;
 }
 
-/** Reads a `course_allocations` row, whose group column is `grp`. */
+/**
+ * Reads a `course_allocations` row, whose group column is `grp`. A student on a team-only
+ * list has no lab group: `grp` comes back null and they get an empty group, which matches
+ * no lab rotation and no group-addressed change — only changes for everyone.
+ */
 export function allocationFromRow(row: Record<string, unknown>): Allocation | null {
-  if (typeof row.grp !== 'string') return null;
+  if (typeof row.grp !== 'string' && row.grp !== null) return null;
   const text = (v: unknown) => (typeof v === 'string' ? v : null);
-  return { group: row.grp, subgroup: text(row.subgroup), day: text(row.day), workshop: text(row.workshop), drawing: text(row.drawing) };
+  return { group: row.grp ?? '', subgroup: text(row.subgroup), day: text(row.day), workshop: text(row.workshop), drawing: text(row.drawing) };
 }
 
 // MARK: - Student profile

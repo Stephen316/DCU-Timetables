@@ -44,6 +44,12 @@ describe('Allocation resolution', () => {
       .toEqual({ group: 'B', subgroup: 'B.3', day: 'Wed', workshop: 'SG24', drawing: 'SB38' });
   });
 
+  test('a row with no lab group reads as an empty group; a row with no grp at all is not one', () => {
+    expect(allocationFromRow({ grp: null, subgroup: null, day: null, workshop: null, drawing: null }))
+      .toEqual({ group: '', subgroup: null, day: null, workshop: null, drawing: null });
+    expect(allocationFromRow({ subgroup: 'B.3' })).toBeNull();
+  });
+
   test('a profile saved before the server matched them still decodes', () => {
     const p = decodeProfile({ name: 'Student Example', cohort: 'engineeringYear1', group: 'C', subgroup: 'C.2', workshop: 'SG25', drawing: 'SB39' });
     expect(p?.group).toBe('C');
