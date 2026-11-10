@@ -1,18 +1,29 @@
 import { Ref, RefCallback } from 'react';
 import { Platform, ScrollView } from 'react-native';
 
-/** How far past its end a page can be pulled, as a share of its height, however hard it's pushed. */
-const STRETCH = 0.55;
-/** No more scrolling for this long, and the page springs back. */
-const SETTLE_MS = 120;
-const SPRING = 'transform 480ms cubic-bezier(0.22, 1, 0.36, 1)';
+/** The furthest past its end a page can be pulled, however hard it's pushed: a hint, not a stretch. */
+const MAX_PULL = 60;
+/** How much of a push shows at first, before the resistance builds: a little, so it eases out. */
+const GIVE = 0.35;
+/** A pull springs back after this long at most, even with the wheel or trackpad still going. */
+const HOLD_MS = 60;
+/**
+ * Once it's sprung back, the scroll that pulled it is spent: a trackpad's momentum keeps
+ * sending it for a while after the fingers lift, and it mustn't pull the page out again.
+ * Only a pause this long in the scrolling starts a fresh pull.
+ */
+const SPENT_MS = 180;
+/** Out to a pull: eased, so the page glides there rather than jumping a step per wheel tick. */
+const PULL = 'transform 90ms cubic-bezier(0.33, 1, 0.68, 1)';
+/** Back from it: a soft ease-out, quick to start and gentle to land. */
+const SPRING = 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)';
 
 /**
- * The pull a push past the end shows: it gives easily at first and ever less after, the
- * curve iOS rubber-bands with, so it can't be dragged off the screen.
+ * The pull a push past the end shows: it gives a little at first and ever less after, the
+ * curve iOS rubber-bands with, but capped short, so the page only nudges past its edge.
  */
-function stretched(push: number, height: number): number {
-  return Math.sign(push) * (1 - 1 / ((Math.abs(push) * STRETCH) / height + 1)) * height;
+function stretched(push: number): number {
+  return Math.sign(push) * (1 - 1 / ((Math.abs(push) * GIVE) / MAX_PULL + 1)) * MAX_PULL;
 }
 
 /**
@@ -30,16 +41,20 @@ function attach(node: HTMLElement): () => void {
   let touch: { x: number; y: number; last: number; axis: 'v' | 'h' | null; from: number | null } | null = null;
 
   const content = () => node.firstElementChild as HTMLElement | null;
-  const show = (spring: boolean) => {
+  /** Under a finger the page follows it exactly; a wheel's pull eases out; letting go springs back. */
+  const show = (motion: 'follow' | 'pull' | 'spring') => {
     const el = content();
     if (!el) return;
-    el.style.transition = spring ? SPRING : 'none';
-    el.style.transform = push === 0 ? '' : `translateY(${stretched(push, node.clientHeight).toFixed(1)}px)`;
+    el.style.transition = motion === 'spring' ? SPRING : motion === 'pull' ? PULL : 'none';
+    el.style.transform = push === 0 ? '' : `translateY(${stretched(push).toFixed(1)}px)`;
   };
+  /** Until when the wheel's scroll at an end is spent momentum, and pulls nothing. */
+  let spentUntil = 0;
   const springBack = () => {
     settle = null;
     push = 0;
-    show(true);
+    spentUntil = performance.now() + SPENT_MS;
+    show('spring');
   };
 
   const onWheel = (e: WheelEvent) => {
@@ -50,19 +65,31 @@ function attach(node: HTMLElement): () => void {
     const end = node.scrollHeight - node.clientHeight;
     if (push === 0) {
       // Past the top, the page comes down (a positive pull); past the bottom, it goes up.
-      if (dy < 0 && node.scrollTop <= 0) push = -dy;
-      else if (dy > 0 && node.scrollTop >= end - 1) push = -dy;
-      else return;
+      const pastTop = dy < 0 && node.scrollTop <= 0;
+      const pastEnd = dy > 0 && node.scrollTop >= end - 1;
+      if (!pastTop && !pastEnd) return;
+      const now = performance.now();
+      if (now < spentUntil) {
+        // The tail of the scroll that already bounced: hold the page still till it dies away.
+        spentUntil = now + SPENT_MS;
+        e.preventDefault();
+        return;
+      }
+      push = -dy;
+      // Back in a moment, however long the scroll keeps coming.
+      settle = setTimeout(springBack, HOLD_MS);
     } else {
       const was = push;
       push -= dy;
       // Scrolled back the other way past where it started: that's ordinary scrolling again.
-      if (Math.sign(push) !== Math.sign(was)) push = 0;
+      if (Math.sign(push) !== Math.sign(was)) {
+        push = 0;
+        if (settle) clearTimeout(settle);
+        settle = null;
+      }
     }
     e.preventDefault();
-    show(false);
-    if (settle) clearTimeout(settle);
-    settle = setTimeout(springBack, SETTLE_MS);
+    show('pull');
   };
 
   const onTouchStart = (e: TouchEvent) => {
@@ -102,12 +129,12 @@ function attach(node: HTMLElement): () => void {
       // Pushed back past where the pull began.
       push = 0;
       touch.from = null;
-      show(false);
+      show('follow');
       return;
     }
     e.preventDefault();
     push = pull;
-    show(false);
+    show('follow');
   };
 
   const onTouchEnd = () => {

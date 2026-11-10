@@ -86,6 +86,17 @@ function Themed({ children }: { children: ReactNode }) {
     if (root) root.style.backgroundColor = palette.canvas;
   }, [scheme, palette]);
 
+  // In a browser the only rubber band is the app's own short one (elasticScroll): Safari's and
+  // a trackpad's, which pull a page far past its edge, are turned off on the page and every
+  // list, menu and sheet in it, and a list at its end doesn't hand the scroll on to the page.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const style = document.createElement('style');
+    style.textContent = 'html, body, * { overscroll-behavior: none; }';
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+
   const navigationTheme = useMemo(() => {
     const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
     return {
