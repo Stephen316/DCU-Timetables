@@ -1,3 +1,4 @@
+import { Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space } from './theme';
 
@@ -31,10 +32,41 @@ export function floatingBarMargin(bottomInset: number): number {
 }
 
 /**
+ * On a desktop-wide window the tabs leave the foot of the screen and stand in a column down
+ * its right edge: the same pill on end, with the room it needs kept clear beside the screens.
+ */
+export const DesktopRail = {
+  /** The pill's width, and its gap from the window's edge. */
+  pill: FloatingBar.height,
+  margin: Space.l,
+  /** What the screens give up on the right: the pill, its margin, and a gap before it. */
+  width: FloatingBar.height + Space.l * 2,
+  /** The narrowest window that gets the rail; below this it's a phone's bottom bar. */
+  minWindow: 600,
+  /** A browser window shorter than this is a phone on its side, which keeps the bottom bar. */
+  minWebHeight: 480,
+} as const;
+
+/**
+ * Whether the tabs stand down the right edge rather than along the bottom: on any big screen —
+ * a laptop or PC browser, or a tablet either way up — but never a phone, even turned sideways.
+ * In the app, a tablet is a screen whose shorter side is past a phone's; in a browser, it's a
+ * window wide enough and not as short as a sideways phone's.
+ */
+export function useDesktopRail(): boolean {
+  const { width, height } = useWindowDimensions();
+  if (Platform.OS === 'web') return width >= DesktopRail.minWindow && height >= DesktopRail.minWebHeight;
+  return Math.min(width, height) >= DesktopRail.minWindow;
+}
+
+/**
  * What the bar and its haze cover at the foot of the screen: pad a list's end by this, so
  * scrolled all the way down, its last line rests clear of the fade rather than dissolving in it.
+ * With the tabs on the right, nothing covers the foot, so only a little breathing room.
  */
 export function useTabBarClearance(): number {
   const { bottom } = useSafeAreaInsets();
+  const rail = useDesktopRail();
+  if (rail) return Space.l + bottom;
   return FloatingBar.height + floatingBarMargin(bottom) + FloatingBar.fade;
 }

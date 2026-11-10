@@ -97,6 +97,12 @@ export const PreviewData = {
         detailsEditedAt: new Date(now.getTime() - 2.5 * HOUR),
       }),
       makeDeadline({ id: 'dl-sheet', moduleKey: 'MS121', title: 'Problem sheet 3', due: addDays(now, 9), kind: 'assignment', submitterID: 'preview-me', isMine: true }),
+      // Enough more that the list runs past the foot of a desktop window, to try its scrolling.
+      makeDeadline({ id: 'dl-lab', moduleKey: 'CA117', title: 'Lab 6: linked lists', due: addDays(now, 2), kind: 'labReport', submitterID: 'someone', isMine: false }),
+      makeDeadline({ id: 'dl-net', moduleKey: 'CA218', title: 'Packet tracing report', due: addDays(now, 6), kind: 'assignment', submitterID: 'someone', isMine: false, gradeWeight: 20 }),
+      makeDeadline({ id: 'dl-ethics', moduleKey: 'EE105', title: 'Ethics case study essay', due: addDays(now, 12), kind: 'assignment', submitterID: 'someone', isMine: false }),
+      makeDeadline({ id: 'dl-midterm', moduleKey: 'CA106', title: 'Midterm exam', due: addDays(now, 15), kind: 'exam', submitterID: 'someone', isMine: false, gradeWeight: 30 }),
+      makeDeadline({ id: 'dl-quiz4', moduleKey: 'MS121', title: 'Quiz 4: matrices', due: addDays(now, 19), kind: 'quiz', submitterID: 'preview-me', isMine: true }),
     ];
   },
 

@@ -37,6 +37,17 @@
       "cwd": "mobile"
     },
     {
+      "name": "mobile-preview-windows",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:EXPO_PUBLIC_PREVIEW='1'; npx.cmd expo start --web --port 8082"
+      ],
+      "port": 8082,
+      "cwd": "mobile"
+    },
+    {
       "name": "site",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
