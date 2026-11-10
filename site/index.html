@@ -325,63 +325,69 @@
       <code id="site-link">https://info.dcutimetables.app/</code>
       <button type="button" id="copy-link">Copy link</button>
     </p>
-    <p class="legal">An independent student project. Not affiliated with or endorsed by Dublin City University.</p>
+    <p class="legal">A student project with some support from DCU. Not an official DCU app, and not recognised or endorsed by Dublin City University.</p>
     <p class="seo-keywords">DCU timetable &middot; DCU timetables app &middot; Dublin City University timetable &middot; DCU class schedule &middot; DCU lecture timetable &middot; DCU deadlines &middot; DCU assignment deadlines &middot; DCU cancelled classes &middot; DCU class alerts &middot; DCU student app &middot; DCU timetable on iPhone and Mac Rubric &middot; Redbrick Timetable &middot; Redbrick &middot; Loop Timetable</p>
   </div>
 </footer>
 
 <script>
-  // Show each phone at the front once, only while the stack is in primary focus.
+  // One forward-only pass between the phones entering fully and leaving at the top.
   (function () {
     var stage = document.querySelector('.stage');
-    var phones = stage.querySelectorAll('.phone');
+    var phones = Array.from(stage.querySelectorAll('.phone'));
     var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    var queued = false;
     var phase = 0;
-    var distance = 0;
-    var previousScroll = window.scrollY;
-    var wasFocused = false;
-    var nextSwapAt = 0;
-    var furthestScroll = window.scrollY;
+    var queued = false;
+    var swapping = false;
+    var measuredWidth = 0;
+    var rangeStart = 0;
+    var rangeLength = 1;
     phones.forEach(function (phone, index) { phone.setAttribute('data-slot', index); });
     stage.setAttribute('data-ready', 'true');
+
+    function measure() {
+      // Mobile browser chrome changes viewport height during scroll. Keep the
+      // boundaries fixed until the layout width changes (including rotation).
+      if (measuredWidth === window.innerWidth) return;
+      measuredWidth = window.innerWidth;
+      var top = stage.getBoundingClientRect().top + window.scrollY;
+      var height = Math.max.apply(null, phones.map(function (phone) { return phone.offsetHeight; })) + 56;
+      rangeLength = window.innerHeight - height;
+      if (rangeLength <= 0) rangeLength = window.innerHeight * .5;
+      rangeStart = top - rangeLength;
+    }
     function update() {
       queued = false;
-      var rect = stage.getBoundingClientRect();
-      var viewport = window.innerHeight;
-      var centre = rect.top + rect.height / 2;
-      var focused = rect.top >= 72 && rect.bottom <= viewport - 16 &&
-        centre >= viewport * .35 && centre <= viewport * .65;
-      var delta = Math.max(0, window.scrollY - Math.max(previousScroll, furthestScroll));
-      furthestScroll = Math.max(furthestScroll, window.scrollY);
-      previousScroll = window.scrollY;
-      if (!reducedMotion.matches && focused && wasFocused && phase < 2) {
-        // Scale the scroll distance to the space available on shorter screens.
-        var focusTravel = Math.min(viewport * .3, viewport - 88 - rect.height);
-        var step = Math.max(16, Math.min(80, focusTravel / 3));
-        distance += Math.max(0, delta);
-        if (distance >= step && Date.now() >= nextSwapAt) {
-          // The left phone returns behind the stack instead of crossing the front.
-          var returning = stage.querySelector('[data-slot="0"]');
-          returning.classList.add('is-wrapping');
-          phase += 1;
-          phones.forEach(function (phone, index) {
-            phone.setAttribute('data-slot', (index - phase + 3) % 3);
-          });
-          window.setTimeout(function () { returning.classList.remove('is-wrapping'); }, 240);
-          nextSwapAt = Date.now() + 850;
-          window.setTimeout(schedule, 850);
-          distance = 0;
+      measure();
+      if (phase === 2 || swapping || reducedMotion.matches) return;
+      var progress = Math.max(0, Math.min(1, (window.scrollY - rangeStart) / rangeLength));
+      var next = progress >= 2 / 3 ? 2 : progress >= 1 / 3 ? 1 : 0;
+      if (next <= phase) return;
+      // Never skip the middle phone or interrupt a transition on a fast swipe.
+      swapping = true;
+      var returning = stage.querySelector('[data-slot="0"]');
+      returning.classList.add('is-wrapping');
+      phase += 1;
+      phones.forEach(function (phone, index) {
+        phone.setAttribute('data-slot', (index - phase + 3) % 3);
+      });
+      window.setTimeout(function () {
+        returning.classList.remove('is-wrapping');
+        swapping = false;
+        if (phase === 2) {
+          window.removeEventListener('scroll', schedule);
+          window.removeEventListener('resize', schedule);
+        } else {
+          schedule();
         }
-      }
-      wasFocused = focused;
+      }, 260);
     }
     function schedule() {
       if (!queued) { queued = true; window.requestAnimationFrame(update); }
     }
     window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', function () { wasFocused = false; schedule(); });
-    reducedMotion.addEventListener('change', function () { wasFocused = false; schedule(); });
+    window.addEventListener('resize', schedule);
+    reducedMotion.addEventListener('change', schedule);
     update();
   })();
 
