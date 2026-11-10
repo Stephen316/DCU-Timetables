@@ -20,14 +20,46 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "WebSite",
-  "name": "DCU Timetable",
-  "alternateName": ["DCU Timetables", "DCU Timetables App"],
-  "url": "https://info.dcutimetables.app/"
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://info.dcutimetables.app/#website",
+      "name": "DCU Timetable",
+      "alternateName": ["DCU Timetables", "DCU Timetables App"],
+      "url": "https://info.dcutimetables.app/"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://info.dcutimetables.app/#app",
+      "name": "DCU Timetable",
+      "alternateName": ["DCU Timetables", "DCU Timetables App"],
+      "description": "A free app for your Dublin City University timetable, with assignment deadlines and cancelled classes shared by your classmates. For anyone with a DCU email.",
+      "url": "https://dcutimetables.app/",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Web browser, iOS, Android, macOS 14 or later",
+      "screenshot": "https://info.dcutimetables.app/img/phone-day-dark.png",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+      "audience": { "@type": "EducationalAudience", "educationalRole": "student" }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://info.dcutimetables.app/#faq",
+      "mainEntity": [
+        { "@type": "Question", "name": "Is there an app for the DCU timetable?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. DCU Timetable is a free app that shows your own Dublin City University timetable, with your programme, groups and labs, on your phone, your computer or your Mac. It runs in your browser at dcutimetables.app, so there is nothing to install." } },
+        { "@type": "Question", "name": "Is DCU Timetable free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. It is free for anyone with a DCU email address, either @mail.dcu.ie or @dcu.ie. You sign in with that email." } },
+        { "@type": "Question", "name": "How do I find out if a DCU class is cancelled?", "acceptedAnswer": { "@type": "Answer", "text": "When a lecture is cancelled, a classmate reports it in DCU Timetable and it shows as cancelled on the timetable of everyone in that class." } },
+        { "@type": "Question", "name": "Where do the deadlines come from?", "acceptedAnswer": { "@type": "Answer", "text": "Students add assignment deadlines for their modules and classmates confirm them, so each deadline shows how many people have vouched for the date. Anything wrong or offensive can be reported." } },
+        { "@type": "Question", "name": "Is there a DCU timetable app for iPhone or Android?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open dcutimetables.app and add it to your Home Screen: in Safari use Share, then Add to Home Screen; in Chrome use the menu, then Add to Home screen or Install app. It opens like any other app and keeps you signed in." } },
+        { "@type": "Question", "name": "Is there a DCU timetable app for Mac?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The free Mac app shows your week and your deadlines in a window of their own, with class alerts as Mac notifications. It needs macOS 14 or later." } },
+        { "@type": "Question", "name": "Is DCU Timetable an official DCU app?", "acceptedAnswer": { "@type": "Answer", "text": "No. It is a student project with some support from DCU, but it is not an official DCU app and is not recognised or endorsed by Dublin City University." } }
+      ]
+    }
+  ]
 }
 </script>
 <script src="theme.js?v=1"></script>
-<link rel="stylesheet" href="landing.css?v=12">
+<link rel="stylesheet" href="landing.css?v=14">
 <link rel="stylesheet" href="react-bits.css?v=3">
 <script src="react-bits.js?v=3" defer></script>
 <link rel="stylesheet" href="assets/heading.css?v=3">
@@ -67,6 +99,7 @@
     <nav aria-label="Main">
       <a class="hide-s" href="#features">Features</a>
       <a class="hide-s" href="#get">Get it</a>
+      <a class="hide-s" href="#faq">FAQ</a>
       <a class="hide-s" href="support.html">Help</a>
       <a class="chip-btn" href="https://dcutimetables.app/">Open app</a>
     </nav>
@@ -167,6 +200,52 @@
     </div>
   </section>
 
+  <section class="sec wrap" id="faq" aria-labelledby="faq-h">
+    <div class="sec-head rv">
+      <p class="eyebrow">Questions</p>
+      <h2 id="faq-h">Before you open it.</h2>
+      <p>The short answers. For anything else, see <a href="support.html">Help and contact</a>.</p>
+    </div>
+
+    <div class="faq">
+      <article class="qa wide rv" data-spotlight-card>
+        <span class="tag">The app</span>
+        <h3>Is there an app for the DCU timetable?</h3>
+        <p><b>Yes.</b> DCU Timetable is a free app that shows your own Dublin City University timetable, with your programme, groups and labs, on your phone, your computer or your Mac. It runs in your browser at <a href="https://dcutimetables.app/">dcutimetables.app</a>, so there is nothing to install.</p>
+      </article>
+      <article class="qa rv" style="--d:.08s" data-spotlight-card>
+        <span class="tag">Price</span>
+        <h3>Is DCU Timetable free?</h3>
+        <p><b>Yes.</b> It is free for anyone with a DCU email address, either @mail.dcu.ie or @dcu.ie. You sign in with that email.</p>
+      </article>
+      <article class="qa rv" data-spotlight-card>
+        <span class="tag">Cancellations</span>
+        <h3>How do I find out if a DCU class is cancelled?</h3>
+        <p>When a lecture is cancelled, a classmate reports it in DCU Timetable and it shows as cancelled on the timetable of everyone in that class.</p>
+      </article>
+      <article class="qa rv" style="--d:.08s" data-spotlight-card>
+        <span class="tag">Deadlines</span>
+        <h3>Where do the deadlines come from?</h3>
+        <p>Students add assignment deadlines for their modules and classmates confirm them, so each deadline shows how many people have vouched for the date. Anything wrong or offensive can be reported.</p>
+      </article>
+      <article class="qa rv" style="--d:.16s" data-spotlight-card>
+        <span class="tag">Phone</span>
+        <h3>Is there a DCU timetable app for iPhone or Android?</h3>
+        <p><b>Yes.</b> Open <a href="https://dcutimetables.app/">dcutimetables.app</a> and add it to your Home Screen: in Safari use Share, then Add to Home Screen; in Chrome use the menu, then Add to Home screen or Install app. It opens like any other app and keeps you signed in.</p>
+      </article>
+      <article class="qa rv" data-spotlight-card>
+        <span class="tag">Mac</span>
+        <h3>Is there a DCU timetable app for Mac?</h3>
+        <p><b>Yes.</b> The free <a href="#get-mac">Mac app</a> shows your week and your deadlines in a window of their own, with class alerts as Mac notifications. It needs macOS 14 or later.</p>
+      </article>
+      <article class="qa rv" style="--d:.08s" data-spotlight-card>
+        <span class="tag">About</span>
+        <h3>Is DCU Timetable an official DCU app?</h3>
+        <p><b>No.</b> It is a student project with some support from DCU, but it is not an official DCU app and is not recognised or endorsed by Dublin City University.</p>
+      </article>
+    </div>
+  </section>
+
   <section class="sec wrap" id="get" aria-labelledby="get-h">
     <div class="sec-head rv">
       <p class="eyebrow">Get it</p>
@@ -174,7 +253,7 @@
     </div>
 
     <div class="ways">
-      <article class="way main rv">
+      <article class="way main rv" data-spotlight-card>
         <span class="tag">Fastest</span>
         <h3>The web app</h3>
         <p>Open it on any phone or computer &mdash; there&rsquo;s no app store to search and nothing to download. Sign in with your DCU email and you&rsquo;re in.</p>
@@ -183,7 +262,7 @@
         </a>
       </article>
 
-      <article class="way rv" style="--d:.08s" aria-labelledby="get-phone">
+      <article class="way rv" style="--d:.08s" aria-labelledby="get-phone" data-spotlight-card>
         <span class="tag">Phone</span>
         <h3 id="get-phone">Add it to your Home Screen</h3>
         <p>iPhone or Android. It sits next to your other apps and you stay signed in.</p>
@@ -209,7 +288,7 @@
         </div>
       </article>
 
-      <article class="way rv" style="--d:.16s" aria-labelledby="get-mac">
+      <article class="way rv" style="--d:.16s" aria-labelledby="get-mac" data-spotlight-card>
         <span class="tag">Mac</span>
         <h3 id="get-mac">The Mac app</h3>
         <p>Your week and deadlines in a window of their own, with class alerts as Mac notifications. macOS 14 or later.</p>

@@ -1,0 +1,23 @@
+# DCU Timetable
+
+> DCU Timetable is a free app that shows a Dublin City University (DCU) student their own timetable (their programme, groups and labs) along with assignment deadlines and cancelled classes shared by classmates. It runs in the browser at https://dcutimetables.app/ and needs a DCU email address (@mail.dcu.ie or @dcu.ie) to sign in. It is a student project with some support from DCU, but it is not an official DCU app and is not recognised or endorsed by Dublin City University.
+
+## What it does
+
+- Personal timetable: pick your programme, groups and labs and see only your classes, in a day view with the free time between classes or a week grid.
+- Deadlines: students add assignment deadlines for their modules and classmates confirm them, so each deadline shows how many people have vouched for the date.
+- Cancelled classes: when a lecture is off, someone in the class reports it and it shows as cancelled on everyone's timetable.
+- Light and dark themes that follow the device.
+
+## Where it runs
+
+- Web app, on any phone or computer, with nothing to install: https://dcutimetables.app/
+- iPhone and Android: add the web app to the Home Screen (Safari: Share, then Add to Home Screen; Chrome: the ⋮ menu, then Add to Home screen or Install app).
+- Mac app, for macOS 14 or later, with the week view, deadlines and class alerts as Mac notifications: https://info.dcutimetables.app/#get
+
+## Pages
+
+- [Home](https://info.dcutimetables.app/): what the app does, how to get it, and common questions
+- [Help and contact](https://info.dcutimetables.app/support.html): wrong groups, confirmation emails, passwords, reporting a deadline, deleting an account
+- [Privacy policy](https://info.dcutimetables.app/privacy.html)
+- [Terms of use](https://info.dcutimetables.app/terms.html)

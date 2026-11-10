@@ -237,6 +237,33 @@ h2 { margin: 0; font-size: clamp(32px, 5.4vw, 56px); line-height: 1.04; letter-s
 .way ol { margin: 14px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; }
 .way li { margin: 6px 0; padding-left: 4px; }
 .way .note { font-size: 13.5px; }
+
+/* ── Questions ─────────────────────────────────────────────────────── */
+/* Always open, not <details>: crawlers and AI answer engines quote what's plainly on the page. */
+/* Laid out like the bento above: three columns, the first question wide. */
+.faq { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.qa {
+  position: relative; overflow: hidden; min-width: 0; display: flex; flex-direction: column;
+  border-radius: 10px; padding: 28px; border: 1px solid var(--line); background: var(--card);
+}
+.qa.wide { grid-column: span 2; }
+.qa .tag { align-self: flex-start; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+.qa h3 { margin: 0 0 10px; font-size: 20px; line-height: 1.25; letter-spacing: -.02em; text-wrap: balance; }
+.qa p { margin: 0; color: var(--muted); font-size: 15.5px; line-height: 1.55; }
+.qa p b { color: var(--text); font-weight: 650; }
+.qa a, .sec-head p a { color: var(--text); text-underline-offset: 3px; text-decoration-color: var(--line); }
+.qa a:hover, .sec-head p a:hover { text-decoration-color: var(--accent); }
+@media (max-width: 920px) { .faq { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .faq { grid-template-columns: minmax(0, 1fr); } .qa.wide { grid-column: span 1; } .qa { padding: 24px; } }
+
+/* Cards answer the pointer the same way everywhere: a purple edge and the spotlight.
+   The scroll reveal sets its own transition, so border-color is added back here, undelayed. */
+.tile:hover, .qa:hover, .way:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.way.main:hover { border-color: color-mix(in srgb, var(--accent) 85%, transparent); }
+.js .tile.rv, .js .qa.rv, .js .way.rv {
+  transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1), border-color .3s ease;
+  transition-delay: var(--d, 0s), var(--d, 0s), 0s;
+}
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 22px;
   border-radius: 14px; font-weight: 650; font-size: 16px; text-decoration: none; border: 1px solid var(--line);
