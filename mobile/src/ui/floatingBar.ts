@@ -1,4 +1,4 @@
-import { useWindowDimensions } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space } from './theme';
 
@@ -43,15 +43,20 @@ export const DesktopRail = {
   width: FloatingBar.height + Space.l * 2,
   /** The narrowest window that gets the rail; below this it's a phone's bottom bar. */
   minWindow: 600,
+  /** A browser window shorter than this is a phone on its side, which keeps the bottom bar. */
+  minWebHeight: 480,
 } as const;
 
 /**
- * Whether the tabs stand down the right edge rather than along the bottom: any window wider
- * than a phone held upright, which is narrower than the rest of the desktop layout asks for,
- * so a browser window or tablet gets the rail even before it's wide enough for the rest.
+ * Whether the tabs stand down the right edge rather than along the bottom: on any big screen —
+ * a laptop or PC browser, or a tablet either way up — but never a phone, even turned sideways.
+ * In the app, a tablet is a screen whose shorter side is past a phone's; in a browser, it's a
+ * window wide enough and not as short as a sideways phone's.
  */
 export function useDesktopRail(): boolean {
-  return useWindowDimensions().width >= DesktopRail.minWindow;
+  const { width, height } = useWindowDimensions();
+  if (Platform.OS === 'web') return width >= DesktopRail.minWindow && height >= DesktopRail.minWebHeight;
+  return Math.min(width, height) >= DesktopRail.minWindow;
 }
 
 /**
