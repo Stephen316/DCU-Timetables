@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { TabSync } from "./tab-sync";
 
 export const metadata: Metadata = {
-  title: "DCU Timetable — console",
-  description: "Moderation and course data for the DCU Timetable app.",
+  title: "DCU Live — console",
+  description: "Moderation and course data for the DCU Live app.",
   icons: { icon: "/logo.svg" },
 };
 

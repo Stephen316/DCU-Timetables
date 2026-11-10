@@ -1,4 +1,4 @@
-# DCU-Timetables — plan
+# DCU Live — plan
 
 ## Vision
 

@@ -19,7 +19,7 @@ const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SE
   auth: { persistSession: false },
 });
 
-const VERIFY_URL = Deno.env.get('VERIFY_URL')?.trim() || 'https://dcutimetables.app/verify.html';
+const VERIFY_URL = Deno.env.get('VERIFY_URL')?.trim() || 'https://app.dculive.ie/signup';
 const MAIL_FROM = Deno.env.get('MAIL_FROM')?.trim() || '';
 const RESEND_KEY = Deno.env.get('RESEND_API_KEY')?.trim() || '';
 const ENC_KEY = Deno.env.get('SIGNUP_ENC_KEY')?.trim() || '';
@@ -104,16 +104,16 @@ async function sendMail(to: string, subject: string, html: string, text: string)
 
 function linkMail(link: string) {
   return {
-    subject: 'Confirm your DCU Timetable account',
+    subject: 'Confirm your DCU Live account',
     text: `Open this link and press "Confirm my account":\n\n${link}\n\nIt works for one hour. If you didn't ask for this, ignore this email — no account was made.`,
-    html: `<p>Open the link and press <b>Confirm my account</b>.</p><p><a href="${link}">Confirm your DCU Timetable account</a></p><p style="color:#666">It works for one hour. If you didn't ask for this, ignore this email — no account was made.</p>`,
+    html: `<p>Open the link and press <b>Confirm my account</b>.</p><p><a href="${link}">Confirm your DCU Live account</a></p><p style="color:#666">It works for one hour. If you didn't ask for this, ignore this email — no account was made.</p>`,
   };
 }
 
 const ALREADY_MAIL = {
-  subject: 'You already have a DCU Timetable account',
-  text: 'Someone (hopefully you) tried to create a DCU Timetable account with this address, but it already has one. Open the app and sign in — or tap "Forgot password?" to reset it. If this wasn\'t you, ignore this email.',
-  html: '<p>Someone (hopefully you) tried to create a DCU Timetable account with this address, but it already has one.</p><p>Open the app and sign in — or tap <b>Forgot password?</b> to reset it.</p><p style="color:#666">If this wasn\'t you, ignore this email.</p>',
+  subject: 'You already have a DCU Live account',
+  text: 'Someone (hopefully you) tried to create a DCU Live account with this address, but it already has one. Open the app and sign in — or tap "Forgot password?" to reset it. If this wasn\'t you, ignore this email.',
+  html: '<p>Someone (hopefully you) tried to create a DCU Live account with this address, but it already has one.</p><p>Open the app and sign in — or tap <b>Forgot password?</b> to reset it.</p><p style="color:#666">If this wasn\'t you, ignore this email.</p>',
 };
 
 // MARK: - Actions

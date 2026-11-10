@@ -4,5 +4,8 @@
   "buildCommand": "npx expo export -p web --output-dir dist",
   "outputDirectory": "dist",
   "redirects": [{ "source": "/app/:path*", "destination": "/:path*", "permanent": true }],
-  "rewrites": [{ "source": "/:path*", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/signup", "destination": "/verify.html" },
+    { "source": "/:path*", "destination": "/index.html" }
+  ]
 }

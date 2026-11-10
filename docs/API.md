@@ -1,4 +1,4 @@
-# DCU Timetable — public API reference (verified live 2026-09-15)
+# DCU Live — public API reference (verified live 2026-09-15)
 
 DCU's timetable system (`mytimetable.dcu.ie`, formerly `opentimetable.dcu.ie`) is a
 Scientia/Semestry **MyTimetable v4** Angular SPA. Its backend serves the whole

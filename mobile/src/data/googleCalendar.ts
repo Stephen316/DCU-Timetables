@@ -36,7 +36,7 @@ export class GoogleAPIError extends Error {
 /**
  * Add to Google Calendar in the web build: Google's own sign-in (Google Identity Services)
  * gives a token for `GoogleCalendarRules.scope` alone, and the classes go straight into a
- * "DCU Timetable" calendar through the Calendar API. Nothing passes through our server, and
+ * "DCU Live" calendar through the Calendar API. Nothing passes through our server, and
  * the token is held only while the classes go in. The calendar's id is kept on this device,
  * so adding the year again fills the same calendar.
  */
@@ -136,7 +136,7 @@ export class GoogleCalendar {
     }
     const created = await this.request(token, 'POST', '/calendars', {
       summary: CalendarExport.calendarName,
-      description: 'Your classes, added by DCU Timetable. Add them again from the app to update them.',
+      description: 'Your classes, added by DCU Live. Add them again from the app to update them.',
       timeZone: GoogleCalendarRules.timeZone,
     }) as { id?: unknown };
     if (typeof created.id !== 'string') throw new Error("Google Calendar didn't make the calendar. Try again.");

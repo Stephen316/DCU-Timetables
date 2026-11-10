@@ -27,7 +27,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
         <div className="who">
           {/* An SVG, which next/image would serve unchanged anyway. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand" src="/logo.svg" alt="DCU Timetables" width={28} height={28} />
+          <img className="brand" src="/logo.svg" alt="DCU Live" width={28} height={28} />
           <strong>{profile.display_name || "Console"}</strong>
         </div>
         <Nav />

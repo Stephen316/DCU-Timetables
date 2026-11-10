@@ -4,7 +4,7 @@ import { CalendarEntry } from './calendarExport';
  * Add to Google Calendar, the pure half: what each class looks like to Google's Calendar API
  * and which failures are worth waiting out. Google has no way to open an .ics on a phone —
  * its Android app won't import one — so the web build signs in with Google and adds the
- * classes itself, to a "DCU Timetable" calendar of their own.
+ * classes itself, to a "DCU Live" calendar of their own.
  */
 
 /** An event as `events.import` takes it. */

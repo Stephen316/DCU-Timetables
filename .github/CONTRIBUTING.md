@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. DCU Timetables is a small student project, so the process is light:
+Thanks for helping. DCU Live is a small student project, so the process is light:
 open an issue first for anything bigger than a typo, so we can agree on the approach before
 you spend time on it.
 

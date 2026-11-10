@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="106.7 13.2 600 600" width="512" height="512">
-  <title>DCU Timetables</title>
+  <title>DCU Live</title>
   <!-- The background and the ring gaps are the console's page colour, #18181b in
        globals.css, so the logo sits flush on the sidebar. Change them with it. -->
   <rect x="106.7" y="13.2" width="600" height="600" fill="#18181b"/>

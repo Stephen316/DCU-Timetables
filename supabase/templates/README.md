@@ -3,12 +3,12 @@
 Supabase stores these in the dashboard, not in the repo — the files here are the source of
 truth to paste from, review in a diff, and rebuild from if the project is ever recreated.
 
-Paste into **Authentication → Emails** on project `pkytnujhwjxudtrudihu` (DCU Timetables):
+Paste into **Authentication → Emails** on project `pkytnujhwjxudtrudihu` (DCU Live):
 
 | File | Dashboard template | Subject |
 | --- | --- | --- |
 | `confirm-signup.html` | Confirm signup | `Confirm your DCU email` |
-| `reset-password.html` | Reset password | `Set a new password for DCU Timetable` |
+| `reset-password.html` | Reset password | `Set a new password for DCU Live` |
 
 `/auth/v1/resend` reuses **Confirm signup** — Supabase has no separate resend template, so
 that one wording covers both the first email and every repeat. The remaining templates
@@ -17,13 +17,17 @@ flow in the app triggers them.
 
 ## URLs the links depend on
 
-Sign-up, resending the confirmation and password reset each send `redirect_to` the public
-site on GitHub Pages (`EMAIL_LINK_DESTINATION` in `mobile/src/data/auth.ts`), not the admin
-console on Vercel. Supabase honours it only if it is on the allow-list, and otherwise falls
-back to the **Site URL**, so both should name the same place:
+Sign-up, resending the confirmation and password reset each send `redirect_to` the web app
+at app.dculive.ie (`EMAIL_LINK_DESTINATION` in `mobile/src/data/auth.ts`), which reads the
+session from the link itself. Supabase honours it only if it is on the allow-list, and
+otherwise falls back to the **Site URL**, so both should name the same place:
 
-- Site URL: `https://stephen316.github.io/DCU-Timetables/`
-- Redirect allow-list: that URL with `**`, which covers the web app under `/app/` as well.
+- Site URL: `https://app.dculive.ie/`
+- Redirect allow-list: `https://app.dculive.ie/**`. Keep the old
+  `https://stephen316.github.io/DCU-Timetables/**` entry until links emailed before the move have expired.
+
+Links that still land on the landing page (dculive.ie, or the old GitHub Pages address) are
+passed on to the app by the `carriesAuth` script in `site/index.html`, so keep it.
 
 Left to the Site URL alone, links once went to `https://github.com/Stephen316/DCU-Timetables`,
 the repo page: a reset link was accepted and then stranded there, with nothing to read its

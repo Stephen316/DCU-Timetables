@@ -13,7 +13,7 @@ import { SetupSurface } from './SetupSurface';
 import { SetupButton } from './SetupButton';
 import { SetupPlan, StudentNumberField } from './SetupFields';
 
-const PLUS_PROMO = 'https://info.dcutimetables.app/purchase/';
+const PLUS_PROMO = 'https://dculive.ie/purchase/';
 
 export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string) => void; onSignOut: () => void }) {
   const { profiles } = useServices();
@@ -104,7 +104,7 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
         busy={saving}
       >
         <Step title="Welcome">
-          <Txt type="title3" accessibilityRole="header">Welcome to DCU Timetable</Txt>
+          <Txt type="title3" accessibilityRole="header">Welcome to DCU Live</Txt>
           <Txt color={theme.inkSecondary}>Set up your account in a few quick steps.</Txt>
         </Step>
         <Step title="Plan">

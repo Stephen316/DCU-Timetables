@@ -28,9 +28,9 @@ export interface CalendarEntry {
  * subscribed: iOS strips the alerts from a subscribed calendar unless told not to.
  */
 export const CalendarExport = {
-  fileName: 'DCU Timetable.ics',
+  fileName: 'DCU Live.ics',
   /** The calendar's name, in the file and as the calendar the app makes in Google. */
-  calendarName: 'DCU Timetable',
+  calendarName: 'DCU Live',
 
   /** Each class once, soonest first, with the student's alert times. */
   entries(events: TimetableEvent[], alerts: AlertSettings): CalendarEntry[] {
@@ -59,7 +59,7 @@ export const CalendarExport = {
     const lines = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//DCU Timetable//EN',
+      'PRODID:-//DCU Live//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       `X-WR-CALNAME:${CalendarExport.calendarName}`,

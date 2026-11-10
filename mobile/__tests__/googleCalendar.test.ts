@@ -69,13 +69,13 @@ function fakeGoogle(answer: (method: string, path: string) => { status: number; 
 describe('Add to Google Calendar: the calendar', () => {
   const entries = CalendarExport.entries([lecture, online], ClassAlerts.defaults);
 
-  test('makes a "DCU Timetable" calendar the first time, and remembers it', async () => {
+  test('makes a "DCU Live" calendar the first time, and remembers it', async () => {
     const prefs = new Prefs(new MemoryKV());
     const google = fakeGoogle((method, path) => (method === 'POST' && path === '/calendars' ? { status: 200, body: { id: 'cal1' } } : { status: 200 }));
     const progress: number[] = [];
     await new GoogleCalendar('client', prefs, google.fetchFn).add('token', entries, (n) => progress.push(n));
 
-    expect(google.calls[0]).toMatchObject({ method: 'POST', path: '/calendars', body: { summary: 'DCU Timetable', timeZone: 'Europe/Dublin' } });
+    expect(google.calls[0]).toMatchObject({ method: 'POST', path: '/calendars', body: { summary: 'DCU Live', timeZone: 'Europe/Dublin' } });
     expect(google.calls.slice(1).map((c) => c.path)).toEqual(['/calendars/cal1/events/import', '/calendars/cal1/events/import']);
     expect(progress).toEqual([1, 2]);
     expect(prefs.get(PrefKey.googleCalendar)).toBe('cal1');

@@ -1,6 +1,6 @@
 {
-  "name": "DCU Timetable",
-  "short_name": "Timetable",
+  "name": "DCU Live",
+  "short_name": "DCU Live",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

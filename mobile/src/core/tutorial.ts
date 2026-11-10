@@ -92,7 +92,7 @@ export const TutorialText = {
   replay: 'Show the tutorial again',
 };
 
-const welcome = step({ id: 'welcome', title: 'Welcome to DCU Timetable', body: "Here's a quick tour of the basics.", primary: 'Start', skip: 'Skip' });
+const welcome = step({ id: 'welcome', title: 'Welcome to DCU Live', body: "Here's a quick tour of the basics.", primary: 'Start', skip: 'Skip' });
 
 /** Tapping a class, reporting it cancelled, taking that back, and coming back out. */
 function classSteps(tapTitle: string): TutorialStep[] {

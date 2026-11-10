@@ -1,4 +1,4 @@
-DCU Timetable — tutorial text
+DCU Live — tutorial text
 ==============================
 
 Edit anything below the dashed lines. Each step has a TITLE (one bold line) and a BODY
@@ -36,7 +36,7 @@ BUTTONS: Next
 Step 1 — Welcome
 POINTS AT: nothing (a card in the middle of the screen)
 --------------------------------------------------------
-TITLE: Welcome to DCU Timetable
+TITLE: Welcome to DCU Live
 BODY: Here's a quick tour of the basics.
 BUTTONS: Start | Skip
 
@@ -139,7 +139,7 @@ MAC APP (no day view)
 Step 1 — Welcome
 POINTS AT: nothing (a card in the middle of the window)
 --------------------------------------------------------
-TITLE: Welcome to DCU Timetable
+TITLE: Welcome to DCU Live
 BODY: Here's a quick tour of the basics.
 BUTTONS: Start | Skip
 

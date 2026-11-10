@@ -117,7 +117,7 @@ export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: Authenticate
 
   return (
     <ListScroll>
-      <ScreenTitle title="DCU Timetable" />
+      <ScreenTitle title="DCU Live" />
       <Section bare>
         <Txt type="subheadline" color={theme.inkSecondary} style={styles.intro}>
           {"Use your DCU email address. Your name and lab group come from it, so there's nothing else to fill in."}

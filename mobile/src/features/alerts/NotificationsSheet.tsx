@@ -54,11 +54,11 @@ export function NotificationsSheet({ visible, onClose, inline = false }: { visib
         ) : !alerts ? (
           <NotificationNotice title="Notifications unavailable" message="Notifications aren't available in this session. Open the installed app or a supported browser to set up alerts." />
         ) : permission === 'undetermined' ? (
-          <Section footer="DCU Timetable needs your permission before it can alert you about classes.">
+          <Section footer="DCU Live needs your permission before it can alert you about classes.">
             <ActionRow title="Turn On Notifications" icon="bell" onPress={() => void allow()} />
           </Section>
         ) : permission === 'denied' ? (
-          <Section footer={`Notifications for DCU Timetable are turned off in ${MacShell.isPresent() ? 'System Settings' : 'Settings'}, so none of these alerts will appear.`}>
+          <Section footer={`Notifications for DCU Live are turned off in ${MacShell.isPresent() ? 'System Settings' : 'Settings'}, so none of these alerts will appear.`}>
             <ActionRow
               title={MacShell.isPresent() ? 'Open System Settings' : 'Open Settings'}
               icon="bell"
@@ -134,11 +134,11 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
   );
   switch (availability) {
     case 'addToHomeScreen':
-      return <NotificationNotice title="Add to your Home Screen" message="On iPhone, add DCU Timetable to your Home Screen from the browser's Share menu, then open it from there to enable notifications." />;
+      return <NotificationNotice title="Add to your Home Screen" message="On iPhone, add DCU Live to your Home Screen from the browser's Share menu, then open it from there to enable notifications." />;
     case 'unsupported':
-      return <NotificationNotice title="Browser not supported" message="This browser can't show notifications from DCU Timetable. Use a supported browser or the installed app." />;
+      return <NotificationNotice title="Browser not supported" message="This browser can't show notifications from DCU Live. Use a supported browser or the installed app." />;
     case 'denied':
-      return <NotificationNotice title="Notifications are blocked" message="Allow notifications for DCU Timetable in your browser or device settings, then return here." />;
+      return <NotificationNotice title="Notifications are blocked" message="Allow notifications for DCU Live in your browser or device settings, then return here." />;
     case 'ask':
       return ask;
     case 'granted':

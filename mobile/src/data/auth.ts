@@ -51,13 +51,13 @@ export class AuthError extends Error {
 }
 
 /**
- * Where every emailed link sends the browser once Supabase has checked it: the public site,
- * whose index page hands the session in the fragment on to the web app. Named on each request
+ * Where every emailed link sends the browser once Supabase has checked it: the web app itself,
+ * which reads the session from the fragment on load (`takeAuthLink`). Named on each request
  * because without it Supabase falls back to the dashboard's Site URL, and when that pointed at
  * the GitHub repo a reset link landed there and the new-password screen never opened. Supabase
  * ignores it unless it is on the project's redirect allow-list (`supabase/templates/README.md`).
  */
-export const EMAIL_LINK_DESTINATION = 'https://stephen316.github.io/DCU-Timetables/';
+export const EMAIL_LINK_DESTINATION = 'https://app.dculive.ie/';
 
 /** The Edge Function that holds a sign-up until its link is confirmed (`supabase/functions/signup`). */
 const SIGNUP_FUNCTION = '/functions/v1/signup';

@@ -147,7 +147,7 @@ self.addEventListener('push', (event) => {
   } catch {
     notice = null;
   }
-  const title = typeof notice?.title === 'string' ? notice.title : 'DCU Timetable';
+  const title = typeof notice?.title === 'string' ? notice.title : 'DCU Live';
   event.waitUntil(
     self.registration.showNotification(title, {
       body: typeof notice?.body === 'string' ? notice.body : '',

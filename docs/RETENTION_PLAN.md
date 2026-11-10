@@ -5,7 +5,7 @@ The website half is being built to [RETENTION_BUILD_PLAN.md](RETENTION_BUILD_PLA
 
 ## Where things stand
 
-Only the website (`stephen316.github.io/DCU-Timetables/app/`, usually added to the Home
+Only the website (`app.dculive.ie`, usually added to the Home
 Screen) is in students' hands. That limits what's possible today:
 
 - **Class alerts** are local notifications from `expo-notifications`

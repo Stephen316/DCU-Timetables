@@ -377,7 +377,7 @@ describe('Auth requests', () => {
     const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
     await service.sendPasswordReset(email);
     expect(new URL(calls[0].url).pathname).toBe('/auth/v1/recover');
-    expect(query(calls[0].url)).toEqual({ redirect_to: 'https://stephen316.github.io/DCU-Timetables/' });
+    expect(query(calls[0].url)).toEqual({ redirect_to: 'https://app.dculive.ie/' });
   });
 
   const tokens = { accessToken: 'link-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 };

@@ -25,7 +25,7 @@ const TTL_SECONDS = 6 * 60 * 60;
 // Trimmed, like the function key below: pasted secrets can carry a stray space or line break.
 webpush.setVapidDetails(
   // Who the push services can contact about these messages: the public site, by default.
-  Deno.env.get('VAPID_SUBJECT')?.trim() || 'https://stephen316.github.io/DCU-Timetables/',
+  Deno.env.get('VAPID_SUBJECT')?.trim() || 'https://dculive.ie/',
   Deno.env.get('VAPID_PUBLIC_KEY')!.trim(),
   Deno.env.get('VAPID_PRIVATE_KEY')!.trim(),
 );

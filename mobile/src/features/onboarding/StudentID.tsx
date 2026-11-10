@@ -160,7 +160,7 @@ export function StudentID({ onRead, onOtherMethods }: { onRead: (number: string)
             <Txt type="subheadline" color="#FFFFFF" style={styles.center}>{"There's no camera to use here. Type your student number instead."}</Txt>
           ) : null}
           {status === 'denied' ? (
-            <Txt type="subheadline" color="#FFFFFF" style={styles.center}>Camera access is off for DCU Timetable. Turn it on in Settings, or type your student number instead.</Txt>
+            <Txt type="subheadline" color="#FFFFFF" style={styles.center}>Camera access is off for DCU Live. Turn it on in Settings, or type your student number instead.</Txt>
           ) : null}
         </View>
       ) : null}

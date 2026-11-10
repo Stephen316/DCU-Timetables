@@ -2,7 +2,7 @@
 
 This covers the repository: issues, pull requests, reviews and any other discussion here.
 Behaviour **in the app** — deadlines, class reports, and who can post them — is governed by
-the [terms of use](https://stephen316.github.io/DCU-Timetables/terms.html), not this page.
+the [terms of use](https://dculive.ie/terms.html), not this page.
 
 ## Expected
 

@@ -22,12 +22,12 @@
       <!-- Mail scanners GET this page. Only the button below does anything, and they don't press buttons. -->
       <section id="ready" hidden>
         <h1>Confirm your account</h1>
-        <p>Press the button to finish creating your DCU Timetable account.</p>
+        <p>Press the button to finish creating your DCU Live account.</p>
         <button id="go" type="button">Confirm my account</button>
       </section>
       <section id="done" hidden>
         <h1>You're in</h1>
-        <p>Your account is ready. Go back to DCU Timetable and press Continue — or sign in with your email and password.</p>
+        <p>Your account is ready. Go back to DCU Live and press Continue — or sign in with your email and password.</p>
       </section>
       <section id="failed" hidden>
         <h1 id="failedTitle">That didn't work</h1>
@@ -46,7 +46,7 @@
       if (token) history.replaceState(null, '', location.pathname);
 
       if (!token) {
-        fail('This link is incomplete. Open the newest email from DCU Timetable and use its link.');
+        fail('This link is incomplete. Open the newest email from DCU Live and use its link.');
       } else {
         show('ready');
         var button = document.getElementById('go');

@@ -12,7 +12,7 @@ Export to Calendar card opens
   GoogleCalendar.prepare()      loads accounts.google.com/gsi/client, makes a token client
 Tap "Add to Google Calendar"
   GoogleCalendar.signIn()       Google's window: pick an account, allow the one scope
-  GoogleCalendar.add()          POST /calendars (first time only) → "DCU Timetable"
+  GoogleCalendar.add()          POST /calendars (first time only) → "DCU Live"
                                 POST /calendars/{id}/events/import, 4 at a time
 ```
 
@@ -39,14 +39,15 @@ Tap "Add to Google Calendar"
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), create a project (or use
    an existing one), then go to **APIs & Services → Library** and enable the **Google Calendar API**.
-2. **OAuth consent screen** (Google Auth Platform → Branding): app name *DCU Timetable*, your
-   email as support and developer contact, home page `https://stephen316.github.io/DCU-Timetables/`,
-   privacy policy `https://stephen316.github.io/DCU-Timetables/privacy.html`, terms
-   `https://stephen316.github.io/DCU-Timetables/terms.html`, and authorised domain
-   `stephen316.github.io`. Audience: **External**.
+2. **OAuth consent screen** (Google Auth Platform → Branding): app name *DCU Live*, your
+   email as support and developer contact, home page `https://dculive.ie/`,
+   privacy policy `https://dculive.ie/privacy.html`, terms
+   `https://dculive.ie/terms.html`, and authorised domain
+   `dculive.ie`. Audience: **External**.
 3. **Data access**: add the scope `https://www.googleapis.com/auth/calendar.app.created`.
 4. **Clients → Create client → Web application.** Authorised JavaScript origins:
-   - `https://stephen316.github.io`
+   - `https://app.dculive.ie`
+   - `https://stephen316.github.io` (the old address, until it is retired)
    - `http://localhost:8081` (the Expo dev server)
 
    No redirect URIs are needed, because the sign-in uses a pop-up. Copy the **Client ID**. It's
@@ -61,7 +62,7 @@ Tap "Add to Google Calendar"
 While the app is in **Testing** in Google's console, only the test users listed there can
 sign in, up to 100. Once it's switched to **In production**, anyone can sign in. Until Google
 verifies the app, they see a "Google hasn't verified this app" screen and have to click
-**Advanced → Go to DCU Timetable**, and there's a cap of 100 users in total.
+**Advanced → Go to DCU Live**, and there's a cap of 100 users in total.
 
 To remove the warning and the cap, submit for verification from the console. Google asks
 for the privacy policy, which already has a Google Calendar section with the Limited Use

@@ -1,4 +1,4 @@
-# DCU-Timetables
+# DCU Live
 
 Hi, I'm Stephen, and I have built a completely pre-customised timetable app for DCU courses.
 See your specific modules, unique class rotations and module assignments all in one place.
@@ -10,7 +10,7 @@ Included are course/module community features, such as flagging classes as cance
 
 ### On your phone (iPhone or Android)
 
-**[Open DCU Timetable](https://dcutimetables.app)**  → then add it to
+**[Open DCU Live](https://app.dculive.ie)**  → then add it to
 your Home Screen, so it opens like any other app. There's no app store listing to search for (yet!).
 
 - **iPhone, in Safari:** tap Share (the square with an arrow; in newer Safari it's under the
@@ -21,11 +21,11 @@ your Home Screen, so it opens like any other app. There's no app store listing t
 
 Reading this on a computer? Point your phone's camera at this code to open it there:
 
-<img src="site/app-qr.svg" width="140" alt="QR code that opens DCU Timetable on a phone">
+<img src="site/app-qr.svg" width="140" alt="QR code that opens DCU Live on a phone">
 
 ### On your desktop
-**[Use the website](https://dcutimetables.app),**
-or visit our **[landing page](https://info.dcutimetables.app) for more information.**
+**[Use the website](https://app.dculive.ie),**
+or visit our **[landing page](https://dculive.ie) for more information.**
 
 ### Mac install
 
@@ -42,15 +42,15 @@ or visit our **[landing page](https://info.dcutimetables.app) for more informati
 There's nothing to download. You install it from the browser and get the same app in a
 window of its own, with a Start menu entry and a taskbar icon.
 
-1. Open **[DCU Timetable](https://stephen316.github.io/DCU-Timetables/app/)** in
+1. Open **[DCU Live](https://app.dculive.ie/)** in
    **Microsoft Edge** or **Google Chrome**.
 2. Click the **Install** icon at the right end of the address bar (a screen with a down
    arrow). If you don't see it, use the menu instead:
-   - **Edge:** ⋯ → **Apps** → **Install DCU Timetable**
+   - **Edge:** ⋯ → **Apps** → **Install DCU Live**
    - **Chrome:** ⋮ → **Cast, save and share** → **Install page as app**
 3. Click **Install**. It opens in its own window. To keep it on the taskbar, right-click its
    icon there and choose **Pin to taskbar**.
-To send it to someone, share [stephen316.github.io/DCU-Timetables](https://stephen316.github.io/DCU-Timetables/):
+To send it to someone, share [dculive.ie](https://dculive.ie/):
 it has both, and shows each person the one for their device first.
 
 ## About the project

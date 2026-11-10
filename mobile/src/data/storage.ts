@@ -137,7 +137,7 @@ export const PrefKey = {
   pushSent: 'pushSent',
   /** `AlertSettings`: how long before a class it alerts. Kept across sign-outs, like appearance. */
   classAlerts: 'classAlerts',
-  /** The id of the "DCU Timetable" calendar made in Google, so adding again fills the same one. */
+  /** The id of the "DCU Live" calendar made in Google, so adding again fills the same one. */
   googleCalendar: 'googleCalendar',
   /**
    * `SavedModuleIdentities`: each module code's id in DCU's timetable API, for the year they

@@ -50,8 +50,9 @@ proved they own would sit in `auth.users`. Instead:
 1. The app calls the **`signup`** Edge Function (`supabase/functions/signup`) with the
    address and password. It checks the DCU rule, stores a *pending* row in
    `pending_signups` (password encrypted, link token kept only as a hash) and emails a link
-   to `/verify.html#t=…`. Nothing is written to `auth.users`.
-2. The link opens `mobile/public/verify.html`, which shows a **Confirm my account** button.
+   to `app.dculive.ie/signup#t=…`. Nothing is written to `auth.users`.
+2. The link opens `mobile/public/verify.html` (`mobile/vercel.json` serves it at `/signup`;
+   `/verify.html` still works for links sent before that), which shows a **Confirm my account** button.
    Mail scanners (Defender Safe Links on `@mail.dcu.ie`) GET every link in a message, so
    the link itself changes nothing — only the button's POST does.
 3. The POST makes the function create the account with `email_confirm: true`, delete the
@@ -66,7 +67,7 @@ Set up, once:
 2. Create a Resend account (free tier), verify a sending domain, and make an API key.
 3. Set the function's secrets (Edge Functions → Secrets), generating the key with
    `openssl rand -base64 32`:
-   `RESEND_API_KEY`, `MAIL_FROM` (e.g. `DCU Timetable <accounts@your-domain>`), `SIGNUP_ENC_KEY`.
+   `RESEND_API_KEY`, `MAIL_FROM` (e.g. `DCU Live <accounts@your-domain>`), `SIGNUP_ENC_KEY`.
 4. Deploy with JWT verification off (a signed-out student calls it):
    `supabase functions deploy signup --no-verify-jwt`
 5. Switch **Allow new users to sign up** OFF (step 2 above) — last, once the function works.
