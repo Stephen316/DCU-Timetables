@@ -26,7 +26,8 @@
   "url": "https://info.dcutimetables.app/"
 }
 </script>
-<link rel="stylesheet" href="landing.css?v=8">
+<script src="theme.js?v=1"></script>
+<link rel="stylesheet" href="landing.css?v=12">
 <script>
   document.documentElement.className = 'js';
 
@@ -141,8 +142,11 @@
       </article>
 
       <article class="tile rv" style="--d:.08s">
-        <div class="viz" aria-hidden="true">
-          <div class="swatches"><div class="sw d">Dark</div><div class="sw l">Light</div></div>
+        <div class="viz">
+          <div class="swatches" role="group" aria-label="Page theme">
+            <button type="button" class="sw d" data-theme-choice="dark" aria-pressed="false">Dark</button>
+            <button type="button" class="sw l" data-theme-choice="light" aria-pressed="false">Light</button>
+          </div>
         </div>
         <h3>Light and dark</h3>
         <p>Follows your device, and stays easy to read on the walk to a lecture.</p>

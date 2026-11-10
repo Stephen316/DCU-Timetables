@@ -1,5 +1,6 @@
 /* Home page only. The other pages (privacy, terms, support, 404) keep using style.css. */
 :root {
+  color-scheme: dark;
   --bg: #131316; --bg-2: #18181d; --card: #1c1c21; --card-2: #26252d;
   --line: rgba(255,255,255,.09); --text: #fafafa; --muted: #b4b1c7;
   --accent: #8b5cf6; --accent-2: #7c3aed; --on-accent: #ffffff;
@@ -9,7 +10,8 @@
   --nav-bg: rgba(19,19,22,.72);
 }
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme]) {
+    color-scheme: light;
     --bg: #f6f5fb; --bg-2: #efedf9; --card: #ffffff; --card-2: #efedf9;
     --line: rgba(23,23,40,.10); --text: #171717; --muted: #55526b;
     --accent: #7c3aed; --accent-2: #6d28d9; --on-accent: #ffffff;
@@ -18,6 +20,16 @@
     --shadow: 0 30px 70px -25px rgba(60,40,140,.35);
     --nav-bg: rgba(246,245,251,.78);
   }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f5fb; --bg-2: #efedf9; --card: #ffffff; --card-2: #efedf9;
+  --line: rgba(23,23,40,.10); --text: #171717; --muted: #55526b;
+  --accent: #7c3aed; --accent-2: #6d28d9; --on-accent: #ffffff;
+  --glow: rgba(124,58,237,.4); --blob-a: #c4b5fd; --blob-b: #f9a8d4; --blob-c: #67e8f9;
+  --due: #b45309; --off: #ea580c; --ok: #059669; --test: #2563eb;
+  --shadow: 0 30px 70px -25px rgba(60,40,140,.35);
+  --nav-bg: rgba(246,245,251,.78);
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-x: clip; }
@@ -107,7 +119,6 @@ h1 em {
   background: radial-gradient(closest-side, var(--glow), transparent); filter: blur(30px); opacity: .55; z-index: 0;
 }
 .phone {
-  --screen-bg: #131316;
   position: relative; z-index: 1; flex: none; width: clamp(200px, 25vw, 290px);
   aspect-ratio: 390 / 844; transition: transform .5s cubic-bezier(.2,.8,.2,1);
   container-type: inline-size; border-radius: 18% / 8.4%; padding: 6px;
@@ -117,7 +128,7 @@ h1 em {
 .phone .screen {
   position: relative; overflow: hidden; border-radius: 16% / 7.4%;
   height: 100%; display: flex; flex-direction: column;
-  background: var(--screen-bg); color: #fafafa;
+  background: var(--bg); color: var(--text);
 }
 .phone picture { display: block; flex: 1; min-height: 0; }
 .phone .screen img { width: 100%; height: 100%; object-fit: contain; object-position: top; }
@@ -160,10 +171,6 @@ h1 em {
   .stage { --phone-step: 66%; gap: 0; height: clamp(380px, 110vw, 480px); }
 }
 
-@media (prefers-color-scheme: light) {
-  .phone { --screen-bg: #f6f5fb; }
-  .phone .screen { color: #171717; }
-}
 /* ── Sections ────────────────────────────────────────────────────── */
 section { position: relative; }
 .sec { padding: clamp(64px, 10vw, 120px) 0 0; }
@@ -209,7 +216,10 @@ h2 { margin: 0; font-size: clamp(32px, 5.4vw, 56px); line-height: 1.04; letter-s
 .row .push { margin-left: auto; }
 .row.cancelled .t, .row.cancelled b { text-decoration: line-through; text-decoration-color: var(--off); opacity: .75; }
 .swatches { display: flex; gap: 10px; }
-.sw { flex: 1; height: 86px; border-radius: 16px; border: 1px solid var(--line); padding: 12px; font-size: 12px; font-weight: 600; display: flex; align-items: flex-end; }
+.sw { font-family: inherit; text-align: left; cursor: pointer; flex: 1; height: 86px; border-radius: 16px; border: 1px solid var(--line); padding: 12px; font-size: 12px; font-weight: 600; display: flex; align-items: flex-end; }
+.sw:hover { border-color: var(--accent); }
+.sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+.sw:focus-visible { outline: 3px solid var(--text); outline-offset: 4px; }
 .sw.d { background: #131316; color: #fafafa; }
 .sw.l { background: #f6f5fb; color: #171717; }
 
