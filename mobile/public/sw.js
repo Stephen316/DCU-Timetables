@@ -19,6 +19,11 @@ const CACHE = 'dcu-timetable-app';
 const ROOT = new URL(self.registration.scope);
 const PAGE = ROOT.href;
 const BUILT = /^(_expo\/static\/|assets\/)/;
+/**
+ * Pages that aren't the app: the sign-up confirmation (vercel.json serves verify.html at
+ * /signup). Left to the network, since the saved app page has no route for them.
+ */
+const NOT_THE_APP = /^(signup\/?|verify\.html)(\?|$)/;
 
 /**
  * Everything a page needs to start: its code file and the files that names. The code comes
@@ -89,6 +94,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || url.origin !== ROOT.origin || !url.href.startsWith(PAGE)) return;
   // The update check (src/data/webUpdate.ts) asks the network itself, past any copy.
   if (request.cache === 'no-store') return;
+  if (NOT_THE_APP.test(url.href.slice(PAGE.length))) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(openPage(event));
