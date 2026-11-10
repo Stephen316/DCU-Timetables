@@ -28,6 +28,8 @@
 </script>
 <script src="theme.js?v=1"></script>
 <link rel="stylesheet" href="landing.css?v=12">
+<link rel="stylesheet" href="react-bits.css?v=1">
+<script src="react-bits.js?v=1" defer></script>
 <script>
   document.documentElement.className = 'js';
 
@@ -72,7 +74,7 @@
 <main>
   <section class="hero wrap" aria-labelledby="top-h">
     <p class="pill"><span class="dot"></span>Free for anyone with a DCU email</p>
-    <h1 id="top-h">Your DCU timetable, <em>sorted.</em></h1>
+    <h1 id="top-h" data-blur-text><span class="sr">Your DCU timetable, sorted.</span><span aria-hidden="true"><span class="rb-word">Your</span> <span class="rb-word">DCU</span> <span class="rb-word">timetable,</span> <em class="rb-word">sorted.</em></span></h1>
     <p class="lede">Your programme, your groups and your labs in one place &mdash; with deadlines and cancelled classes shared by your classmates.</p>
 
     <div class="cta-wrap">
@@ -114,7 +116,7 @@
     </div>
 
     <div class="bento">
-      <article class="tile wide rv">
+      <article class="tile wide rv" data-spotlight-card>
         <div class="viz mini" aria-hidden="true">
           <div class="row"><span class="bar"></span><span class="t">09:00</span><span><b>Maths for Computing</b><small>Lecture &middot; Group 01 &middot; Business School, Room 15</small></span></div>
           <div class="row gap">1 hour free</div>
@@ -124,7 +126,7 @@
         <p>A clean day view with the free time between classes, and a week grid when you want the whole picture.</p>
       </article>
 
-      <article class="tile rv" style="--d:.08s">
+      <article class="tile rv" style="--d:.08s" data-spotlight-card>
         <div class="viz mini" aria-hidden="true">
           <div class="row"><span class="bar" style="background:var(--due)"></span><span><b>Prototype demo</b><small>Today &middot; 20:00</small></span></div>
           <div class="row"><span class="badge ok">&#10003; 4 people have confirmed</span></div>
@@ -133,7 +135,7 @@
         <p>Add a deadline and classmates vouch for it, so you know the date is right.</p>
       </article>
 
-      <article class="tile rv">
+      <article class="tile rv" data-spotlight-card>
         <div class="viz mini" aria-hidden="true">
           <div class="row cancelled"><span class="bar" style="background:var(--off)"></span><span class="t">11:00</span><span><b>Operating Systems</b></span><span class="badge off push">Cancelled</span></div>
         </div>
@@ -141,7 +143,7 @@
         <p>When a lecture is off, someone in your class reports it and it shows on your timetable.</p>
       </article>
 
-      <article class="tile rv" style="--d:.08s">
+      <article class="tile rv" style="--d:.08s" data-spotlight-card>
         <div class="viz">
           <div class="swatches" role="group" aria-label="Page theme">
             <button type="button" class="sw d" data-theme-choice="dark" aria-pressed="false">Dark</button>
@@ -152,7 +154,7 @@
         <p>Follows your device, and stays easy to read on the walk to a lecture.</p>
       </article>
 
-      <article class="tile rv" style="--d:.16s">
+      <article class="tile rv" style="--d:.16s" data-spotlight-card>
         <div class="viz mini" aria-hidden="true">
           <div class="row"><span class="badge due">Programme</span><span class="badge ok push">Group 01</span></div>
           <div class="row"><span class="badge due" style="color:var(--test);background:color-mix(in srgb,var(--test) 15%,transparent)">Labs</span><span class="badge ok push" style="color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)">Lab B</span></div>

@@ -1,0 +1,38 @@
+/* kit-design: adapted from React Bits BlurText and SpotlightCard.
+   Source and licence: vendor/react-bits/README.md and LICENSE.md.
+   Existing landing.css owns layout, typography, surfaces and the colour scheme. */
+:root {
+  --rb-blur: 8px;
+  --rb-travel: 10px;
+  --rb-duration: 600;
+  --rb-stagger: 80;
+  --rb-spotlight-size: 240px;
+  --rb-spotlight-intensity: .12;
+  --rb-spotlight-fade: 180ms;
+}
+
+.rb-word { display: inline-block; }
+
+/* The light sits behind content, never between a pointer and a control. */
+[data-spotlight-card] { isolation: isolate; }
+[data-spotlight-card]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 761px) and (prefers-reduced-motion: no-preference) {
+  [data-spotlight-card]::before {
+    background: radial-gradient(circle var(--rb-spotlight-size) at var(--rb-x, 50%) var(--rb-y, 50%), var(--rb-falloff));
+    transition: opacity var(--rb-spotlight-fade) ease;
+  }
+  [data-spotlight-card][data-spotlight-active]::before { opacity: var(--rb-spotlight-intensity); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rb-word { filter: none !important; transform: none !important; opacity: 1 !important; }
+}
