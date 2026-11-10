@@ -1,0 +1,2 @@
+/* kit-design: existing landing-page accent applied to FoldText's final word. */
+[data-fold-heading] .fold-text-word:last-child { color: var(--accent); }

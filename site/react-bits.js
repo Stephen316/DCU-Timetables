@@ -1,4 +1,4 @@
-/* kit-design: adapted from React Bits BlurText and SpotlightCard.
+/* kit-design: adapted from React Bits SpotlightCard.
  * Copyright (c) 2026 David Haz. MIT + Commons Clause; see vendor/react-bits/.
  * Static DOM adapters retain the existing HTML, links and deployment pipeline.
  */
@@ -7,29 +7,6 @@
 
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   var desktopPointer = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 761px)');
-  var tokens = getComputedStyle(document.documentElement);
-  var animations = new Set();
-
-  // BlurText's word stagger and blur → overshoot → settled keyframes, using
-  // the browser animation API instead of React/Motion. The heading's original
-  // text stays available to assistive technology throughout the entrance.
-  var heading = document.querySelector('[data-blur-text]');
-  if (heading && !reducedMotion.matches && typeof Element.prototype.animate === 'function') {
-    var blur = parseFloat(tokens.getPropertyValue('--rb-blur'));
-    var travel = parseFloat(tokens.getPropertyValue('--rb-travel'));
-    var duration = parseFloat(tokens.getPropertyValue('--rb-duration'));
-    var stagger = parseFloat(tokens.getPropertyValue('--rb-stagger'));
-    heading.querySelectorAll('.rb-word').forEach(function (word, index) {
-      var animation = word.animate([
-        { filter: 'blur(' + blur + 'px)', opacity: 0, transform: 'translateY(-' + travel + 'px)' },
-        { filter: 'blur(' + blur / 2 + 'px)', opacity: .5, transform: 'translateY(' + travel / 10 + 'px)', offset: .5 },
-        { filter: 'blur(0px)', opacity: 1, transform: 'translateY(0)' }
-      ], { duration: duration, delay: index * stagger, easing: 'ease-out', fill: 'backwards' });
-      animations.add(animation);
-      animation.onfinish = function () { animations.delete(animation); };
-    });
-  }
-
   // SpotlightCard's soft radial falloff, with the existing accent token.
   // Only its circle fill is needed: no ambient loop, grain, flare or new surface.
   function falloff(color, softness) {
@@ -89,18 +66,12 @@
     clearSpotlights = function () { cleanups.forEach(function (cleanup) { cleanup(); }); };
   }
 
-  function settleText() {
-    animations.forEach(function (animation) { animation.cancel(); });
-    animations.clear();
-  }
   reducedMotion.addEventListener('change', function () {
-    if (reducedMotion.matches) settleText();
     syncSpotlights();
   });
   desktopPointer.addEventListener('change', syncSpotlights);
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
-      settleText();
       clearSpotlights();
     } else {
       syncSpotlights();

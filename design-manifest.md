@@ -59,32 +59,27 @@ Existing unrelated workspace edits are preserved outside this task's commit. UI 
 
 ## Public landing page: React Bits
 
-Scope: `site/index.html` only. Direction: restrained student utility.
-Kit: existing landing-page components plus source adaptations of React Bits
-BlurText and SpotlightCard. Platform: responsive static website, touch, pointer
-and keyboard, verified at 320, 390, 768 and 1440 CSS pixels.
+Scope: `site/index.html`. Direction: restrained student utility.
+Kit: existing landing-page components, supplied React Bits FoldText and a
+SpotlightCard source adaptation. Platform: responsive static website with a React
+heading island, touch, pointer and keyboard, 320–1440 CSS pixels.
 
-The user explicitly selected React Bits and requested preservation of the colour
-scheme, overall layout and functions. The existing kit, typography, spacing,
-section order, phone showcase, controls and light/dark palette are retained.
-No new product features, runtime dependencies or hosting build steps.
+The user requested React Bits while retaining the colour scheme, overall layout
+and functions, then supplied FoldText and changed the final word to personalised.
+The heading now reads “Your DCU timetable, personalised.” The existing typography,
+section order, phone showcase, controls and light/dark palette remain. The longer
+word wraps naturally on phones; animated and static versions occupy the same space.
 
-### Layout and components
+### Components
 
-| Section | Structure and focal point | Enhancement |
-|---|---|---|
-| Hero | Existing title, web-app action, supporting links and three-phone stage | BlurText word entrance on the title; one pass, 600ms per word, 80ms stagger, 10px travel |
-| Features | Existing five cards and responsive grid; theme buttons stay in their card | SpotlightCard soft radial fill follows a desktop pointer behind the content |
-| Get it / footer | Existing platform instructions, download links, closing action and copy-link control | Preserved |
+| Section | Implementation |
+|---|---|
+| Hero | Supplied FoldText React component, paper style, character splits, top hinge, scroll entrance, 92-degree fold, 0.65s duration and 0.045s stagger. “personalised.” inherits the existing accent |
+| Desktop heading hover | Supplied refold interaction: 140px radius, 45 degrees; disabled on touch and below 761px |
+| Features | Existing five-card grid and SpotlightCard soft radial fill; theme controls preserved |
+| Get it / footer | Existing device instructions, links, closing action and copy-link control |
 
-The current breakpoints and narrow-screen stacking remain unchanged. No controls
-move with the effects. Spotlight is disabled on touch, below 761px, and with
-reduced motion. The heading remains static when animation is unsupported or
-reduced motion is enabled; live preference changes cancel running animations.
-Hidden documents stop the enhancements. Both effects are optional: content and
-links remain available without JavaScript.
-
-### Tokens and source adaptations
+### Tokens and integration
 
 | Role | Light | Dark |
 |---|---|---|
@@ -92,34 +87,38 @@ links remain available without JavaScript.
 | Card | Existing `--card`: #ffffff | Existing `--card`: #1c1c21 |
 | Text | Existing `--text`: #171717 | Existing `--text`: #fafafa |
 | Supporting text | Existing `--muted`: #55526b | Existing `--muted`: #b4b1c7 |
-| Effect colour | Existing `--accent`: #7c3aed | Existing `--accent`: #8b5cf6 |
+| Accent | Existing `--accent`: #7c3aed | Existing `--accent`: #8b5cf6 |
 
-New effect parameters are defined under `:root` in `site/react-bits.css`.
-Spotlight opacity is 0.12; no new palette colours are introduced.
+FoldText's source and CSS are copied from the user's attachment, with attribution.
+The wrapper passes inherited font size, weight, line height and letter spacing;
+its final word receives the existing accent. The component's original crease
+shading remains. There are no new palette colours or structural styling changes.
+This explicitly requested fold motion is the single headline effect; BlurText was
+removed. SpotlightCard remains the previously documented static DOM adaptation.
 
-These are static DOM adaptations, not React imports. BlurText uses native Web
-Animations in place of Motion; the original inline heading layout and a single
-accessible text equivalent are preserved. SpotlightCard retains the upstream
-falloff calculation and radial fill, using local, frame-batched pointer events.
-Its ambient animation, grain, flare, proximity tracking and border glow are
-omitted. A non-interactive pseudo-element puts the light behind existing content.
-Source revision, upstream links and licence are in `site/vendor/react-bits/`.
-The user's explicit motion request permits these React Bits effects within the
-existing restrained design; no additional styling overrides are needed.
+React 19.2.3, React DOM 19.2.3 and GSAP 3.14.2 are locally bundled with esbuild
+0.25.12. Source, lockfile, generated assets and licence notices are committed.
+`npm --prefix site run build` regenerates the bundle; GitHub Pages continues to
+copy the static site without an extra build step. The heading bundle is about
+307 KiB before compression. No third-party CDN or runtime network request is needed.
 
-### Landing-page verification
+Reduced motion renders a plain heading and cancels FoldText via unmount when
+changed live. Static HTML remains readable if JavaScript or its bundle is blocked.
+The supplied component provides a single screen-reader text equivalent and hides
+its visual character panels from assistive technology. Hover is decorative and
+never required to access information or controls.
+
+### Verification
 
 | Check | Result |
 |---|---|
-| Syntax / patch | `node --check site/react-bits.js` and `git diff --check` passed; static site has no compilation or lint task |
-| Layout | Hero, heading, stage, feature grid, download grid, final action and footer bounds match the pre-change page within 1px at all four widths; no horizontal overflow |
-| Visual | Desktop and phone reviewed in both themes; desktop spotlight reviewed |
-| Behaviour | Headline animation, live reduced-motion cancellation, desktop pointer effect, narrow-screen fallback, theme Enter activation, visible focus, persisted theme, screenshot theme changes, clipboard success and manual-copy fallback passed |
-| Content | Every link destination unchanged; one accessible level-one heading; all five feature cards available with JavaScript disabled |
-| Contrast | At peak spotlight: main text light 15.00:1 / dark 14.31:1, supporting text 6.26:1 / 7.15:1. Large accent heading 5.26:1 / 4.38:1 |
-| Axe | Same findings as the pre-change page: 6 dark / 7 light contrast failures in existing controls, decorative badges and footer text. No new violations; existing colours retained as requested |
-| Runtime | No browser errors; no continuous rendering loop or external asset requests added |
-| Limitations | Chromium browser verification; physical touch devices, Safari and screen-reader speech not exercised. Existing accessibility findings remain outside this motion-only change |
+| Build / syntax | Production esbuild bundle and `node --check site/react-bits.js` passed; no lint task configured for the static site |
+| Layout | Animated and plain versions of the updated heading and surrounding sections match within 1px at 320, 390, 768 and 1440px; no horizontal overflow |
+| Visual | Desktop paper fold, hover refold and phone heading reviewed; light/dark screenshots captured |
+| Behaviour | Character unfolding, desktop hover refold and recovery, narrow-screen hover suppression, live reduced-motion fallback and blocked-bundle/no-JavaScript fallbacks passed |
+| Accessibility | One accessible level-one heading and unchanged accent; prior landing-page contrast findings remain unchanged in existing controls, decorative badges and footer |
+| Runtime | No browser errors |
+| Limits | Chromium verification; physical devices, Safari and screen-reader speech not exercised |
 
-The unrelated uncommitted phone-scroll changes in `site/index.html` are preserved
-in the working tree and excluded from the React Bits commit.
+The unrelated uncommitted phone-scroll changes in `site/index.html` remain in the
+working tree and are excluded from this task's commit.
