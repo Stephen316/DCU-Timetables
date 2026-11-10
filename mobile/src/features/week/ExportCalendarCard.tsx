@@ -8,8 +8,11 @@ import { errorMessage } from '../../data/rest';
 import { PrefKey } from '../../data/storage';
 import { useServices, usePrefJSON } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { BottomCard, Icon, PrimaryButton, SecondaryButton, Txt } from '../../ui/components';
-import { Space, useTheme } from '../../ui/theme';
+import { BottomCard, ListScroll, PrimaryButton, Row, SecondaryButton, Txt } from '../../ui/components';
+import { light, Space, ThemeContext, useTheme } from '../../ui/theme';
+
+import { SettingsIntro, SettingsSection } from '../account/SettingsLayout';
+import { useTabBarClearance } from '../../ui/floatingBar';
 
 type Export =
   | { state: 'loading' }
@@ -28,8 +31,9 @@ type GoogleLoad = 'loading' | 'ready' | 'failed';
  * to allow the download; Google's sign-in is loaded ahead for the same reason. On Android,
  * where Google Calendar won't open an .ics, Google comes first.
  */
-export function ExportCalendarCard({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function ExportCalendarCard({ visible, onClose, inline = false }: { visible: boolean; onClose: () => void; inline?: boolean }) {
   const theme = useTheme();
+  const clearance = useTabBarClearance();
   const week = useWeekModel();
   const { googleCalendar: google } = useServices();
   const [saved] = usePrefJSON<unknown>(PrefKey.classAlerts, null);
@@ -108,25 +112,32 @@ export function ExportCalendarCard({ visible, onClose }: { visible: boolean; onC
   };
 
   const classes = (n: number) => (n === 1 ? '1 class' : `${n} classes`);
-  const message =
+  const empty = result.state === 'ready' && result.entries.length === 0;
+  const message = empty ? 'There are no upcoming classes to export for your current timetable.' :
     result.state === 'failed' ? result.message
       : result.state === 'adding' ? `Adding ${result.done} of ${classes(result.total)} to Google Calendar…`
         : result.state === 'added'
           ? `Added ${classes(result.count)} to the "${CalendarExport.calendarName}" calendar in Google Calendar, ${alertPhrase(alerts)}. It won't follow later changes to the timetable — add them again to pick them up.`
           // With Google beside the file, neither button has room for the count, so it's said here.
-          : `Adds your ${google && result.state === 'ready' ? classes(result.entries.length) : 'classes'} from today to the end of the year, ${alertPhrase(alerts)}. Your calendar won't follow later changes to the timetable — export again to pick them up.`;
+          : `Adds your ${google && result.state === 'ready' ? classes(result.entries.length) : 'classes'} from today to the end of the year, ${alertPhrase(alerts)}.`;
 
-  return (
-    <BottomCard visible={visible} onClose={close}>
+  const content = (
+    <>
+      <SettingsIntro title="Export to Calendar" description="Keep your classes in the calendar you already use." />
+      <SettingsSection header="Your timetable">
+      <Row>
       <View style={styles.body}>
-        <Icon name="calendar" size={30} color={theme.accent} />
-        <Txt type="headline" style={styles.centred}>Export to Calendar</Txt>
-        <Txt type="subheadline" color={result.state === 'failed' ? theme.destructive : theme.inkSecondary} style={styles.centred}>
+        {result.state === 'ready' ? <Txt type="headline">{empty ? 'No upcoming classes' : `${classes(result.entries.length)} ready to export`}</Txt> : null}
+        <Txt type="subheadline" color={result.state === 'failed' ? theme.destructive : theme.inkSecondary}>
           {message}
         </Txt>
       </View>
+      </Row>
+      </SettingsSection>
+      <SettingsSection header={empty ? undefined : 'Export options'} footer={empty ? undefined : 'Exports are a snapshot. Export again after timetable changes.'}>
+      <ThemeContext.Provider value={theme.scheme === 'dark' ? { ...theme, accent: light.accent } : theme}>
       <View style={styles.buttons}>
-        {result.state === 'failed' ? (
+        {empty ? <SecondaryButton title="Refresh classes" onPress={retry} /> : result.state === 'failed' ? (
           <PrimaryButton title="Try Again" onPress={retry} />
         ) : result.state === 'ready' ? (
           google ? (
@@ -150,10 +161,13 @@ export function ExportCalendarCard({ visible, onClose }: { visible: boolean; onC
         ) : (
           <PrimaryButton title="Getting the year…" busy onPress={() => undefined} />
         )}
-        <SecondaryButton title={result.state === 'added' ? 'Done' : result.state === 'adding' ? 'Close' : 'Not now'} onPress={close} />
+        {!inline ? <SecondaryButton title={result.state === 'added' ? 'Done' : result.state === 'adding' ? 'Close' : 'Not now'} onPress={close} /> : null}
       </View>
-    </BottomCard>
+      </ThemeContext.Provider>
+      </SettingsSection>
+    </>
   );
+  return inline ? <ListScroll contentStyle={{ paddingBottom: clearance }}>{content}</ListScroll> : <BottomCard visible={visible} onClose={close}>{content}</BottomCard>;
 }
 
 /**
@@ -193,7 +207,6 @@ function alertPhrase(alerts: AlertSettings): string {
 }
 
 const styles = StyleSheet.create({
-  body: { alignItems: 'center', gap: Space.m, paddingTop: Space.s },
-  centred: { textAlign: 'center' },
-  buttons: { gap: Space.s },
+  body: { gap: Space.m },
+  buttons: { gap: Space.m, padding: Space.l },
 });

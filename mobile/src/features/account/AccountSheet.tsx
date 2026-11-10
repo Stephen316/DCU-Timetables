@@ -10,21 +10,24 @@ import { AppLinks } from '../../ui/links';
 import { TutorialText } from '../../core/tutorial';
 import { useTutorial } from '../tutorial/Tutorial';
 import {
-  ActionRow, ActionSheet, Avatar, BarButton, Icon, LabeledRow, ListScroll, Row, Section, Sheet, Txt,
+  ActionRow, ActionSheet, Avatar, BarButton, Icon, LabeledRow, ListScroll, Row, Sheet, Txt,
 } from '../../ui/components';
 import { useTabBarClearance } from '../../ui/floatingBar';
 import { appearanceLabel, AppearanceSetting, elevation, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 
+import { SettingsIntro, SettingsSection as Section } from './SettingsLayout';
+
 const SETTINGS: AppearanceSetting[] = ['system', 'light', 'dark'];
 
 /** Who you're signed in as, the identifier you share to be made trusted, and the way out. */
-export function AccountSheet({ visible, onClose, inline = false, top }: {
+export function AccountSheet({ visible, onClose, inline = false, top, section }: {
   visible: boolean;
   onClose: () => void;
   /** Drawn as the Account tab's page rather than a sheet over another one. */
   inline?: boolean;
   /** Rows shown first on the inline page: notifications, calendar export. */
   top?: React.ReactNode;
+  section?: 'settings' | 'account';
 }) {
   const tutorial = useTutorial();
   const clearance = useTabBarClearance();
@@ -105,6 +108,8 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
   const content = (
     <>
       <ListScroll contentStyle={inline ? { paddingBottom: clearance } : undefined}>
+        <SettingsIntro title={section === 'settings' ? 'Settings' : 'Your account'} description={section === 'settings' ? 'Appearance, privacy and help.' : 'Your profile and account details.'} />
+        {section !== 'settings' ? <>
         {/* Who's signed in, as a profile card: initials on violet, the name, the email. */}
         <View style={[styles.profile, { backgroundColor: theme.surface }, elevation(theme)]}>
           <Avatar text={initialsOf(email?.displayName ?? user?.address ?? '?')} color={theme.accent} size={52} />
@@ -118,20 +123,24 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
             ) : null}
           </View>
         </View>
+        </> : null}
         {top}
+        {section !== 'account' ? <>
 
         {/* Rows with a checkmark rather than a segmented control: rows wrap at large text sizes. */}
-        <Section header="Appearance" footer="Match phone follows the Light or Dark setting on your phone.">
+        <Section header="Appearance" footer="Match device follows the Light or Dark setting on your device.">
           {SETTINGS.map((setting) => (
-            <Row key={setting} onPress={() => choose(setting)} accessibilityLabel={appearanceLabel(setting)}>
+            <Row key={setting} onPress={() => choose(setting)} accessibilityLabel={`${setting === 'system' ? 'Match device' : appearanceLabel(setting)}${appearance === setting ? ', selected' : ''}`}>
               <View style={styles.line}>
-                <Txt>{appearanceLabel(setting)}</Txt>
+                <Txt>{setting === 'system' ? 'Match device' : appearanceLabel(setting)}</Txt>
                 {appearance === setting ? <Icon name="check" color={theme.accent} /> : null}
               </View>
             </Row>
           ))}
         </Section>
 
+        </> : null}
+        {section !== 'settings' ? <>
         <Section
           header="Your ID"
           footer="Share this only with someone making you a trusted reporter. It identifies your account — it isn't a password, and it doesn't let anyone sign in as you."
@@ -155,6 +164,8 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
           )}
         </Section>
 
+        </> : null}
+        {section !== 'account' ? <>
         {/* The way back from "Hide posts from this person" — all at once, because the app only learns how many. */}
         {hiddenCount !== null && hiddenCount > 0 ? (
           <Section header="Hidden people" footer="Deadlines from people you've hidden don't reach you.">
@@ -180,7 +191,9 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
           ) : null}
         </Section>
 
-        <Section footer="Delete account removes your account and everything on this device.">
+        </> : null}
+        {section !== 'settings' ? <>
+        <Section header="Account access">
           <ActionRow
             title="Sign out"
             icon="signOut"
@@ -199,6 +212,7 @@ export function AccountSheet({ visible, onClose, inline = false, top }: {
             </Pressable>
           </Section>
         ) : null}
+        </> : null}
       </ListScroll>
 
       <ActionSheet

@@ -8,14 +8,18 @@ import { PrefKey } from '../../data/storage';
 import { WebPush } from '../../data/webPush';
 import { usePrefJSON, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
-import { ActionRow, BarButton, ListScroll, Row, Section, Sheet, ToggleRow, Txt } from '../../ui/components';
-import { Space, useTheme } from '../../ui/theme';
+import { ActionRow, BarButton, ListScroll, Row, Sheet, ToggleRow, Txt } from '../../ui/components';
+import { light, MIN_TARGET, Radius, Space, useTheme } from '../../ui/theme';
+
+import { SettingsIntro, SettingsSection as Section } from '../account/SettingsLayout';
+import { useTabBarClearance } from '../../ui/floatingBar';
 
 /**
  * Calendar's Default Alert Times, for classes: when each class alerts, and a second alert.
  * In a browser, which can't alert on its own, the notifications the server pushes instead.
  */
-export function NotificationsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function NotificationsSheet({ visible, onClose, inline = false }: { visible: boolean; onClose: () => void; inline?: boolean }) {
+  const clearance = useTabBarClearance();
   const { alerts, webPush } = useServices();
   const week = useWeekModel();
   const [saved, setSaved] = usePrefJSON<unknown>(PrefKey.classAlerts, null);
@@ -42,13 +46,13 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
     if (answer === 'granted') week.scheduleAlerts(true);
   };
 
-  return (
-    <Sheet visible={visible} title="Notifications" onClose={onClose} right={<BarButton title="Done" onPress={onClose} />}>
-      <ListScroll>
+  const content = (
+      <ListScroll contentStyle={inline ? { paddingBottom: clearance } : undefined}>
+        <SettingsIntro title="Notifications" description="Choose how and when you hear about your timetable." />
         {!alerts && webPush ? (
           <WebPushSettings webPush={webPush} visible={visible} />
         ) : !alerts ? (
-          <Section footer="Notifications don't work in a web browser, which can't alert you once the page is closed." />
+          <NotificationNotice title="Notifications unavailable" message="Notifications aren't available in this session. Open the installed app or a supported browser to set up alerts." />
         ) : permission === 'undetermined' ? (
           <Section footer="DCU Timetable needs your permission before it can alert you about classes.">
             <ActionRow title="Turn On Notifications" icon="bell" onPress={() => void allow()} />
@@ -64,7 +68,7 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
         ) : null}
 
         {/* Alerts before each class are the phone's own; pushes don't do them. */}
-        {alerts || !webPush ? (
+        {alerts ? (
           <>
             <OffsetList header="Class alert" selected={settings.first} onChoose={(o) => choose('first', o)} disabled={!alerts} />
             <OffsetList
@@ -77,8 +81,8 @@ export function NotificationsSheet({ visible, onClose }: { visible: boolean; onC
           </>
         ) : null}
       </ListScroll>
-    </Sheet>
   );
+  return inline ? content : <Sheet visible={visible} title="Notifications" onClose={onClose} right={<BarButton title="Done" onPress={onClose} />}>{content}</Sheet>;
 }
 
 /** The web build's notifications: asked for here, then a switch for each kind. */
@@ -130,11 +134,11 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
   );
   switch (availability) {
     case 'addToHomeScreen':
-      return <Section footer="To get notifications on an iPhone, add DCU Timetable to your Home Screen and open it from there: tap ⋯, then Share, View More and Add to Home Screen." />;
+      return <NotificationNotice title="Add to your Home Screen" message="On iPhone, add DCU Timetable to your Home Screen from the browser's Share menu, then open it from there to enable notifications." />;
     case 'unsupported':
-      return <Section footer="This browser can't show notifications from DCU Timetable." />;
+      return <NotificationNotice title="Browser not supported" message="This browser can't show notifications from DCU Timetable. Use a supported browser or the installed app." />;
     case 'denied':
-      return <Section footer="Notifications for DCU Timetable are turned off. Turn them on in your browser's or phone's settings, then come back here." />;
+      return <NotificationNotice title="Notifications are blocked" message="Allow notifications for DCU Timetable in your browser or device settings, then return here." />;
     case 'ask':
       return ask;
     case 'granted':
@@ -151,6 +155,16 @@ function WebPushSettings({ webPush, visible }: { webPush: WebPush; visible: bool
         </Section>
       );
   }
+}
+
+function NotificationNotice({ title, message }: { title: string; message: string }) {
+  const theme = useTheme();
+  return <Section header="Delivery">
+    <Row><View style={{ gap: Space.s }}>
+      <Txt type="headline">{title}</Txt>
+      <Txt type="subheadline" color={theme.inkSecondary}>{message}</Txt>
+    </View></Row>
+  </Section>;
 }
 
 /**
@@ -178,11 +192,12 @@ function OffsetList({ header, selected, onChoose, disabled, footer }: {
                 onPress={() => onChoose(offset)}
                 disabled={disabled}
                 accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected, disabled: !!disabled }}
+                aria-checked={isSelected}
+                accessibilityState={{ checked: isSelected, disabled: !!disabled }}
                 accessibilityLabel={label}
                 style={({ pressed }) => [
                   styles.pill,
-                  { backgroundColor: isSelected ? theme.accent : theme.raised, opacity: disabled ? 0.45 : pressed ? 0.7 : 1 },
+                  { backgroundColor: isSelected ? light.accent : theme.raised, opacity: disabled ? 0.45 : pressed ? 0.7 : 1 },
                 ]}
               >
                 <Txt type="footnote" color={isSelected ? theme.onAccent : theme.ink} style={isSelected ? styles.semibold : undefined}>{label}</Txt>
@@ -197,6 +212,6 @@ function OffsetList({ header, selected, onChoose, disabled, footer }: {
 
 const styles = StyleSheet.create({
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.s },
-  pill: { borderRadius: 999, paddingHorizontal: Space.m, paddingVertical: Space.s - 1 },
+  pill: { minHeight: MIN_TARGET, justifyContent: 'center', borderRadius: Radius.control, paddingHorizontal: Space.m, paddingVertical: Space.s },
   semibold: { fontWeight: '600' },
 });
