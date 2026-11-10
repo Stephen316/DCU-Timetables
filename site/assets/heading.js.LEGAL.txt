@@ -1,4 +1,5 @@
 /*! React Bits FoldText — Copyright (c) 2026 David Haz. MIT + Commons Clause. See vendor/react-bits/LICENSE.md. */
+/*! React Bits GradientText — Copyright (c) 2026 David Haz. MIT + Commons Clause. See vendor/react-bits/LICENSE.md. */
 
 Bundled license information:
 

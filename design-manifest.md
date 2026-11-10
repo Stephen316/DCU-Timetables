@@ -60,12 +60,12 @@ Existing unrelated workspace edits are preserved outside this task's commit. UI 
 ## Public landing page: React Bits
 
 Scope: `site/index.html`. Direction: restrained student utility.
-Kit: existing landing-page components, supplied React Bits FoldText and a
+Kit: existing landing-page components, supplied React Bits FoldText and GradientText, plus a
 SpotlightCard source adaptation. Platform: responsive static website with a React
 heading island, touch, pointer and keyboard, 320–1440 CSS pixels.
 
 The user requested React Bits while retaining the colour scheme, overall layout
-and functions, then supplied FoldText and changed the final word to personalised.
+and functions, then supplied FoldText and GradientText for separate phrases.
 The heading now reads “Your DCU timetable, personalised.” The existing typography,
 section order, phone showcase, controls and light/dark palette remain. The longer
 word wraps naturally on phones; animated and static versions occupy the same space.
@@ -74,7 +74,8 @@ word wraps naturally on phones; animated and static versions occupy the same spa
 
 | Section | Implementation |
 |---|---|
-| Hero | Supplied FoldText React component, paper style, character splits, top hinge, scroll entrance, 92-degree fold, 0.65s duration and 0.045s stagger. “personalised.” inherits the existing accent |
+| Hero first phrase | “Your DCU timetable,” uses FoldText: paper style, character splits, top hinge, scroll entrance, 92-degree fold, 0.65s duration and 0.045s stagger |
+| Hero final word | “personalised.” uses GradientText exclusively: flow variant, eight-second cycle, 0.4 glow; existing violet accent tokens and a theme-derived highlight |
 | Desktop heading hover | Supplied refold interaction: 140px radius, 45 degrees; disabled on touch and below 761px |
 | Features | Existing five-card grid and SpotlightCard soft radial fill; theme controls preserved |
 | Get it / footer | Existing device instructions, links, closing action and copy-link control |
@@ -89,23 +90,27 @@ word wraps naturally on phones; animated and static versions occupy the same spa
 | Supporting text | Existing `--muted`: #55526b | Existing `--muted`: #b4b1c7 |
 | Accent | Existing `--accent`: #7c3aed | Existing `--accent`: #8b5cf6 |
 
-FoldText's source and CSS are copied from the user's attachment, with attribution.
-The wrapper passes inherited font size, weight, line height and letter spacing;
-its final word receives the existing accent. The component's original crease
-shading remains. There are no new palette colours or structural styling changes.
-This explicitly requested fold motion is the single headline effect; BlurText was
-removed. SpotlightCard remains the previously documented static DOM adaptation.
+Both components and their CSS are copied from the user's attachments, with
+attribution. FoldText inherits heading typography and uses inline layout so the
+separate GradientText word fits the original wrapping. The gradient uses `--accent`,
+`--accent-2` and `--heading-gradient-highlight` (75% accent, 25% text) in both themes.
+The default purple/pink palette is replaced with the site's existing violet scheme.
+
+User override: the user explicitly requested separate FoldText and GradientText
+effects in one heading. This overrides the skill's single-hero-effect default
+only for this heading. “personalised.” has no fold or hover-refold panels.
+SpotlightCard remains the previously documented static DOM adaptation.
 
 React 19.2.3, React DOM 19.2.3 and GSAP 3.14.2 are locally bundled with esbuild
 0.25.12. Source, lockfile, generated assets and licence notices are committed.
 `npm --prefix site run build` regenerates the bundle; GitHub Pages continues to
 copy the static site without an extra build step. The heading bundle is about
-307 KiB before compression. No third-party CDN or runtime network request is needed.
+311 KiB before compression. No third-party CDN or runtime network request is needed.
 
-Reduced motion renders a plain heading and cancels FoldText via unmount when
+Reduced motion renders a plain heading and cancels both text effects via unmount when
 changed live. Static HTML remains readable if JavaScript or its bundle is blocked.
-The supplied component provides a single screen-reader text equivalent and hides
-its visual character panels from assistive technology. Hover is decorative and
+FoldText provides a screen-reader equivalent for its phrase and hides the visual
+character panels. GradientText exposes its word once and hides the glow duplicate. Hover is decorative and
 never required to access information or controls.
 
 ### Verification
@@ -114,9 +119,9 @@ never required to access information or controls.
 |---|---|
 | Build / syntax | Production esbuild bundle and `node --check site/react-bits.js` passed; no lint task configured for the static site |
 | Layout | Animated and plain versions of the updated heading and surrounding sections match within 1px at 320, 390, 768 and 1440px; no horizontal overflow |
-| Visual | Desktop paper fold, hover refold and phone heading reviewed; light/dark screenshots captured |
-| Behaviour | Character unfolding, desktop hover refold and recovery, narrow-screen hover suppression, live reduced-motion fallback and blocked-bundle/no-JavaScript fallbacks passed |
-| Accessibility | One accessible level-one heading and unchanged accent; prior landing-page contrast findings remain unchanged in existing controls, decorative badges and footer |
+| Visual | Desktop and phone reviewed with the separated gradient word; light/dark screenshots captured |
+| Behaviour | First-phrase folding only, animated gradient on personalised only, desktop refold/recovery, narrow-screen hover suppression, live reduced-motion and blocked-bundle/no-JavaScript fallbacks passed |
+| Accessibility | One accessible level-one heading and existing violet palette; prior landing-page contrast findings remain unchanged in existing controls, decorative badges and footer |
 | Runtime | No browser errors |
 | Limits | Chromium verification; physical devices, Safari and screen-reader speech not exercised |
 

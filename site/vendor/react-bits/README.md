@@ -3,19 +3,25 @@
 React Bits by David Haz. The upstream [licence](LICENSE.md) is included alongside
 this notice.
 
-## FoldText heading
+## FoldText and GradientText heading
 
 `site/src/react-bits/FoldText.jsx` and `FoldText.css` contain the user's supplied
 React Bits FoldText JavaScript + CSS source. The component itself is unchanged
 apart from its attribution comment. `site/src/heading.jsx` renders it directly
-with React and GSAP: paper style, character splits, top hinge, scroll entrance,
+on “Your DCU timetable,” with React and GSAP: paper style, character splits, top hinge, scroll entrance,
 92-degree fold, 0.65s duration and 0.045s stagger. Desktop pointer users also get
 the supplied hover refold (140px radius, 45 degrees). Touch and narrow screens
 retain the entrance without pointer refolding. Reduced motion renders plain text
 and responds immediately when the preference changes.
 
-The existing heading owns typography and line wrapping. The final word uses the
-existing violet accent. Static HTML remains visible when JavaScript is disabled
+`GradientText.jsx` and `GradientText.css` contain the second user-supplied component,
+unchanged apart from attribution. Only “personalised.” renders inside GradientText;
+it is not a FoldText panel. It uses flow mode, an eight-second cycle and 0.4 glow.
+The palette uses the existing two violet accent tokens plus a highlight mixed
+from 75% accent and 25% text. No additional dependency is needed. The component
+stops its animation when offscreen; reduced motion removes both effects.
+
+The existing heading owns typography and line wrapping. Static HTML remains visible when JavaScript is disabled
 or the bundle cannot load. The accessible heading has one text equivalent.
 
 To rebuild after editing the source, run `npm ci` and `npm run build` in `site/`.
