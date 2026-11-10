@@ -1,5 +1,6 @@
+import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space } from './theme';
+import { Desktop, Space } from './theme';
 
 /** The selected tab's violet disc, and the pale ring round it. */
 const DISC = 40;
@@ -31,10 +32,30 @@ export function floatingBarMargin(bottomInset: number): number {
 }
 
 /**
+ * On a desktop-wide window the tabs leave the foot of the screen and stand in a column down
+ * its right edge: the same pill on end, with the room it needs kept clear beside the screens.
+ */
+export const DesktopRail = {
+  /** The pill's width, and its gap from the window's edge. */
+  pill: FloatingBar.height,
+  margin: Space.l,
+  /** What the screens give up on the right: the pill, its margin, and a gap before it. */
+  width: FloatingBar.height + Space.l * 2,
+} as const;
+
+/** Whether the tabs stand down the right edge rather than along the bottom. */
+export function useDesktopRail(): boolean {
+  return useWindowDimensions().width >= Desktop.wide;
+}
+
+/**
  * What the bar and its haze cover at the foot of the screen: pad a list's end by this, so
  * scrolled all the way down, its last line rests clear of the fade rather than dissolving in it.
+ * With the tabs on the right, nothing covers the foot, so only a little breathing room.
  */
 export function useTabBarClearance(): number {
   const { bottom } = useSafeAreaInsets();
+  const rail = useDesktopRail();
+  if (rail) return Space.l + bottom;
   return FloatingBar.height + floatingBarMargin(bottom) + FloatingBar.fade;
 }
