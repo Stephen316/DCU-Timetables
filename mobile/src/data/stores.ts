@@ -246,10 +246,13 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     await this.rpc('verify_deadline', { deadline: id, new_status: verified ? 'verified' : 'pending' });
   }
 
-  async withdraw(id: string, submitterID: string): Promise<void> {
-    await this.rest.json('DELETE', '/rest/v1/module_deadlines', SupabaseDeadlineStore.describe, {
-      query: [['id', `eq.${id}`], ['submitter_id', `eq.${submitterID}`]],
-    });
+  /**
+   * An RPC, not a DELETE on the table: students can't read module_deadlines (only its public
+   * view), and a filtered DELETE on rows you can't read matches nothing and still says 204.
+   * The server checks the poster from the session, so `submitterID` isn't sent.
+   */
+  async withdraw(id: string): Promise<void> {
+    await this.rpc('withdraw_deadline', { p_deadline: id });
   }
 
   async standings(ids: string[]): Promise<Map<string, DeadlineStanding>> {

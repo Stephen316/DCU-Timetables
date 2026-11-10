@@ -166,6 +166,8 @@ describe('Supabase requests', () => {
     await store.withdrawReport('d1');
     await store.setDetails('d1', 'Upload to Loop');
     await store.report('d1', 'details');
+    // Not a DELETE on the table: students can't read it, so that one matched nothing.
+    await store.withdraw('d1');
     expect(calls.map((c) => [c.url.replace(config.url, ''), c.body])).toEqual([
       ['/rest/v1/rpc/edit_deadline', { p_deadline: 'd1', p_title: 'Quiz 2', p_kind: 'exam', p_due: '2026-10-02T09:00:00Z', p_weight: 15 }],
       ['/rest/v1/rpc/set_deadline_label', { p_deadline: 'd1', p_label: 'memory quiz' }],
@@ -174,6 +176,7 @@ describe('Supabase requests', () => {
       ['/rest/v1/rpc/withdraw_deadline_report', { p_deadline: 'd1' }],
       ['/rest/v1/rpc/set_deadline_details', { p_deadline: 'd1', p_details: 'Upload to Loop' }],
       ['/rest/v1/rpc/report_deadline', { p_deadline: 'd1', p_reason: 'details' }],
+      ['/rest/v1/rpc/withdraw_deadline', { p_deadline: 'd1' }],
     ]);
   });
 
