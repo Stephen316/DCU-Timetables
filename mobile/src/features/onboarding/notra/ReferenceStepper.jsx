@@ -4,6 +4,8 @@ import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState 
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowLeft01Icon, ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 
+import { withShinyPlus } from '../../../ui/PlusWord';
+
 import './Stepper.css';
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -493,7 +495,7 @@ export default function Stepper({
                     if (!event.defaultPrevented) go(current + 1);
                   }}
                 >
-                  <span>{nextLabel}</span>
+                  <span>{withShinyPlus(nextLabel, 'onFill')}</span>
                   <HugeiconsIcon icon={isLast ? Tick02Icon : ArrowRight01Icon} size={16} strokeWidth={2} />
                 </FooterButton>
               </div>

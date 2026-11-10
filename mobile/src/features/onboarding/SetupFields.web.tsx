@@ -1,5 +1,6 @@
 import { Tick02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { withShinyPlus } from '../../ui/PlusWord';
 import type { SetupPlanProps, StudentNumberFieldProps } from './SetupFields.types';
 import { Card, CardDescription, CardHeader, CardTitle } from './notra/shadcn-card';
 import { Input } from './notra/shadcn-input';
@@ -23,8 +24,8 @@ export function SetupPlan({ title, description, selected, onExplore }: SetupPlan
     >
       <CardHeader>
         <CardTitle>
-          {title}
-          {onExplore ? <span className="account-setup-explore">› Explore plus</span> : null}
+          {withShinyPlus(title)}
+          {onExplore ? <span className="account-setup-explore">› Explore {withShinyPlus('plus')}</span> : null}
           {selected ? <span className="account-setup-selected"><HugeiconsIcon icon={Tick02Icon} size={14} /> Selected</span> : null}
         </CardTitle>
         <CardDescription>{description}</CardDescription>

@@ -1,3 +1,4 @@
+import { withShinyPlus } from '../../ui/PlusWord';
 import { useTheme } from '../../ui/theme';
 import type { SetupButtonProps } from './SetupButton.types';
 import { Button } from './notra/button/components/button';
@@ -17,7 +18,7 @@ export function SetupButton({ title, onPress, icon, variant, disabled, busy }: S
       onClick={onPress}
     >
       {icon ? <span aria-hidden="true">{icon}</span> : null}
-      {title}
+      {withShinyPlus(title, variant === 'outline' || variant === 'ghost' ? 'page' : 'onFill')}
     </Button>
   );
 }

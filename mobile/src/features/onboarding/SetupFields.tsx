@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Icon, Txt } from '../../ui/components';
+import { withShinyPlus } from '../../ui/PlusWord';
 import { Space, useTheme } from '../../ui/theme';
 
 import type { SetupPlanProps, StudentNumberFieldProps } from './SetupFields.types';
@@ -10,8 +11,8 @@ export function SetupPlan({ title, description, selected, onExplore }: SetupPlan
     <Pressable accessibilityRole={onExplore ? 'button' : undefined} accessibilityLabel={onExplore ? 'Explore Plus' : undefined} disabled={!onExplore} onPress={onExplore} style={[styles.plan, { backgroundColor: theme.canvas, borderColor: selected ? theme.accent : theme.separator }]}>
       <View style={styles.planText}>
         <View style={styles.planHeading}>
-          <Txt type="headline">{selected ? `${title} · Selected` : title}</Txt>
-          {onExplore ? <Txt type="subheadline" color={theme.inkSecondary}>› Explore plus</Txt> : null}
+          <Txt type="headline">{withShinyPlus(title)}{selected ? ' · Selected' : ''}</Txt>
+          {onExplore ? <Txt type="subheadline" color={theme.inkSecondary}>› Explore {withShinyPlus('plus')}</Txt> : null}
         </View>
         <Txt color={theme.inkSecondary}>{description}</Txt>
       </View>

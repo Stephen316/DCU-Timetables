@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet } from 'react-native';
 import { Txt } from '../../ui/components';
+import { withShinyPlus } from '../../ui/PlusWord';
 import { Space, useTheme } from '../../ui/theme';
 
 import type { SetupButtonProps } from './SetupButton.types';
@@ -20,7 +21,7 @@ export function SetupButton({ title, onPress, icon, variant = 'default', disable
       }]}
     >
       {icon}
-      <Txt color={primary ? theme.onAccent : theme.ink}>{title}</Txt>
+      <Txt color={primary ? theme.onAccent : theme.ink}>{withShinyPlus(title, primary ? 'onFill' : 'page')}</Txt>
     </Pressable>
   );
 }

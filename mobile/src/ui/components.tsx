@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardInset, concentric, Desktop, elevation, MIN_TARGET, Radius, screenCorner, Space, Type, useTheme, withAlpha } from './theme';
 import { elasticScroll } from './elasticScroll';
+import { withShinyPlus } from './PlusWord';
 
 // MARK: - Icons
 
@@ -471,7 +472,7 @@ export function PrimaryButton({
       ]}
     >
       {busy ? <ActivityIndicator size="small" color={fg} /> : null}
-      <Txt type="headline" color={fg} style={styles.centerText}>{title}</Txt>
+      <Txt type="headline" color={fg} style={styles.centerText}>{withShinyPlus(title, 'onFill')}</Txt>
     </Pressable>
   );
 }

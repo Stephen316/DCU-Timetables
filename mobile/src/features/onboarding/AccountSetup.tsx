@@ -5,6 +5,7 @@ import { StudentNumber } from '../../core/identity';
 import { errorMessage, isNotSignedIn } from '../../data/rest';
 import { useServices } from '../../state/hooks';
 import { Txt } from '../../ui/components';
+import { PlusWord } from '../../ui/PlusWord';
 import { Space, useTheme } from '../../ui/theme';
 import Stepper, { Step } from './Stepper';
 import { StudentID } from './StudentID';
@@ -127,7 +128,7 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
           } : undefined} />
           {plan === 'checking' ? <Txt type="footnote" accessibilityLiveRegion="polite">Checking your plan…</Txt> : null}
           {plan === 'unavailable' ? <Txt type="footnote" accessibilityLiveRegion="polite">Couldn’t check your plan. You can still continue setup.</Txt> : null}
-          {linkError ? <Txt accessibilityLiveRegion="polite">Couldn’t open the Plus page. Try again.</Txt> : null}
+          {linkError ? <Txt accessibilityLiveRegion="polite">Couldn’t open the <PlusWord /> page. Try again.</Txt> : null}
         </Step>
         <Step title="Profile">
           {manual ? (
@@ -161,7 +162,7 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
             <View style={styles.reviewDetails}>
               <View style={styles.reviewRow}>
                 <Txt type="subheadline" color={theme.inkSecondary}>Plan</Txt>
-                <Txt type="headline">{hasPlus ? 'Plus' : plan === 'standard' ? 'Standard' : 'Unavailable'}</Txt>
+                <Txt type="headline">{hasPlus ? <PlusWord /> : plan === 'standard' ? 'Standard' : 'Unavailable'}</Txt>
               </View>
               <View style={[styles.reviewRow, styles.reviewDivider, { borderTopColor: theme.separator }]}>
                 <Txt type="subheadline" color={theme.inkSecondary}>Student number</Txt>
