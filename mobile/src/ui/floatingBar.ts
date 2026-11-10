@@ -1,6 +1,6 @@
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Desktop, Space } from './theme';
+import { Space } from './theme';
 
 /** The selected tab's violet disc, and the pale ring round it. */
 const DISC = 40;
@@ -41,11 +41,17 @@ export const DesktopRail = {
   margin: Space.l,
   /** What the screens give up on the right: the pill, its margin, and a gap before it. */
   width: FloatingBar.height + Space.l * 2,
+  /** The narrowest window that gets the rail; below this it's a phone's bottom bar. */
+  minWindow: 600,
 } as const;
 
-/** Whether the tabs stand down the right edge rather than along the bottom. */
+/**
+ * Whether the tabs stand down the right edge rather than along the bottom: any window wider
+ * than a phone held upright, which is narrower than the rest of the desktop layout asks for,
+ * so a browser window or tablet gets the rail even before it's wide enough for the rest.
+ */
 export function useDesktopRail(): boolean {
-  return useWindowDimensions().width >= Desktop.wide;
+  return useWindowDimensions().width >= DesktopRail.minWindow;
 }
 
 /**

@@ -18,15 +18,23 @@ function shownTabs({ state, descriptors }: TabBarProps): number[] {
   return state.routes.map((_, i) => i).filter((i) => (descriptors[state.routes[i].key].options as { href?: unknown }).href !== null);
 }
 
+/** The rail's tabs from the top: the account first, then the week, today, and the deadlines. */
+const RAIL_ORDER = ['account', 'week', 'index', 'deadlines'];
+
 /**
- * The tabs on a desktop window: the same pill as the phone's bar, stood on end and centred
- * down the right edge, the selected tab on its violet disc. Each tab is only an icon; resting
- * the cursor on one brings up its name in a small bubble to its left.
+ * The tabs on a desktop window: the same pill as the phone's bar, stood on end and running
+ * the height of the window's right edge, the tabs gathered at its top and the selected one on
+ * its violet disc. Each tab is only an icon; resting the cursor on one brings up its name in a
+ * small bubble to its left.
  */
 function RailTabBar(props: TabBarProps) {
   const { state, descriptors, navigation } = props;
   const theme = useTheme();
-  const shown = shownTabs(props);
+  const rank = (i: number) => {
+    const at = RAIL_ORDER.indexOf(state.routes[i].name);
+    return at === -1 ? RAIL_ORDER.length : at;
+  };
+  const shown = shownTabs(props).sort((a, b) => rank(a) - rank(b));
   const position = Math.max(shown.indexOf(state.index), 0);
   const [offset] = useState(() => new Animated.Value(position * FloatingBar.halo));
   const [hovered, setHovered] = useState<number | null>(null);
@@ -307,8 +315,9 @@ const styles = StyleSheet.create({
   disc: { width: FloatingBar.disc, height: FloatingBar.disc, borderRadius: FloatingBar.disc / 2 },
   tab: { flex: 1, height: FloatingBar.halo, alignItems: 'center', justifyContent: 'center' },
   // Down the right edge, centred top to bottom, clear of the screens beside it.
-  rail: { position: 'absolute', top: 0, bottom: 0, right: DesktopRail.margin, justifyContent: 'center', zIndex: 10 },
-  railPill: { width: DesktopRail.pill, padding: FloatingBar.padding, borderRadius: DesktopRail.pill / 2 },
+  // Down the right edge, from just under the top of the window to just above its foot.
+  rail: { position: 'absolute', top: DesktopRail.margin, bottom: DesktopRail.margin, right: DesktopRail.margin, zIndex: 10 },
+  railPill: { flex: 1, width: DesktopRail.pill, padding: FloatingBar.padding, borderRadius: DesktopRail.pill / 2, justifyContent: 'flex-start' },
   railIndicator: { position: 'absolute', top: FloatingBar.padding, left: FloatingBar.padding },
   railTab: { width: FloatingBar.halo, height: FloatingBar.halo, alignItems: 'center', justifyContent: 'center' },
   railHover: { position: 'absolute', top: 0, left: 0, width: FloatingBar.halo, height: FloatingBar.halo, borderRadius: FloatingBar.halo / 2 },
