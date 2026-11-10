@@ -10,15 +10,15 @@ React Bits FoldText JavaScript + CSS source. The component itself is unchanged
 apart from its attribution comment. `site/src/heading.jsx` renders it directly
 on “Your DCU timetable,” with React and GSAP: paper style, character splits, top hinge, scroll entrance,
 92-degree fold, 0.65s duration and 0.045s stagger. Desktop pointer users also get
-the supplied hover refold (140px radius, 45 degrees). Touch and narrow screens
-retain the entrance without pointer refolding. Reduced motion renders plain text
+the supplied hover refold (140px radius, 45 degrees). Touch screens retain the entrance without pointer refolding. Narrow desktop
+windows retain hover interaction. Reduced motion renders plain text
 and responds immediately when the preference changes.
 
 `GradientText.jsx` and `GradientText.css` contain the second user-supplied component,
 unchanged apart from attribution. Only “personalised.” renders inside GradientText;
-it is not a FoldText panel. It uses flow mode, an eight-second cycle and 0.4 glow.
+it is not a FoldText panel. It uses flow mode, a four-second cycle and 0.4 glow.
 The palette uses the existing two violet accent tokens plus a highlight mixed
-from 75% accent and 25% text. No additional dependency is needed. The component
+from 35% accent and 65% text. No additional dependency is needed. The component
 stops its animation when offscreen; reduced motion removes both effects.
 
 The existing heading owns typography and line wrapping. Static HTML remains visible when JavaScript is disabled
@@ -41,4 +41,4 @@ Source revision: `9d9c687dc4f55b23539aa5417b703078047efa74`.
 falloff calculation to local pointer events and a CSS pseudo-element behind the
 existing card content. The page's accent, surface and radius are retained.
 Ambient movement, grain, flare, proximity tracking and border glow are omitted.
-Reduced motion, touch and narrow viewports disable the effect.
+Reduced motion and touch disable the effect; narrow mouse-driven windows keep it.

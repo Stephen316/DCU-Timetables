@@ -5,7 +5,8 @@ import GradientText from './react-bits/GradientText';
 import './heading.css';
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-const desktopPointer = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 761px)');
+// A narrow desktop preview still has a mouse; gate on input, not width.
+const desktopPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
 const subscribe = callback => {
   reducedMotion.addEventListener('change', callback);
   desktopPointer.addEventListener('change', callback);
@@ -49,8 +50,9 @@ function Heading() {
       {' '}
       <GradientText
         colors={['var(--accent)', 'var(--heading-gradient-highlight)', 'var(--accent-2)']}
-        animationSpeed={8}
+        animationSpeed={4}
         variant="flow"
+        scale={1.5}
         glow={0.4}
       >
         personalised.

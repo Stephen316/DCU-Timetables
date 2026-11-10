@@ -6,7 +6,7 @@
   'use strict';
 
   var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  var desktopPointer = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 761px)');
+  var desktopPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
   // SpotlightCard's soft radial falloff, with the existing accent token.
   // Only its circle fill is needed: no ambient loop, grain, flare or new surface.
   function falloff(color, softness) {

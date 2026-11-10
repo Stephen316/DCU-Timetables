@@ -75,8 +75,8 @@ word wraps naturally on phones; animated and static versions occupy the same spa
 | Section | Implementation |
 |---|---|
 | Hero first phrase | “Your DCU timetable,” uses FoldText: paper style, character splits, top hinge, scroll entrance, 92-degree fold, 0.65s duration and 0.045s stagger |
-| Hero final word | “personalised.” uses GradientText exclusively: flow variant, eight-second cycle, 0.4 glow; existing violet accent tokens and a theme-derived highlight |
-| Desktop heading hover | Supplied refold interaction: 140px radius, 45 degrees; disabled on touch and below 761px |
+| Hero final word | “personalised.” uses GradientText exclusively: flow variant, four-second cycle, 1.5 scale, 0.4 glow; existing violet accent tokens and a theme-derived highlight |
+| Desktop heading hover | Supplied refold interaction: 140px radius, 45 degrees; enabled for a fine pointer with hover at any width; disabled on touch |
 | Features | Existing five-card grid and SpotlightCard soft radial fill; theme controls preserved |
 | Get it / footer | Existing device instructions, links, closing action and copy-link control |
 
@@ -93,7 +93,7 @@ word wraps naturally on phones; animated and static versions occupy the same spa
 Both components and their CSS are copied from the user's attachments, with
 attribution. FoldText inherits heading typography and uses inline layout so the
 separate GradientText word fits the original wrapping. The gradient uses `--accent`,
-`--accent-2` and `--heading-gradient-highlight` (75% accent, 25% text) in both themes.
+`--accent-2` and `--heading-gradient-highlight` (35% accent, 65% text) in both themes.
 The default purple/pink palette is replaced with the site's existing violet scheme.
 
 User override: the user explicitly requested separate FoldText and GradientText
@@ -120,10 +120,25 @@ never required to access information or controls.
 | Build / syntax | Production esbuild bundle and `node --check site/react-bits.js` passed; no lint task configured for the static site |
 | Layout | Animated and plain versions of the updated heading and surrounding sections match within 1px at 320, 390, 768 and 1440px; no horizontal overflow |
 | Visual | Desktop and phone reviewed with the separated gradient word; light/dark screenshots captured |
-| Behaviour | First-phrase folding only, animated gradient on personalised only, desktop refold/recovery, narrow-screen hover suppression, live reduced-motion and blocked-bundle/no-JavaScript fallbacks passed |
+| Behaviour | First-phrase folding only, animated gradient on personalised only, desktop refold/recovery, touch hover suppression, live reduced-motion and blocked-bundle/no-JavaScript fallbacks passed |
 | Accessibility | One accessible level-one heading and existing violet palette; prior landing-page contrast findings remain unchanged in existing controls, decorative badges and footer |
 | Runtime | No browser errors |
 | Limits | Chromium verification; physical devices, Safari and screen-reader speech not exercised |
 
 The unrelated uncommitted phone-scroll changes in `site/index.html` remain in the
 working tree and are excluded from this task's commit.
+
+### Narrow-preview animation fix
+
+The user's live preview was 593px wide with a fine pointer and hover support.
+The previous 761px breakpoint incorrectly disabled FoldText refolding and
+SpotlightCard. Both now use input capabilities instead of viewport width.
+This intentionally permits the requested effects in narrow desktop previews;
+touch and reduced-motion fallbacks remain. The gradient was animating, but its
+three similar colours, broad scale and slow cycle made the movement hard to see.
+The four-second cycle, 1.5 scale and brighter violet highlight make it clearer.
+
+Verified in the user's open preview: new bundle loaded, reduced motion off,
+fold panels reached approximately 42 degrees under the mouse at 593px, and
+gradient positions changed between observations. Production build, JavaScript
+syntax and patch checks passed. No console errors were reported in the preview.

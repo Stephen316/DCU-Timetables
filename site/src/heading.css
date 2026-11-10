@@ -1,4 +1,4 @@
 /* kit-design: theme tokens keep GradientText within the existing violet palette. */
 :root {
-  --heading-gradient-highlight: color-mix(in srgb, var(--accent) 75%, var(--text));
+  --heading-gradient-highlight: color-mix(in srgb, var(--accent) 35%, var(--text));
 }
