@@ -16,13 +16,15 @@ import { SetupPlan, StudentNumberField } from './SetupFields';
 const PLUS_PROMO = 'https://info.dcutimetables.app/purchase/';
 
 export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string) => void; onSignOut: () => void }) {
-  const { auth, plus, profiles } = useServices();
+  const { profiles } = useServices();
   const theme = useTheme();
   const [step, setStep] = useState(1);
   const [checking, setChecking] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [plan, setPlan] = useState<'checking' | 'standard' | 'plus' | 'unavailable'>('checking');
+  // Plus's store is private and isn't in this build (as on the deadlines screen), so there's no
+  // paid plan to look up: everyone starts on Standard, and the Plus option links to its page.
+  const [plan] = useState<'checking' | 'standard' | 'plus' | 'unavailable'>('standard');
   const hasPlus = plan === 'plus';
   const [camera, setCamera] = useState(false);
   const [manual, setManual] = useState(false);
@@ -46,20 +48,6 @@ export function AccountSetup({ onSaved, onSignOut }: { onSaved: (number: string)
     });
     return () => { cancelled = true; };
   }, [attempt, profiles, onSaved, onSignOut]);
-
-  useEffect(() => {
-    if (step !== 2) return;
-    let cancelled = false;
-    // Local mode has no paid account. Its permissive Plus store is for offline features.
-    void (auth ? plus.status() : Promise.resolve({ active: false })).then(({ active }) => {
-      if (!cancelled) setPlan(active ? 'plus' : 'standard');
-    }).catch((error) => {
-      if (cancelled) return;
-      if (isNotSignedIn(error)) onSignOut();
-      else setPlan('unavailable');
-    });
-    return () => { cancelled = true; };
-  }, [auth, plus, step, onSignOut]);
 
   const saveNumber = async () => {
     if (!number || busy.current) return;
