@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ImageSourcePropType, StyleSheet, View } from 'react-native';
+import { AsciiWake } from './AsciiWake';
 import { Txt } from './components';
+import { isNewUI } from './newUI';
 import { Space, useTheme } from './theme';
 
 // Metro's way to bundle an image.
@@ -34,7 +36,8 @@ export function LoadingScreen({ caption, slowCaption }: { caption?: string; slow
       accessibilityLiveRegion="polite"
     >
       <Image source={icon} style={styles.icon} accessibilityIgnoresInvertColors />
-      <ActivityIndicator color={theme.inkSecondary} />
+      {/* The boot screen (no caption) matches the web page's own spinner; later loads get the wake. */}
+      {isNewUI() && caption ? <AsciiWake /> : <ActivityIndicator color={theme.inkSecondary} />}
       {said ? (
         <Txt type="subheadline" color={theme.inkSecondary} style={styles.caption}>{said}</Txt>
       ) : null}
