@@ -1,22 +1,27 @@
 import { Ref, RefCallback } from 'react';
 import { Platform, ScrollView } from 'react-native';
 
-/** The furthest past its end a page can be pulled, however hard it's pushed: a hint, not a stretch. */
-const MAX_PULL = 60;
+/** The furthest past its end a page can be pulled, however hard it's pushed. */
+const MAX_PULL = 100;
 /** How much of a push shows at first, before the resistance builds: a little, so it eases out. */
 const GIVE = 0.35;
-/** A pull springs back after this long at most, even with the wheel or trackpad still going. */
-const HOLD_MS = 60;
 /**
- * Once it's sprung back, the scroll that pulled it is spent: a trackpad's momentum keeps
- * sending it for a while after the fingers lift, and it mustn't pull the page out again.
- * Only a pause this long in the scrolling starts a fresh pull.
+ * A wheel or trackpad bounce is one animation, start to finish: out past the edge, then back.
+ * Played whole by the browser's compositor, it's never restarted tick by tick (which repaints
+ * the page dozens of times a second, and stutters), and the app has nothing to do while it runs.
+ */
+const BOUNCE_OUT_MS = 130;
+const BOUNCE_BACK_MS = 180;
+/** How hard the scroll that reached the edge was, scaled up into a push for `stretched`. */
+const BOUNCE_PUSH = 5;
+/**
+ * Once it's bounced, the scroll that reached the edge is spent: a trackpad's momentum keeps
+ * sending it for a while after the fingers lift, and it mustn't bounce the page again.
+ * Only a pause this long in the scrolling starts a fresh bounce.
  */
 const SPENT_MS = 180;
-/** Out to a pull: eased, so the page glides there rather than jumping a step per wheel tick. */
-const PULL = 'transform 90ms cubic-bezier(0.33, 1, 0.68, 1)';
-/** Back from it: a soft ease-out, quick to start and gentle to land. */
-const SPRING = 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)';
+/** Back from a finger's pull: a soft ease-out, quick to start and gentle to land. */
+const SPRING = 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)';
 
 /**
  * The pull a push past the end shows: it gives a little at first and ever less after, the
@@ -36,60 +41,67 @@ function stretched(push: number): number {
  */
 function attach(node: HTMLElement): () => void {
   let push = 0;
-  let settle: ReturnType<typeof setTimeout> | null = null;
   /** A finger on the page: where it went down, which way it's moving, and where a pull began. */
   let touch: { x: number; y: number; last: number; axis: 'v' | 'h' | null; from: number | null } | null = null;
 
   const content = () => node.firstElementChild as HTMLElement | null;
-  /** Under a finger the page follows it exactly; a wheel's pull eases out; letting go springs back. */
-  const show = (motion: 'follow' | 'pull' | 'spring') => {
+  /** Under a finger the page follows it exactly; letting go springs back. */
+  const show = (motion: 'follow' | 'spring') => {
     const el = content();
     if (!el) return;
-    el.style.transition = motion === 'spring' ? SPRING : motion === 'pull' ? PULL : 'none';
+    el.style.transition = motion === 'spring' ? SPRING : 'none';
     el.style.transform = push === 0 ? '' : `translateY(${stretched(push).toFixed(1)}px)`;
   };
-  /** Until when the wheel's scroll at an end is spent momentum, and pulls nothing. */
-  let spentUntil = 0;
   const springBack = () => {
-    settle = null;
     push = 0;
-    spentUntil = performance.now() + SPENT_MS;
     show('spring');
   };
 
+  /** The wheel bounce playing now, if one is. */
+  let bounce: Animation | null = null;
+  /** Until when the wheel's scroll at an end is spent momentum, and bounces nothing. */
+  let spentUntil = 0;
+
+  /**
+   * Only watches the wheel, never holds it up: the listener is passive, so the browser scrolls
+   * on its own thread without waiting for the app, and a busy moment in the app can't stall a
+   * scroll. Nothing needs cancelling anyway — at an end there's nothing left to scroll, and the
+   * page's `overscroll-behavior: none` keeps the scroll from passing on to anything behind it.
+   */
   const onWheel = (e: WheelEvent) => {
     // A pinch is a zoom, and a sideways swipe is the pager's.
     if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * node.clientHeight : e.deltaY;
     if (dy === 0) return;
+    // Past the top, the page comes down; past the bottom, it goes up.
     const end = node.scrollHeight - node.clientHeight;
-    if (push === 0) {
-      // Past the top, the page comes down (a positive pull); past the bottom, it goes up.
-      const pastTop = dy < 0 && node.scrollTop <= 0;
-      const pastEnd = dy > 0 && node.scrollTop >= end - 1;
-      if (!pastTop && !pastEnd) return;
-      const now = performance.now();
-      if (now < spentUntil) {
-        // The tail of the scroll that already bounced: hold the page still till it dies away.
-        spentUntil = now + SPENT_MS;
-        e.preventDefault();
-        return;
-      }
-      push = -dy;
-      // Back in a moment, however long the scroll keeps coming.
-      settle = setTimeout(springBack, HOLD_MS);
-    } else {
-      const was = push;
-      push -= dy;
-      // Scrolled back the other way past where it started: that's ordinary scrolling again.
-      if (Math.sign(push) !== Math.sign(was)) {
-        push = 0;
-        if (settle) clearTimeout(settle);
-        settle = null;
-      }
+    const pastTop = dy < 0 && node.scrollTop <= 0;
+    const pastEnd = dy > 0 && node.scrollTop >= end - 1;
+    if (!pastTop && !pastEnd) return;
+    const now = performance.now();
+    // Still bouncing, or the tail of the scroll that bounced it: nothing more till it dies away.
+    if (bounce || now < spentUntil) {
+      spentUntil = now + SPENT_MS;
+      return;
     }
-    e.preventDefault();
-    show('pull');
+    spentUntil = now + SPENT_MS;
+    const el = content();
+    if (!el || typeof el.animate !== 'function') return;
+    const peak = stretched(-dy * BOUNCE_PUSH).toFixed(1);
+    const total = BOUNCE_OUT_MS + BOUNCE_BACK_MS;
+    bounce = el.animate(
+      [
+        { transform: 'translateY(0px)', easing: 'cubic-bezier(0.33, 1, 0.68, 1)' },
+        { transform: `translateY(${peak}px)`, offset: BOUNCE_OUT_MS / total, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+        { transform: 'translateY(0px)' },
+      ],
+      { duration: total },
+    );
+    const done = () => {
+      bounce = null;
+    };
+    bounce.onfinish = done;
+    bounce.oncancel = done;
   };
 
   const onTouchStart = (e: TouchEvent) => {
@@ -97,8 +109,8 @@ function attach(node: HTMLElement): () => void {
       touch = null;
       return;
     }
-    if (settle) clearTimeout(settle);
-    settle = null;
+    // A finger takes over from a wheel bounce still playing.
+    bounce?.cancel();
     const { clientX, clientY } = e.touches[0];
     touch = { x: clientX, y: clientY, last: clientY, axis: null, from: null };
   };
@@ -142,7 +154,7 @@ function attach(node: HTMLElement): () => void {
     touch = null;
   };
 
-  node.addEventListener('wheel', onWheel, { passive: false });
+  node.addEventListener('wheel', onWheel, { passive: true });
   node.addEventListener('touchstart', onTouchStart, { passive: true });
   node.addEventListener('touchmove', onTouchMove, { passive: false });
   node.addEventListener('touchend', onTouchEnd);
@@ -153,7 +165,7 @@ function attach(node: HTMLElement): () => void {
     node.removeEventListener('touchmove', onTouchMove);
     node.removeEventListener('touchend', onTouchEnd);
     node.removeEventListener('touchcancel', onTouchEnd);
-    if (settle) clearTimeout(settle);
+    bounce?.cancel();
     const el = content();
     if (el) el.style.transform = '';
   };
