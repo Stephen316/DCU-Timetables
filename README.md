@@ -10,11 +10,12 @@ Included are course/module community features, such as flagging classes as cance
 
 ### On your phone (iPhone or Android)
 
-**[Open DCU Timetable](https://stephen316.github.io/DCU-Timetables/app/)**  → then add it to
-your Home Screen, so it opens like any other app. There's no app store listing to search for.
+**[Open DCU Timetable](https://dcutimetables.app)**  → then add it to
+your Home Screen, so it opens like any other app. There's no app store listing to search for (yet!).
 
 - **iPhone, in Safari:** tap Share (the square with an arrow; in newer Safari it's under the
   ••• button), then **Add to Home Screen**, then **Add**.
+  
 - **Android, in Chrome:** tap ⋮ at the top right, then **Add to Home screen** or
   **Install app**.
 
@@ -22,7 +23,11 @@ Reading this on a computer? Point your phone's camera at this code to open it th
 
 <img src="site/app-qr.svg" width="140" alt="QR code that opens DCU Timetable on a phone">
 
-### On your Mac
+### On your desktop
+**[Use the website](https://dcutimetables.app),**
+or visit our **[landing page](https://info.dcutimetables.app) for more information.**
+
+### Mac install
 
 **[Download DCU Timetable for Mac](https://github.com/Stephen316/DCU-Timetables/releases/latest/download/DCU-Timetable-mac.zip)**
 (macOS 14 or later), then:
@@ -32,6 +37,19 @@ Reading this on a computer? Point your phone's camera at this code to open it th
 3. Go to **System Settings → Privacy & Security** and click **Open Anyway**. You only do this
    once.
 
+### Windows install
+
+There's nothing to download. You install it from the browser and get the same app in a
+window of its own, with a Start menu entry and a taskbar icon.
+
+1. Open **[DCU Timetable](https://stephen316.github.io/DCU-Timetables/app/)** in
+   **Microsoft Edge** or **Google Chrome**.
+2. Click the **Install** icon at the right end of the address bar (a screen with a down
+   arrow). If you don't see it, use the menu instead:
+   - **Edge:** ⋯ → **Apps** → **Install DCU Timetable**
+   - **Chrome:** ⋮ → **Cast, save and share** → **Install page as app**
+3. Click **Install**. It opens in its own window. To keep it on the taskbar, right-click its
+   icon there and choose **Pin to taskbar**.
 To send it to someone, share [stephen316.github.io/DCU-Timetables](https://stephen316.github.io/DCU-Timetables/):
 it has both, and shows each person the one for their device first.
 
