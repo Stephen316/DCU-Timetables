@@ -15,13 +15,12 @@ import { ScreenTitle } from './ScreenTitle';
 type Mode = 'signIn' | 'createAccount';
 
 /**
- * DCU-only sign-in with an email address and password. Creating an account sends
- * Supabase's confirmation email; the account can't be used until the link in it is tapped,
- * which is what proves the address is theirs. The name then comes from the address.
+ * DCU-only sign-in with an email address and password. Creating an account emails a link;
+ * no account exists until its "Confirm my account" button is pressed, which is what proves
+ * the address is theirs. The name then comes from the address.
  *
- * Tapping that link in a browser signs the student in without coming back here at all;
- * this screen is what they return to when the link failed, or when they confirmed on a
- * different device.
+ * The button is pressed in a browser, which can't hand a session back, so this screen is
+ * where they return and press Continue — on this phone or after confirming on another device.
  */
 export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: AuthenticatedUser) => void; notice?: string | null }) {
   const theme = useTheme();
@@ -96,18 +95,13 @@ export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: Authenticate
       );
     } else {
       run(async (service) => {
-        const outcome = await service.signUp(email, password);
+        await service.signUp(email, password);
         // A new account gets the tutorial when its timetable first opens, after the email
         // link, the student number and the programme — on this phone, where it was made.
-        if (outcome.kind !== 'alreadyRegistered') prefs.setBool(PrefKey.tutorialDue, true);
-        if (outcome.kind === 'needsEmailConfirmation') startConfirmation(email, null);
-        else if (outcome.kind === 'alreadyRegistered') {
-          // Back to Sign in with the address kept, so signing in or resetting is one tap.
-          setMode('signIn');
-          setPassword('');
-          setConfirmPassword('');
-          setNote('An account with this email already exists. Sign in, or tap "Forgot password?" to reset it.');
-        } else onSignedIn(outcome.user);
+        // (An address that already had an account is emailed a note instead and answers the
+        // same way, so it is not told apart here.)
+        prefs.setBool(PrefKey.tutorialDue, true);
+        startConfirmation(email, null);
       });
     }
   };
@@ -136,7 +130,7 @@ export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: Authenticate
           <Section>
             <Row>
               <Txt type="headline">Check your email</Txt>
-              <Txt color={theme.inkSecondary}>{`We've sent a confirmation link to ${awaiting.address}. Tap it, then come back here.`}</Txt>
+              <Txt color={theme.inkSecondary}>{`We've sent a link to ${awaiting.address}. Open it and press "Confirm my account", then come back here. Your account is only created at that point.`}</Txt>
             </Row>
           </Section>
           {noteSection}
@@ -145,11 +139,19 @@ export function SignIn({ onSignedIn, notice }: { onSignedIn: (user: Authenticate
               title="Continue"
               busy={busy}
               onPress={() =>
-                run((service) =>
-                  signInAs(service, awaiting, async () => {
-                    setNote('Not confirmed yet — tap the link in the email, then press Continue.');
-                  }),
-                )
+                run(async (service) => {
+                  try {
+                    onSignedIn(await service.signIn(awaiting, password));
+                  } catch (error) {
+                    // Until the link's button is pressed there is no account, so the server
+                    // calls it a wrong password; here that can only mean "not confirmed yet".
+                    if (error instanceof AuthError && (error.kind === 'invalidCredentials' || error.kind === 'emailNotConfirmed')) {
+                      setNote('Not confirmed yet — open the link in the email, press "Confirm my account", then press Continue.');
+                      return;
+                    }
+                    throw error;
+                  }
+                })
               }
             />
           </Section>

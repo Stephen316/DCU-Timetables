@@ -349,28 +349,35 @@ describe('Auth requests', () => {
     expect(calls).toHaveLength(0);
   });
 
-  test('signing up an address that already has an account says so instead of waiting for an email', async () => {
-    // The live project's answer for a confirmed address: a stand-in user, no identities.
-    const { fn } = fakeFetch(() => ({ body: { id: 'x', email: 'aoife.murphy5@mail.dcu.ie', identities: [] } }));
-    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
-    await expect(service.signUp(email, 'Password1')).resolves.toEqual({ kind: 'alreadyRegistered' });
-  });
-
-  test('sign-up without a session needs the email confirmed', async () => {
-    const { fn } = fakeFetch(() => ({ body: { id: 'u1', email: 'x' } }));
+  test('sign-up goes to the holding function, never to Supabase\'s own sign-up', async () => {
+    // /auth/v1/signup would write the account before the address is proved; it is switched off.
+    const { calls, fn } = fakeFetch(() => ({ body: { status: 'sent' } }));
     const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
     expect(await service.signUp(email, 'Password1')).toEqual({ kind: 'needsEmailConfirmation' });
+    expect(calls.map((call) => new URL(call.url).pathname)).toEqual(['/functions/v1/signup']);
+    expect(calls[0].body).toEqual({ action: 'request', email: email.address, password: 'Password1' });
   });
 
-  test('every request that emails a link names the public site as where it lands', async () => {
-    // Left to the dashboard's Site URL, a reset link once opened the GitHub repo instead.
-    const { calls, fn } = fakeFetch(() => ({ body: { id: 'u1', email: 'x' } }));
+  test('a refused sign-up shows the function\'s own words', async () => {
+    const { fn } = fakeFetch(() => ({ status: 403, body: { error: 'Sign up with your DCU address (@dcu.ie or @mail.dcu.ie).' } }));
     const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
-    await service.signUp(email, 'Password1');
+    await expect(service.signUp(email, 'Password1')).rejects.toThrow('Sign up with your DCU address');
+  });
+
+  test('resending asks for a new link without sending the password again', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: { status: 'sent' } }));
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
     await service.resendConfirmation(email);
+    expect(calls[0].body).toEqual({ action: 'resend', email: email.address });
+  });
+
+  test('a password reset still names the public site as where its link lands', async () => {
+    // Left to the dashboard's Site URL, a reset link once opened the GitHub repo instead.
+    const { calls, fn } = fakeFetch(() => ({ body: {} }));
+    const service = new SupabaseAuthService(config, new SupabaseSession(memorySecrets(), () => undefined, fn), fn);
     await service.sendPasswordReset(email);
-    expect(calls.map((call) => new URL(call.url).pathname)).toEqual(['/auth/v1/signup', '/auth/v1/resend', '/auth/v1/recover']);
-    for (const call of calls) expect(query(call.url)).toEqual({ redirect_to: 'https://stephen316.github.io/DCU-Timetables/' });
+    expect(new URL(calls[0].url).pathname).toBe('/auth/v1/recover');
+    expect(query(calls[0].url)).toEqual({ redirect_to: 'https://stephen316.github.io/DCU-Timetables/' });
   });
 
   const tokens = { accessToken: 'link-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 };

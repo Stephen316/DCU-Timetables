@@ -21,34 +21,80 @@ given-name-first, so the profile match compares name parts as a **set**, not in 
 
 Sign-in is **email + password**:
 
-- **Create account** → Supabase emails a confirmation link → the student confirms → they can
-  sign in.
+- **Create account** → our `signup` Edge Function emails a link → the student opens it and
+  presses **Confirm my account** → only then does the account exist, and they can sign in.
 - **Sign in** → email + password.
 - **Forgot password?** → Supabase emails a reset link.
 
 Steps:
 
 1. Authentication → **Providers → Email**: enable Email.
-2. Authentication → **Providers → Email → Confirm email: ON**. ⚠️ **This is what makes the
-   DCU rule mean anything.** With confirmations off, anyone could sign up as
-   `someone.else@dcu.ie` without ever receiving mail at that address, and the domain check
-   would be decoration. With it on, an account only works once the student has proved they
-   control the DCU mailbox.
+2. Authentication → **Sign In / Providers → Allow new users to sign up: OFF**. ⚠️ **This is
+   what makes the DCU rule mean anything.** Accounts are created only by the `signup`
+   function, after the student has proved they control the DCU mailbox (below). Left on,
+   anyone could still call `POST /auth/v1/signup` directly — claiming
+   `someone.else@dcu.ie` without ever receiving mail there — and an unconfirmed row would be
+   stored. Switching it off does not affect the function (it uses the admin API) or sign-in
+   and password reset for existing accounts.
 3. Set a minimum password length under Authentication → Policies if you want more than
    Supabase's default of 6 (the app asks for 8 when creating an account).
 
-No email-template editing is needed — the default confirmation and recovery templates both
-send links, which is exactly what this flow uses.
+The password-reset email still comes from Supabase's template. The confirmation email is sent
+by the function, so `supabase/templates/confirm-signup.html` is no longer used.
 
-The built-in SMTP is rate-limited (a few emails per hour) — fine for development, but a real
-launch needs a custom SMTP provider configured in Supabase.
+### Verify before an account exists
+
+Supabase's own sign-up stores the account before the link is clicked, so an address nobody
+proved they own would sit in `auth.users`. Instead:
+
+1. The app calls the **`signup`** Edge Function (`supabase/functions/signup`) with the
+   address and password. It checks the DCU rule, stores a *pending* row in
+   `pending_signups` (password encrypted, link token kept only as a hash) and emails a link
+   to `/verify.html#t=…`. Nothing is written to `auth.users`.
+2. The link opens `mobile/public/verify.html`, which shows a **Confirm my account** button.
+   Mail scanners (Defender Safe Links on `@mail.dcu.ie`) GET every link in a message, so
+   the link itself changes nothing — only the button's POST does.
+3. The POST makes the function create the account with `email_confirm: true`, delete the
+   pending row, and the student presses Continue in the app.
+
+Pending rows last an hour and are swept every ten minutes (pg_cron). The same job clears any
+unconfirmed accounts left by the old route.
+
+Set up, once:
+
+1. Run `supabase/phase50_verify_before_account.sql`.
+2. Create a Resend account (free tier), verify a sending domain, and make an API key.
+3. Set the function's secrets (Edge Functions → Secrets), generating the key with
+   `openssl rand -base64 32`:
+   `RESEND_API_KEY`, `MAIL_FROM` (e.g. `DCU Timetable <accounts@your-domain>`), `SIGNUP_ENC_KEY`.
+4. Deploy with JWT verification off (a signed-out student calls it):
+   `supabase functions deploy signup --no-verify-jwt`
+5. Switch **Allow new users to sign up** OFF (step 2 above) — last, once the function works.
+
+Check: create an account in the app, confirm that no row appears in `auth.users` until the
+button is pressed, and that `POST /auth/v1/signup` now answers "Signups not allowed".
+
+Same address, second time: no second link — the person is emailed that they already have an
+account, and the app's answer is identical, so it can't be used to learn who is registered.
+A repeat request within a minute sends nothing.
+
+Resend's free tier caps emails per day and per month; check its current limits before a launch
+where a whole cohort signs up at once. Supabase's built-in SMTP (still used for password
+resets) is far tighter — a few emails per hour — so a real launch also wants custom SMTP there.
 
 ### Restricting the domain server-side
 
 The app validates the domain, but a client check is bypassable — someone could call the Auth
-API directly. To enforce it for real, add an Auth Hook / trigger in Supabase that rejects
-sign-ups whose email doesn't end in `@dcu.ie` or `@mail.dcu.ie`. Until then the domain rule
-is a UI guard, not a security boundary.
+API directly. Two server-side layers enforce it:
+
+1. `supabase/phase0_identity.sql` §11 — the **Before User Created** hook, which must be
+   switched on in the dashboard (Authentication → Hooks).
+2. `supabase/phase45_dcu_email_enforced.sql` — a trigger on `auth.users` that rejects any
+   insert, or any change of address, to a non-DCU email. This closes the
+   `PUT /auth/v1/user {"email": ...}` route and backstops the hook if it is ever disabled.
+
+Addresses outside the domain (console admin, App Review demo) go in `auth_domain_exceptions`.
+Also keep **anonymous sign-ins** and **Phone** switched off in the dashboard.
 
 ## What's stored
 

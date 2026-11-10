@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Confirm your account</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #eee8d5; --ink: #1c1c1e; --muted: #5f6368; --accent: #268bd2; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #212129; --ink: #f2f2f7; --muted: #a0a0ab; } }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 17px/1.45 -apple-system, system-ui, sans-serif; }
+      main { max-width: 420px; margin: 0 auto; padding: 72px 20px; }
+      h1 { font-size: 24px; margin: 0 0 8px; }
+      p { margin: 0 0 20px; color: var(--muted); }
+      button { font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 10px; padding: 14px 22px; width: 100%; cursor: pointer; }
+      button:disabled { opacity: 0.6; cursor: default; }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Mail scanners GET this page. Only the button below does anything, and they don't press buttons. -->
+      <section id="ready" hidden>
+        <h1>Confirm your account</h1>
+        <p>Press the button to finish creating your DCU Timetable account.</p>
+        <button id="go" type="button">Confirm my account</button>
+      </section>
+      <section id="done" hidden>
+        <h1>You're in</h1>
+        <p>Your account is ready. Go back to DCU Timetable and press Continue — or sign in with your email and password.</p>
+      </section>
+      <section id="failed" hidden>
+        <h1 id="failedTitle">That didn't work</h1>
+        <p id="failedText"></p>
+      </section>
+    </main>
+    <script>
+      var ENDPOINT = 'https://pkytnujhwjxudtrudihu.supabase.co/functions/v1/signup';
+      var token = (/[#&]t=([0-9a-f]{64})/.exec(location.hash) || [])[1];
+      var show = function (id) {
+        ['ready', 'done', 'failed'].forEach(function (s) { document.getElementById(s).hidden = s !== id; });
+      };
+      var fail = function (text) { document.getElementById('failedText').textContent = text; show('failed'); };
+
+      // Taken out of the address bar straight away, so it isn't left in history or a screenshot.
+      if (token) history.replaceState(null, '', location.pathname);
+
+      if (!token) {
+        fail('This link is incomplete. Open the newest email from DCU Timetable and use its link.');
+      } else {
+        show('ready');
+        var button = document.getElementById('go');
+        button.addEventListener('click', function () {
+          button.disabled = true;
+          button.textContent = 'Confirming…';
+          fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'confirm', token: token }),
+          })
+            .then(function (res) { return res.json().catch(function () { return {}; }).then(function (body) { return { ok: res.ok, body: body }; }); })
+            .then(function (r) { if (r.ok) show('done'); else fail(r.body.error || "Couldn't confirm. Try again in a moment."); })
+            .catch(function () { fail("Couldn't reach the server. Check your connection and use the link again."); });
+        });
+      }
+    </script>
+  </body>
+</html>

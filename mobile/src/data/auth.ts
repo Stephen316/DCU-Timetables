@@ -45,7 +45,7 @@ export class AuthError extends Error {
   static invalidCredentials(): AuthError {
     return new AuthError(
       'invalidCredentials',
-      "That email and password don't match an account. Check both and try again, or create an account if you haven't yet.",
+      "That email and password don't match an account. Check both and try again, or create an account if you haven't yet. If you just created one, open the link in your email and confirm it first.",
     );
   }
 }
@@ -59,20 +59,23 @@ export class AuthError extends Error {
  */
 export const EMAIL_LINK_DESTINATION = 'https://stephen316.github.io/DCU-Timetables/';
 
+/** The Edge Function that holds a sign-up until its link is confirmed (`supabase/functions/signup`). */
+const SIGNUP_FUNCTION = '/functions/v1/signup';
+
 const emailLinkQuery = `redirect_to=${encodeURIComponent(EMAIL_LINK_DESTINATION)}`;
 
-export type SignUpOutcome =
-  /** Supabase sent a confirmation email; the address must be confirmed before sign-in. */
-  | { kind: 'needsEmailConfirmation' }
-  /** Confirmations are switched off in Supabase, so the account is usable immediately. */
-  | { kind: 'signedIn'; user: AuthenticatedUser }
-  /** The address already has a confirmed account. Supabase sends no email for this. */
-  | { kind: 'alreadyRegistered' };
+/**
+ * Sign-up never signs anyone in: no account exists until the emailed link's button is pressed
+ * (`supabase/functions/signup`). The answer is the same whether the address is new or already
+ * registered — a registered one is emailed a note instead of a link — so it can't be used to
+ * find out who has an account.
+ */
+export type SignUpOutcome = { kind: 'needsEmailConfirmation' };
 
 export interface AuthService {
   signUp(email: DCUEmail, password: string): Promise<SignUpOutcome>;
   signIn(email: DCUEmail, password: string): Promise<AuthenticatedUser>;
-  /** Send the confirmation email again to an address that hasn't been confirmed yet. */
+  /** Send the confirmation link again for a sign-up that is still waiting. */
   resendConfirmation(email: DCUEmail): Promise<void>;
   sendPasswordReset(email: DCUEmail): Promise<void>;
   /** Turns the tokens an email link came back with into the signed-in student. */
@@ -82,8 +85,8 @@ export interface AuthService {
 }
 
 /**
- * Supabase Auth email-and-password sign-in, with the address confirmed by the link Supabase
- * emails.
+ * Supabase Auth email-and-password sign-in. The account is only created once the emailed link
+ * has been confirmed, so a sign-up that was never confirmed leaves nothing behind.
  */
 export class SupabaseAuthService implements AuthService {
   constructor(
@@ -93,14 +96,9 @@ export class SupabaseAuthService implements AuthService {
   ) {}
 
   async signUp(email: DCUEmail, password: string): Promise<SignUpOutcome> {
-    const json = await this.post(`/auth/v1/signup?${emailLinkQuery}`, { email: email.address, password });
-    // A session only comes back when email confirmation is disabled.
-    const session = parseAuthSession(json);
-    if (session) {
-      await this.session.save(session);
-      return { kind: 'signedIn', user: { id: session.userID, address: email.address } };
-    }
-    if (isRepeatedSignUp(json)) return { kind: 'alreadyRegistered' };
+    // Goes to our own function, not Supabase's /auth/v1/signup (switched off in the dashboard):
+    // that route writes the account before the address is proved.
+    await this.post(SIGNUP_FUNCTION, { action: 'request', email: email.address, password });
     return { kind: 'needsEmailConfirmation' };
   }
 
@@ -126,7 +124,7 @@ export class SupabaseAuthService implements AuthService {
   }
 
   async resendConfirmation(email: DCUEmail): Promise<void> {
-    await this.post(`/auth/v1/resend?${emailLinkQuery}`, { email: email.address, type: 'signup' });
+    await this.post(SIGNUP_FUNCTION, { action: 'resend', email: email.address });
   }
 
   async sendPasswordReset(email: DCUEmail): Promise<void> {
@@ -228,18 +226,6 @@ export class SupabaseAuthService implements AuthService {
 function isSamePassword(message: string): boolean {
   const lowered = message.toLowerCase();
   return lowered.includes('same_password') || lowered.includes('should be different from the old password');
-}
-
-/**
- * Signing up an address that already has a confirmed account gets a 200 with a stand-in user
- * whose `identities` is empty, and no email — so a caller can't learn which addresses exist
- * from the status alone. An unconfirmed address comes back with its identity and a fresh
- * confirmation email, which is the ordinary path.
- */
-function isRepeatedSignUp(json: unknown): boolean {
-  if (typeof json !== 'object' || json === null) return false;
-  const identities = (json as { identities?: unknown }).identities;
-  return Array.isArray(identities) && identities.length === 0;
 }
 
 /** Matches Supabase's "Invalid login credentials", with or without its `error_code`. */
