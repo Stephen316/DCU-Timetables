@@ -26,11 +26,17 @@ or the bundle cannot load. The accessible heading has one text equivalent.
 
 To rebuild after editing the source, run `npm ci` and `npm run build` in `site/`.
 Commit the generated `assets/heading.js`, `assets/heading.css` and
-`assets/heading.js.LEGAL.txt` alongside the source. The existing deployment copies
+`assets/heading.js.LEGAL.txt` alongside the source. The GitHub Pages deployment copies
 these files directly, so it needs no additional build step or CDN. Dependencies
 are pinned in `package-lock.json`. React, React DOM and Scheduler share the licence
 in `site/vendor/react/LICENSE.txt`; bundled GSAP notices are in the generated legal
 file.
+
+For Vercel, the project's Root Directory is `site`. `site/vercel.json` explicitly
+runs `npm run build` and publishes `.` relative to that root: the HTML pages stay
+at the root and the generated bundle lives in `assets/`. There is no `public/`
+output directory. This configuration overrides the Vercel dashboard's output
+directory for subsequent deployments.
 
 ## SpotlightCard feature cards
 
