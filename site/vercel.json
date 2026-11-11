@@ -3,5 +3,12 @@
   "framework": null,
   "buildCommand": "npm run build",
   "outputDirectory": ".",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [{ "source": "/sitemap", "destination": "/sitemap.xml" }],
+  "headers": [
+    {
+      "source": "/sitemap",
+      "headers": [{ "key": "Content-Type", "value": "application/xml; charset=utf-8" }]
+    }
+  ]
 }
