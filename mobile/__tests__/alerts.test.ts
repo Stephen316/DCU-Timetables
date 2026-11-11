@@ -129,4 +129,11 @@ describe('Class alerts from the week model', () => {
     services.signOut();
     await settle();
   });
+
+  test("signing out takes this student's ticked-off deadlines with it", async () => {
+    const services = await createServices({ kv: new MemoryKV(), secrets: { get: async () => null, set: async () => {}, remove: async () => {} }, env: {}, alerts: null });
+    services.prefs.setJSON(PrefKey.completedDeadlines, ['d1', 'd2']);
+    services.signOut();
+    expect(services.prefs.get(PrefKey.completedDeadlines)).toBeNull();
+  });
 });
