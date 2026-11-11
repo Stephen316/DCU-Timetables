@@ -35,7 +35,15 @@ export class LectureModel extends Observable {
   practice = false;
 
   setPractice(practice: boolean): void {
+    // The tour ending on this page (skipped, say) takes its pretend report with it, or the
+    // page goes on showing it and a real report or undo afterwards acts on it.
+    const ended = this.practice && !practice && this.beforePractice !== null;
     this.practice = practice;
+    if (ended && this.beforePractice) {
+      this.status = this.beforePractice;
+      this.beforePractice = null;
+      this.changed();
+    }
   }
 
   private readonly reporterID: string;
@@ -126,6 +134,8 @@ export class LectureModel extends Observable {
 
   private async busy(work: () => Promise<void>, fallback: string, reload = true): Promise<void> {
     this.isBusy = true;
+    // A new try starts clean: an old failure left up reads as this one failing too.
+    this.errorText = null;
     this.changed();
     try {
       await work();
@@ -211,6 +221,7 @@ export class LectureModel extends Observable {
     });
     // Show it straight away; the reload confirms it landed.
     this.deadlines = DeadlineRules.upcoming([...this.deadlines, deadline]);
+    this.errorText = null;
     this.changed();
     try {
       await shareDeadline(this.services, deadline, this.reporterID);
@@ -278,6 +289,7 @@ export class LectureModel extends Observable {
 
   private async dropThen(deadline: Deadline, work: () => Promise<void>, fallback: string): Promise<void> {
     this.deadlines = this.deadlines.filter((d) => d.id !== deadline.id);
+    this.errorText = null;
     this.changed();
     try {
       await work();
