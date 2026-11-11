@@ -8,6 +8,7 @@ import {
 } from './courseData';
 import { DCU_API, DCUAPIClient, TimetableSource } from './dcuApi';
 import { GoogleCalendar } from './googleCalendar';
+import { OpenPlusStore, PlusStore, SupabasePlusStore } from './passes';
 import { SupabaseREST, withTimeLimit } from './rest';
 import {
   AppEvent, CachedRole, Emitter, ReporterID, SecretStore, SignedInUser, supabaseConfigFromEnv, SupabaseConfig,
@@ -39,6 +40,8 @@ export interface Services {
   deadlines: DeadlineStore;
   verdicts: VerdictStore;
   profiles: ProfileStore;
+  /** Plus: whether this account has it, and the checkout that gives it. */
+  plus: PlusStore;
   /** Null until Supabase is configured: a class list lives on the server or nowhere. */
   allocations: AllocationStore | null;
   labRotations: LabRotationStore | null;
@@ -129,6 +132,7 @@ export async function createServices(platform: Platform): Promise<Services> {
     deadlines: new PrivateDeadlineStore(rest ? new SupabaseDeadlineStore(rest) : new LocalDeadlineStore(prefs), prefs, () => reporter.current),
     verdicts: rest ? new SupabaseVerdictStore(rest) : new LocalVerdictStore(),
     profiles: rest ? new SupabaseProfileStore(rest) : new LocalProfileStore(user),
+    plus: rest ? new SupabasePlusStore(rest) : new OpenPlusStore(),
     allocations: rest ? new SupabaseAllocationStore(rest) : null,
     labRotations: rest ? new SupabaseLabRotationStore(rest) : null,
     timetableChanges: rest ? new SupabaseTimetableChangeStore(rest) : null,

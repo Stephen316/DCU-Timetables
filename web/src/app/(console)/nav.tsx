@@ -11,6 +11,7 @@ const links = [
   { href: "/courses", label: "Courses" },
   { href: "/people", label: "People" },
   { href: "/flags", label: "Flags" },
+  { href: "/payment-plans", label: "Plus" },
   { href: "/test-accounts", label: "Test accounts" },
   { href: "/security", label: "Security" },
   { href: "/audit", label: "Audit" },
