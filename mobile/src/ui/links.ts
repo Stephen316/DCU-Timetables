@@ -5,7 +5,7 @@
 const BASE = 'https://dculive.ie';
 
 export const AppLinks = {
-  privacy: `${BASE}/privacy.html`,
-  terms: `${BASE}/terms.html`,
-  support: `${BASE}/support.html`,
+  privacy: `${BASE}/privacy`,
+  terms: `${BASE}/terms`,
+  support: `${BASE}/support`,
 } as const;

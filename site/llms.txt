@@ -18,6 +18,6 @@
 ## Pages
 
 - [Home](https://dculive.ie/): what the app does, how to get it, and common questions
-- [Help and contact](https://dculive.ie/support.html): wrong groups, confirmation emails, passwords, reporting a deadline, deleting an account
-- [Privacy policy](https://dculive.ie/privacy.html)
-- [Terms of use](https://dculive.ie/terms.html)
+- [Help and contact](https://dculive.ie/support): wrong groups, confirmation emails, passwords, reporting a deadline, deleting an account
+- [Privacy policy](https://dculive.ie/privacy)
+- [Terms of use](https://dculive.ie/terms)

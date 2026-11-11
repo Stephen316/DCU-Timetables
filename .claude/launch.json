@@ -49,12 +49,12 @@
     },
     {
       "name": "site",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "npx",
       "runtimeArgs": [
-        "-m",
-        "http.server",
+        "--yes",
+        "serve@14.2.4",
+        "--listen",
         "4100",
-        "--directory",
         "site"
       ],
       "port": 4100
