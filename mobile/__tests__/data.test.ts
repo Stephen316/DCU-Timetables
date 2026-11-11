@@ -706,6 +706,37 @@ describe('Auth session', () => {
     expect(session.userID).toBeNull();
     expect(secrets.size).toBe(0);
   });
+
+  test('a refresh that lands after sign-out does not sign the student back in', async () => {
+    const secrets = new Map<string, string>();
+    const store = { get: async (k: string) => secrets.get(k) ?? null, set: async (k: string, v: string) => void secrets.set(k, v), remove: async (k: string) => void secrets.delete(k) };
+    let answer: (r: Response) => void = () => undefined;
+    const fetchFn = jest.fn(() => new Promise<Response>((resolve) => { answer = resolve; }));
+    const session = new SupabaseSession(store, () => undefined, fetchFn as unknown as typeof fetch);
+    await session.save({ accessToken: 'old', refreshToken: 'r', userID: 'u', expiresAt: Date.now() - 1000 });
+    const pending = session.accessToken({ url: 'https://x.supabase.co', anonKey: 'anon' });
+    await Promise.resolve();
+    await session.clear();
+    answer(new Response(JSON.stringify(json), { status: 200 }));
+    expect(await pending).toBeNull();
+    expect(session.userID).toBeNull();
+    expect(secrets.size).toBe(0);
+  });
+
+  test('a refresh that lands after someone else signs in keeps their session', async () => {
+    const secrets = new Map<string, string>();
+    const store = { get: async (k: string) => secrets.get(k) ?? null, set: async (k: string, v: string) => void secrets.set(k, v), remove: async (k: string) => void secrets.delete(k) };
+    let answer: (r: Response) => void = () => undefined;
+    const fetchFn = jest.fn(() => new Promise<Response>((resolve) => { answer = resolve; }));
+    const session = new SupabaseSession(store, () => undefined, fetchFn as unknown as typeof fetch);
+    await session.save({ accessToken: 'old', refreshToken: 'r', userID: 'u', expiresAt: Date.now() - 1000 });
+    const pending = session.accessToken({ url: 'https://x.supabase.co', anonKey: 'anon' });
+    await Promise.resolve();
+    await session.save({ accessToken: 'theirs', refreshToken: 't', userID: 'other', expiresAt: Date.now() + 3_600_000 });
+    answer(new Response(JSON.stringify(json), { status: 200 }));
+    expect(await pending).toBe('theirs');
+    expect(session.userID).toBe('other');
+  });
 });
 
 test('no signal while the token is refreshed keeps the student signed in', async () => {

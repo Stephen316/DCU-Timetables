@@ -191,7 +191,10 @@ export class SupabaseSession {
       }
       return null;
     }
-    await this.save(refreshed);
+    // The refresh was for `current`. If the student signed out, or someone else signed in,
+    // while it was out, its tokens belong to nobody now and must not be put back.
+    if (this.cached === current) await this.save(refreshed);
+    else if (this.cached !== refreshed) return this.accessToken(config);
     return refreshed.accessToken;
   }
 
