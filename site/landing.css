@@ -20,6 +20,7 @@
     --due: #b45309; --off: #ea580c; --ok: #059669; --test: #2563eb;
     --shadow: 0 30px 70px -25px rgba(60,40,140,.35);
     --nav-bg: rgba(246,245,251,.78);
+    --student-id-shadow: drop-shadow(0 3px 8px rgba(23,23,40,.18));
   }
 }
 :root[data-theme="light"] {
@@ -31,6 +32,7 @@
   --due: #b45309; --off: #ea580c; --ok: #059669; --test: #2563eb;
   --shadow: 0 30px 70px -25px rgba(60,40,140,.35);
   --nav-bg: rgba(246,245,251,.78);
+  --student-id-shadow: drop-shadow(0 3px 8px rgba(23,23,40,.18));
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-x: clip; }
@@ -251,7 +253,7 @@ h2 { margin: 0; font-size: clamp(32px, 5.4vw, 56px); line-height: 1.04; letter-s
 /* Keep the supplied ID artwork still; only the surrounding corners move. */
 .student-id-preview { display: grid; place-items: center; flex: 1; padding: 20px; }
 .student-id-scan { position: relative; width: 100%; max-width: 320px; }
-.student-id-scan img { display: block; width: 100%; height: auto; }
+.student-id-scan img { display: block; width: 100%; height: auto; filter: var(--student-id-shadow, none); }
 .scan-corner {
   position: absolute; width: 24px; height: 24px;
   border: 2px solid var(--accent); pointer-events: none;
