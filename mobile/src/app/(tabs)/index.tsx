@@ -1,13 +1,13 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import { MacShell } from '../../data/macShell';
+import { useCallback, useRef } from 'react';
 import { TimetableScreen } from '../../features/week/TimetableScreen';
 import { useWeekModel } from '../../state/root';
+import { useWeekFirst } from '../../ui/floatingBar';
 
-/** The front page: the day list, or on the Mac (which has no day view) the week. */
+/** The front page: the day list on a phone, or on the Mac and a desktop-wide window the week. */
 export default function TimetableRoute() {
   const model = useWeekModel();
-  const [onMac] = useState(() => MacShell.isPresent());
+  const weekFirst = useWeekFirst();
   const returning = useRef(false);
   // Back from a class's page: a report or a deadline may have been added there, and both
   // decide what the timetable outlines.
@@ -19,5 +19,5 @@ export default function TimetableRoute() {
       returning.current = true;
     }, [model]),
   );
-  return <TimetableScreen mode={onMac ? 'week' : 'day'} owner />;
+  return <TimetableScreen mode={weekFirst ? 'week' : 'day'} owner />;
 }

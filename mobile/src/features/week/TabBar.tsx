@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router';
 import { ComponentProps, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, LayoutChangeEvent, PanResponder, Platform, Pressable, StyleSheet, TextStyle, View, ViewStyle } from 'react-native';
-import { useTutorialTarget } from '../tutorial/Tutorial';
-import { Txt } from '../../ui/components';
+import { Animated, Easing, LayoutChangeEvent, Linking, PanResponder, Platform, Pressable, StyleProp, StyleSheet, TextStyle, View, ViewStyle } from 'react-native';
+import { useTutorial, useTutorialTarget } from '../tutorial/Tutorial';
+import { TutorialText } from '../../core/tutorial';
+import { AppLinks } from '../../ui/links';
+import { Icon, IconName, Txt } from '../../ui/components';
 import { DesktopRail, FloatingBar, floatingBarMargin, useDesktopRail } from '../../ui/floatingBar';
 import { Desktop, elevation, Palette, Space, useTheme, withAlpha } from '../../ui/theme';
 
@@ -13,9 +15,17 @@ export function TabBar(props: TabBarProps) {
   return useDesktopRail() ? <RailTabBar {...props} /> : <BottomTabBar {...props} />;
 }
 
-/** The tabs a bar draws: any hidden with `href: null` (the week tab on the Mac) are left off. */
+/**
+ * The tabs a bar draws: any hidden with `href: null` (the week tab where the week is the front
+ * page) are left off. Expo Router takes `href` out of the options it hands on and hides the tab
+ * with `tabBarItemStyle: { display: 'none' }` instead, so that is what's looked for too.
+ */
 function shownTabs({ state, descriptors }: TabBarProps): number[] {
-  return state.routes.map((_, i) => i).filter((i) => (descriptors[state.routes[i].key].options as { href?: unknown }).href !== null);
+  return state.routes.map((_, i) => i).filter((i) => {
+    const options = descriptors[state.routes[i].key].options as { href?: unknown; tabBarItemStyle?: unknown };
+    const style = StyleSheet.flatten(options.tabBarItemStyle as StyleProp<ViewStyle>);
+    return options.href !== null && style?.display !== 'none';
+  });
 }
 
 /** The rail's tabs from the top: the account first, then the week, today, and the deadlines. */
@@ -38,6 +48,7 @@ function RailTabBar(props: TabBarProps) {
   const position = Math.max(shown.indexOf(state.index), 0);
   const [offset] = useState(() => new Animated.Value(position * FloatingBar.halo));
   const [hovered, setHovered] = useState<number | null>(null);
+  const tutorial = useTutorial();
 
   useEffect(() => {
     Animated.timing(offset, { toValue: position * FloatingBar.halo, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
@@ -91,8 +102,33 @@ function RailTabBar(props: TabBarProps) {
             </Pressable>
           );
         })}
+        {/* At the foot of the rail, away from the tabs: what Account's About section offers. */}
+        <View style={styles.railFoot}>
+          {tutorial ? <RailAction icon="replay" name={TutorialText.replay} onPress={() => tutorial.replay()} /> : null}
+          <RailAction icon="help" name="Help and contact" onPress={() => void Linking.openURL(AppLinks.support)} />
+        </View>
       </View>
     </View>
+  );
+}
+
+/** A button at the foot of the rail: an icon like a tab's, named in the same bubble on hover. */
+function RailAction({ icon, name, onPress }: { icon: IconName; name: string; onPress: () => void }) {
+  const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Pressable
+      onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      accessibilityRole="button"
+      accessibilityLabel={name}
+      style={({ pressed }) => [styles.railTab, { opacity: pressed ? 0.5 : 1 }]}
+    >
+      {hovered ? <View pointerEvents="none" style={[styles.railHover, { backgroundColor: haloColor(theme) }]} /> : null}
+      <Icon name={icon} size={24} color={hovered ? theme.accent : theme.inkTertiary} />
+      {hovered ? <RailTooltip name={name} /> : null}
+    </Pressable>
   );
 }
 
@@ -319,6 +355,7 @@ const styles = StyleSheet.create({
   rail: { position: 'absolute', top: DesktopRail.margin, bottom: DesktopRail.margin, right: DesktopRail.margin, zIndex: 10 },
   railPill: { flex: 1, width: DesktopRail.pill, padding: FloatingBar.padding, borderRadius: DesktopRail.pill / 2, justifyContent: 'flex-start' },
   railIndicator: { position: 'absolute', top: FloatingBar.padding, left: FloatingBar.padding },
+  railFoot: { marginTop: 'auto' },
   railTab: { width: FloatingBar.halo, height: FloatingBar.halo, alignItems: 'center', justifyContent: 'center' },
   railHover: { position: 'absolute', top: 0, left: 0, width: FloatingBar.halo, height: FloatingBar.halo, borderRadius: FloatingBar.halo / 2 },
   // To the tab's left, past the pill's edge and a little gap, centred on the icon.

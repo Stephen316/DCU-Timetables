@@ -100,7 +100,10 @@ export function DeadlineCard({
   };
 
   const kindTint = deadlineTint(deadline.kind, theme);
-  const graded = deadline.gradeWeight > 0 ? ` · ${deadline.gradeWeight}%` : '';
+  // Counting towards the grade is what most needs noticing, so it's outlined in a bright colour
+  // and badged with how much it's worth.
+  const graded = deadline.gradeWeight > 0;
+  const gradedTint = theme.tint.graded;
 
   return (
     <Animated.View
@@ -128,9 +131,15 @@ export function DeadlineCard({
         <Pressable
           onPress={onOpen}
           accessibilityRole="button"
-          accessibilityLabel={`${displayTitle(deadline)}, ${deadlineKindLabel(deadline.kind)}, ${moduleName}, due ${dueLabel(deadline.due, now)}${disputed ? ', reported wrong' : ''}${completed ? ', completed' : ''}`}
+          accessibilityLabel={`${displayTitle(deadline)}, ${deadlineKindLabel(deadline.kind)}${graded ? `, graded, ${deadline.gradeWeight}%` : ''}, ${moduleName}, due ${dueLabel(deadline.due, now)}${disputed ? ', reported wrong' : ''}${completed ? ', completed' : ''}`}
           accessibilityHint="Opens it"
-          style={({ pressed }) => [styles.card, { backgroundColor: theme.surface, opacity: pressed ? 0.85 : 1 }, elevation(theme)]}
+          style={({ pressed }) => [
+            styles.card,
+            { backgroundColor: theme.surface, opacity: pressed ? 0.85 : 1 },
+            elevation(theme),
+            // After the elevation, whose dark-mode hairline border it replaces.
+            graded && { borderWidth: 2, borderColor: gradedTint, boxShadow: `0 0 0 3px ${withAlpha(gradedTint, 0.18)}` },
+          ]}
         >
           <Pressable
             onPress={press}
@@ -152,6 +161,13 @@ export function DeadlineCard({
                   <Txt type="caption" color={theme.tint.off} style={styles.flagMark}>!</Txt>
                 </View>
               ) : null}
+              {graded ? (
+                <View style={[styles.graded, { backgroundColor: gradedTint }]}>
+                  {/* On the card's own colour: white on the light theme's pink, near-black on the dark's. */}
+                  <Icon name="graded" size={12} color={theme.surface} />
+                  <Txt type="caption" color={theme.surface} style={styles.bold}>Graded · {deadline.gradeWeight}%</Txt>
+                </View>
+              ) : null}
             </View>
             <View style={styles.meta}>
               <View style={[styles.kind, { backgroundColor: withAlpha(kindTint, 0.14) }]}>
@@ -159,7 +175,7 @@ export function DeadlineCard({
               </View>
               <View style={styles.module}>
                 <Avatar text={moduleInitials(moduleName)} color={moduleTint(theme, deadline.moduleKey)} size={22} />
-                <Txt type="footnote" color={theme.ink} numberOfLines={1} style={styles.shrink}>{moduleName}{graded}</Txt>
+                <Txt type="footnote" color={theme.ink} numberOfLines={1} style={styles.shrink}>{moduleName}</Txt>
               </View>
               <Txt type="footnote" color={theme.inkSecondary} style={styles.time}>{dueLabel(deadline.due, now)}</Txt>
             </View>
@@ -185,6 +201,8 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   flag: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   flagMark: { fontWeight: '800' },
+  bold: { fontWeight: '700' },
+  graded: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, paddingHorizontal: Space.s, paddingVertical: 3 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   kind: { borderRadius: 999, paddingHorizontal: Space.s, paddingVertical: 2 },
   semibold: { fontWeight: '600' },

@@ -1,5 +1,6 @@
 import { Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MacShell } from '../data/macShell';
 import { Space } from './theme';
 
 /** The selected tab's violet disc, and the pale ring round it. */
@@ -57,6 +58,15 @@ export function useDesktopRail(): boolean {
   const { width, height } = useWindowDimensions();
   if (Platform.OS === 'web') return width >= DesktopRail.minWindow && height >= DesktopRail.minWebHeight;
   return Math.min(width, height) >= DesktopRail.minWindow;
+}
+
+/**
+ * The week is the front page and there is no Today tab: on the Mac, and on a desktop-wide
+ * window, which has the room for the whole week. A phone keeps Today, its day list.
+ */
+export function useWeekFirst(): boolean {
+  const rail = useDesktopRail();
+  return rail || MacShell.isPresent();
 }
 
 /**

@@ -71,6 +71,8 @@ const ICONS = {
   arrowUp: 'arrow-up',
   arrowDown: 'arrow-down',
   arrowLeft: 'arrow-back',
+  /** A deadline that counts towards the grade. */
+  graded: 'star',
 } as const;
 
 export type IconName = keyof typeof ICONS;

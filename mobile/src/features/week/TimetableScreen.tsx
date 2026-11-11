@@ -4,7 +4,8 @@ import { AppState, StyleSheet, View } from 'react-native';
 import { addDays, daysBetween, formatDayMonth, isSameDay, isToday, isTomorrow, startOfDay, weekdayName, WeekHeading } from '../../core/time';
 import { WeekdayIndex } from '../../core/misc';
 import { TimetableEvent } from '../../core/timetableEvent';
-import { listenForMacAlertTaps, MacShell } from '../../data/macShell';
+import { listenForMacAlertTaps } from '../../data/macShell';
+import { useWeekFirst } from '../../ui/floatingBar';
 import { listenForAlertTaps } from '../../data/notifications';
 import { useAppEvent, useModel, useNow } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
@@ -32,8 +33,9 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
   // Said relative to today, so it moves on by itself when Monday comes.
   const shownWeek = model.weeks[model.weekIndex];
   const heading = shownWeek ? WeekHeading.of(shownWeek.firstDay, shownWeek.label, now) : null;
-  // The Mac app is the week and the deadlines: the day list is a phone's view.
-  const [onMac] = useState(() => MacShell.isPresent());
+  // The Mac app and a desktop-wide window are the week and the deadlines: the day list is a
+  // phone's view. Their week has arrows and Today beside its title.
+  const weekControls = useWeekFirst() && mode === 'week';
   const showsCalendar = mode === 'week';
   const weekPager = useRef<PagerControl>(null);
   /** Edit timetable: the course's other classes show as ghosts, and a tap adds or removes. */
@@ -160,10 +162,15 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
   // The Day tab is titled by its day; the Week tab by its week ("This week", "Next week").
   const shownDay = shownWeek ? addDays(startOfDay(shownWeek.firstDay), model.dayIndex) : null;
   const dayLine = shownDay ? (isToday(shownDay, now) ? 'Today' : isTomorrow(shownDay, now) ? 'Tomorrow' : formatDayMonth(shownDay)) : '';
-  const title = editing ? 'Edit timetable' : showsCalendar ? heading?.title ?? '' : shownDay ? weekdayName(shownDay) : '';
+  // With the arrows, the week's number sits between them, so the middle doesn't say it again:
+  // "This week" alone, or the month for a week further off (whose heading would be its number).
+  const numbered = weekControls && !!shownWeek && heading?.title === `Week ${shownWeek.label}`;
+  const weekTitle = weekControls ? (numbered ? heading?.detail : heading?.title) ?? '' : heading?.title ?? '';
+  const weekDetail = weekControls ? '' : heading?.detail ?? '';
+  const title = editing ? 'Edit timetable' : showsCalendar ? weekTitle : shownDay ? weekdayName(shownDay) : '';
   const detail = editing
-    ? (showsCalendar ? heading?.title : shownDay ? `${weekdayName(shownDay)} ${formatDayMonth(shownDay)}` : '') ?? ''
-    : showsCalendar ? heading?.detail ?? '' : [dayLine, heading?.detail].filter(Boolean).join(' · ');
+    ? (showsCalendar ? weekTitle : shownDay ? `${weekdayName(shownDay)} ${formatDayMonth(shownDay)}` : '') ?? ''
+    : showsCalendar ? weekDetail : [dayLine, heading?.detail].filter(Boolean).join(' · ');
 
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
@@ -171,20 +178,24 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
         title={title}
         subtitle={
           <View style={styles.subtitle}>
-            <Txt type="footnote" color={theme.inkSecondary} numberOfLines={1}>{detail}</Txt>
+            {detail ? <Txt type="footnote" color={theme.inkSecondary} numberOfLines={1}>{detail}</Txt> : null}
             {model.campusName && !editing ? <Label icon="place" text={model.campusName} type="footnote" color={theme.inkSecondary} /> : null}
           </View>
         }
-        left={onMac ? (
+        left={weekControls ? (
           <>
             <IconButton icon="back" label="Previous week" onPress={() => weekPager.current?.turn(-1)} />
+            {/* Which week the arrows are on, so turning them reads as counting through the term. */}
+            {shownWeek ? (
+              <Txt type="subheadline" style={styles.weekNumber} numberOfLines={1}>Week {shownWeek.label}</Txt>
+            ) : null}
             <IconButton icon="forward" label="Next week" onPress={() => weekPager.current?.turn(1)} />
           </>
         ) : undefined}
         right={
           // Editing lives here and only here: on the day and the week, the two places a class can be added or dropped.
           <>
-            {onMac && !editing ? <PillButton title="Today" onPress={() => model.showCurrentWeek()} /> : null}
+            {weekControls && !editing ? <PillButton title="Today" onPress={() => model.showCurrentWeek()} /> : null}
             {editing
               ? <PillButton title="Done" filled onPress={() => setEditing(false)} />
               : <PillButton title="Edit" icon="edit" label="Edit timetable" onPress={() => setEditing(true)} />}
@@ -214,4 +225,5 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   subtitle: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  weekNumber: { fontWeight: '600', fontVariant: ['tabular-nums'], minWidth: 64, textAlign: 'center' },
 });
