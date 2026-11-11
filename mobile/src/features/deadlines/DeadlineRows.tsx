@@ -15,7 +15,7 @@ import { deadlineKindIcon, deadlineTint } from '../../ui/meaning';
 import { useNow } from '../../state/hooks';
 import { elevation, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DuePicker } from './DuePicker';
-import { canEdit, Moderation } from './Moderation';
+import { canDelete, canEdit, Moderation } from './Moderation';
 
 export interface DeadlineActions {
   onConfirm: () => void;
@@ -200,7 +200,7 @@ export function DeadlineSheet({
           <Section>
             {isMine ? null : <ActionRow title="Report…" icon="flag" chevron onPress={() => setSheet('reasons')} />}
             {isMine ? null : <ActionRow title="Hide posts from this person" icon="hide" destructive onPress={() => setSheet('hide')} />}
-            {isMine ? <ActionRow title="Delete deadline" icon="delete" destructive onPress={() => setSheet('delete')} /> : null}
+            {canDelete(moderation, isMine) ? <ActionRow title="Delete deadline" icon="delete" destructive onPress={() => setSheet('delete')} /> : null}
           </Section>
         ) : null}
       </ListScroll>

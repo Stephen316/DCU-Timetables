@@ -7,7 +7,7 @@ import { Services } from '../../data/services';
 import { Observable } from '../../state/hooks';
 import { DetailsEdits } from './DetailsEdits';
 import { CompletedDeadlines } from './Completed';
-import { canEdit, Moderation, moderationFor } from './Moderation';
+import { canDelete, canEdit, Moderation, moderationFor } from './Moderation';
 
 /**
  * Posting a new deadline, from a class page or this tab. Submitting is itself a vouch —
@@ -277,7 +277,7 @@ export class DeadlinesModel extends Observable {
   }
 
   async remove(deadline: Deadline): Promise<void> {
-    if (!this.isMine(deadline)) return;
+    if (!canDelete(this.moderation, this.isMine(deadline))) return;
     await this.act(() => this.services.deadlines.withdraw(deadline.id, this.reporterID), "Couldn't remove that deadline.");
   }
 

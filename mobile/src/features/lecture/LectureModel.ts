@@ -12,7 +12,7 @@ import { Observable } from '../../state/hooks';
 import { shareDeadline } from '../deadlines/DeadlinesModel';
 import { DetailsEdits } from '../deadlines/DetailsEdits';
 import { CompletedDeadlines } from '../deadlines/Completed';
-import { canEdit, Moderation, moderationFor } from '../deadlines/Moderation';
+import { canDelete, canEdit, Moderation, moderationFor } from '../deadlines/Moderation';
 
 /** Everything known about one class: the crowd, any verdict, and the module's deadlines. */
 export class LectureModel extends Observable {
@@ -271,7 +271,7 @@ export class LectureModel extends Observable {
   }
 
   async removeDeadline(deadline: Deadline): Promise<void> {
-    if (!this.isMine(deadline)) return;
+    if (!canDelete(this.moderation, this.isMine(deadline))) return;
     await this.dropThen(deadline, () => this.services.deadlines.withdraw(deadline.id, this.reporterID), "Couldn't remove that deadline.");
   }
 

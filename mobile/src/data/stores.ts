@@ -321,9 +321,51 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     await this.rpc('unhide_all_authors', {});
   }
 
-  private rpc(name: string, args: Record<string, string | number>): Promise<unknown> {
-    return this.rest.json('POST', `/rest/v1/rpc/${name}`, SupabaseDeadlineStore.describe, { body: args });
+  /**
+   * A deadline RPC. When the database refuses with its own reason (a `raise exception`, which
+   * PostgREST sends as code P0001), that reason is what the student sees: "the due date has
+   * passed" says what to fix, where "Deadline service returned 400." left every refused edit
+   * or delete looking as if the button did nothing.
+   */
+  private async rpc(name: string, args: Record<string, string | number>): Promise<unknown> {
+    const response = await this.rest.request('POST', `/rest/v1/rpc/${name}`, { body: args });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new ServiceError(response.status, deadlineRefusal(text) ?? SupabaseDeadlineStore.describe(response.status));
+    }
+    if (text.length === 0) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   }
+}
+
+/** The database's own words for the refusals a student can meet, as a sentence for them. */
+const DEADLINE_REFUSALS: Record<string, string> = {
+  'not allowed': "You can't change that deadline.",
+  'no such deadline': 'That deadline has gone. Pull down to refresh.',
+  'no such deadline of yours': "That deadline has gone, or isn't yours to delete.",
+};
+
+/**
+ * The student's sentence for a PostgREST error body, or null when it isn't one of the
+ * database's deliberate refusals (a 401, a timeout page, a constraint name), which keep the
+ * plain "returned 400" wording rather than show internals.
+ */
+export function deadlineRefusal(body: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  const { code, message } = (parsed ?? {}) as { code?: unknown; message?: unknown };
+  if (code !== 'P0001' || typeof message !== 'string' || message.trim() === '') return null;
+  const text = message.trim();
+  if (DEADLINE_REFUSALS[text]) return DEADLINE_REFUSALS[text];
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
 }
 
 /**

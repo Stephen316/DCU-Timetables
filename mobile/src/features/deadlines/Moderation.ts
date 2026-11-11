@@ -20,3 +20,12 @@ export function moderationFor(role: AppRole): Moderation {
 export function canEdit(moderation: Moderation, isMine: boolean): boolean {
   return isMine || moderation.canEditAny;
 }
+
+/**
+ * Deleting it for everyone: the poster, or an admin (`withdraw_deadline`, phase 55). The
+ * server has the last word; once phase 44 asks admins for two-step sign-in, an admin's app
+ * session is refused and the error says so.
+ */
+export function canDelete(moderation: Moderation, isMine: boolean): boolean {
+  return isMine || moderation.canEditAny;
+}
