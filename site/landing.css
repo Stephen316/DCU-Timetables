@@ -1,4 +1,4 @@
-/* Home page only. The other pages (privacy, terms, support, 404) keep using style.css. */
+/* Public site theme, shared components and landing page layouts. */
 :root {
   color-scheme: dark;
   --bg: #131316; --bg-2: #18181d; --card: #1c1c21; --card-2: #26252d;
@@ -8,6 +8,7 @@
   --due: #fbbf24; --off: #fb923c; --ok: #34d399; --test: #60a5fa;
   --shadow: 0 30px 80px -20px rgba(0,0,0,.7);
   --nav-bg: rgba(19,19,22,.72);
+  --action-fill: #7c3aed;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
@@ -199,6 +200,60 @@ h2 { margin: 0; font-size: clamp(32px, 5.4vw, 56px); line-height: 1.04; letter-s
 .tile { justify-content: space-between; }
 @media (max-width: 920px) { .bento { grid-template-columns: repeat(2, 1fr); } .tile, .tile.wide { grid-column: span 1; } .tile.wide { grid-column: span 2; } }
 @media (max-width: 600px) { .bento { grid-template-columns: 1fr; } .tile.wide { grid-column: span 1; } .tile { min-height: 220px; padding: 24px; } }
+
+/* Static excerpts of the web app's WeekGrid, DeadlineCard and SubgroupCard.
+   Scoped to the examples so the surrounding tiles retain their layout and effects. */
+.app-preview {
+  --preview-band: #26252e; --preview-separator: #2c2b34;
+  --preview-rail: #4a4858; --preview-tertiary: #8a879f;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 13px; line-height: 1.35;
+}
+:root[data-theme="light"] .app-preview {
+  --preview-band: #f1eff8; --preview-separator: #e7e4f2;
+  --preview-rail: #c4c0da; --preview-tertiary: #6b6885;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .app-preview {
+    --preview-band: #f1eff8; --preview-separator: #e7e4f2;
+    --preview-rail: #c4c0da; --preview-tertiary: #6b6885;
+  }
+}
+.preview-calendar { max-height: 250px; overflow: hidden; padding: 8px; border: 1px solid var(--preview-separator); border-radius: 16px; background: var(--card); }
+.preview-weekdays { display: grid; grid-template-columns: 36px repeat(5, minmax(0, 1fr)); padding-bottom: 8px; text-align: center; color: var(--muted); font-size: 11px; }
+.preview-weekdays i { display: grid; place-items: center; width: 28px; height: 28px; margin: 2px auto 0; border-radius: 50%; font-size: 13px; font-style: normal; color: var(--text); }
+.preview-weekdays .selected { color: var(--accent); font-weight: 600; }
+.preview-weekdays .selected i { background: var(--accent); color: white; }
+.preview-hours { display: grid; grid-template-columns: 36px minmax(0, 1fr); grid-template-rows: 68px 68px 136px; }
+.preview-hour { padding-right: 6px; text-align: right; color: var(--preview-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.preview-class { min-width: 0; border-radius: 8px; padding: 7px 12px; color: white; display: flex; flex-direction: column; gap: 1px; }
+.preview-hours .preview-class, .preview-free { margin: 1px 0 1px 2px; }
+.preview-class b { font-size: 15px; font-weight: 700; }
+.preview-class > span { opacity: .85; font-size: 13px; }
+.preview-hours .preview-class > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-maths { background: #406ac3; }
+.preview-systems { background: #8953ba; }
+.preview-free { display: grid; place-items: center; border-radius: 8px; background: var(--preview-band); color: var(--preview-tertiary); font-weight: 600; }
+.preview-deadline { display: flex; align-items: center; gap: 8px; padding: 14px 16px 14px 12px; border-radius: 18px; background: var(--card); border: 1px solid var(--preview-separator); }
+.preview-check-circle { width: 26px; height: 26px; border: 2px solid var(--preview-rail); border-radius: 50%; flex-shrink: 0; }
+.preview-deadline-body { min-width: 0; flex: 1; }
+.preview-deadline-body > b { font-size: 17px; }
+.preview-deadline-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.preview-kind { color: var(--test); background: color-mix(in srgb, var(--test) 14%, transparent); border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+.preview-avatar { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #6aa75e; color: white; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+.preview-module { flex: 1; min-width: 65px; color: var(--text); }
+.preview-section-label { margin: 16px 12px 6px; color: var(--muted); font-size: 13px; }
+.preview-confirmation { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-radius: 16px; border: 1px solid var(--preview-separator); background: var(--card); color: var(--ok); font-size: 15px; }
+.preview-cancelled { background: var(--card-2); border: 1.5px solid color-mix(in srgb, var(--preview-tertiary) 40%, transparent); color: var(--muted); min-height: 116px; }
+.preview-cancelled-text { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; opacity: .55; }
+.preview-cancelled b { text-decoration: line-through; }
+.preview-status { border-radius: 999px; padding: 2px 8px; margin-top: 2px; background: white; color: #55526b; font-size: 12px; font-weight: 600; }
+.preview-subgroups { text-align: center; }
+.preview-subgroups > b { font-size: 17px; font-weight: 600; }
+.preview-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.preview-choices span { display: grid; place-items: center; min-height: 44px; border: 1.5px solid var(--preview-separator); border-radius: 10px; color: var(--muted); font-size: 15px; }
+.preview-choices .selected { border-color: var(--accent); color: var(--text); font-weight: 600; }
+.preview-primary { display: block; padding: 12px; border-radius: 10px; background: var(--accent); color: white; font-size: 15px; font-weight: 600; }
 
 /* Little live-looking bits inside the tiles */
 .mini { display: flex; flex-direction: column; gap: 8px; }

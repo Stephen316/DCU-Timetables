@@ -83,7 +83,7 @@
 }
 </script>
 <script src="theme.js?v=2"></script>
-<link rel="stylesheet" href="landing.css?v=16">
+<link rel="stylesheet" href="landing.css?v=17">
 <link rel="stylesheet" href="react-bits.css?v=3">
 <script src="react-bits.js?v=3" defer></script>
 <link rel="stylesheet" href="assets/heading.css?v=3">
@@ -176,27 +176,43 @@
 
     <div class="bento">
       <article class="tile wide rv" data-spotlight-card>
-        <div class="viz mini" aria-hidden="true">
-          <div class="row"><span class="bar"></span><span class="t">09:00</span><span><b>Maths for Computing</b><small>Lecture &middot; Group 01 &middot; Business School, Room 15</small></span></div>
-          <div class="row gap">1 hour free</div>
-          <div class="row"><span class="bar" style="background:#d466ff"></span><span class="t">11:00</span><span><b>Operating Systems</b><small>Lecture &middot; Group 01 &middot; Stokes Extension, Room 101</small></span></div>
+        <div class="viz app-preview" aria-hidden="true">
+          <div class="preview-calendar">
+            <div class="preview-weekdays"><span></span><span class="selected">Mon<i>9</i></span><span>Tue<i>10</i></span><span>Wed<i>11</i></span><span>Thu<i>12</i></span><span>Fri<i>13</i></span></div>
+            <div class="preview-hours">
+              <span class="preview-hour">9am</span>
+              <div class="preview-class preview-maths"><b>Maths for Computing</b><span>09:00 – 10:00 · Lecture · Group 01</span><span>Business School, Room 15</span></div>
+              <span class="preview-hour">10am</span><div class="preview-free">1 hour free</div>
+              <span class="preview-hour">11am</span>
+              <div class="preview-class preview-systems"><b>Operating Systems</b><span>11:00 – 13:00 · Lecture · Group 01</span><span>Stokes Extension, Room 101</span><span>Liam Fox</span></div>
+            </div>
+          </div>
         </div>
         <h3>Your day, and the gaps in it</h3>
         <p>A clean day view with the free time between classes, and a week grid when you want the whole picture.</p>
       </article>
 
       <article class="tile rv" style="--d:.08s" data-spotlight-card>
-        <div class="viz mini" aria-hidden="true">
-          <div class="row"><span class="bar" style="background:var(--due)"></span><span><b>Prototype demo</b><small>Today &middot; 20:00</small></span></div>
-          <div class="row"><span class="badge ok">&#10003; 4 people have confirmed</span></div>
+        <div class="viz app-preview preview-deadlines" aria-hidden="true">
+          <div class="preview-deadline">
+            <span class="preview-check-circle"></span>
+            <div class="preview-deadline-body">
+              <b>Prototype demo</b>
+              <div class="preview-deadline-meta"><span class="preview-kind">Presentation</span><span class="preview-avatar">DI</span><span class="preview-module">Digital Innovation · 15%</span><span>20:00</span></div>
+            </div>
+          </div>
+          <div class="preview-section-label">Is it right?</div>
+          <div class="preview-confirmation">✓ <span>4 people have confirmed</span></div>
         </div>
         <h3>Deadlines your class confirms</h3>
         <p>Add a deadline and classmates vouch for it, so you know the date is right.</p>
       </article>
 
       <article class="tile rv" data-spotlight-card>
-        <div class="viz mini" aria-hidden="true">
-          <div class="row cancelled"><span class="bar" style="background:var(--off)"></span><span class="t">11:00</span><span><b>Operating Systems</b></span><span class="badge off push">Cancelled</span></div>
+        <div class="viz app-preview" aria-hidden="true">
+          <div class="preview-class preview-cancelled">
+            <div class="preview-cancelled-text"><b>Operating Systems</b><span>11:00 – 13:00 · Lecture · Group 01</span><span>Stokes Extension, Room 101</span><span class="preview-status">⊗ Reported cancelled</span></div>
+          </div>
         </div>
         <h3>Cancelled? You&rsquo;ll know.</h3>
         <p>When a lecture is off, someone in your class reports it and it shows on your timetable.</p>
@@ -214,9 +230,10 @@
       </article>
 
       <article class="tile rv" style="--d:.16s" data-spotlight-card>
-        <div class="viz mini" aria-hidden="true">
-          <div class="row"><span class="badge due">Programme</span><span class="badge ok push">Group 01</span></div>
-          <div class="row"><span class="badge due" style="color:var(--test);background:color-mix(in srgb,var(--test) 15%,transparent)">Labs</span><span class="badge ok push" style="color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)">Lab B</span></div>
+        <div class="viz app-preview preview-subgroups" aria-hidden="true">
+          <b>Which lab subgroup are you in?</b>
+          <div class="preview-choices"><span>A.1</span><span>A.2</span><span>A.3</span><span>A.4</span><span>B.1</span><span class="selected">B.2</span><span>B.3</span><span>B.4</span></div>
+          <span class="preview-primary">Show my labs</span>
         </div>
         <h3>Just your classes</h3>
         <p>Pick your programme, your groups and your labs, and see only what&rsquo;s yours.</p>

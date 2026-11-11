@@ -41,8 +41,8 @@ Tap "Add to Google Calendar"
    an existing one), then go to **APIs & Services → Library** and enable the **Google Calendar API**.
 2. **OAuth consent screen** (Google Auth Platform → Branding): app name *DCU Live*, your
    email as support and developer contact, home page `https://dculive.ie/`,
-   privacy policy `https://dculive.ie/privacy.html`, terms
-   `https://dculive.ie/terms.html`, and authorised domain
+   privacy policy `https://dculive.ie/privacy`, terms
+   `https://dculive.ie/terms`, and authorised domain
    `dculive.ie`. Audience: **External**.
 3. **Data access**: add the scope `https://www.googleapis.com/auth/calendar.app.created`.
 4. **Clients → Create client → Web application.** Authorised JavaScript origins:
@@ -52,9 +52,11 @@ Tap "Add to Google Calendar"
 
    No redirect URIs are needed, because the sign-in uses a pop-up. Copy the **Client ID**. It's
    public by design, so it isn't a secret.
-5. In GitHub, go to repository **Settings → Secrets and variables → Actions → Variables** and add
-   `EXPO_PUBLIC_GOOGLE_CLIENT_ID` with the client ID. The next push to `mobile/**` (or a manual
-   run of the Pages workflow) builds it in.
+5. In Vercel, open the **dcu-timetables-mobile** project → **Settings → Environment Variables**
+   and add `EXPO_PUBLIC_GOOGLE_CLIENT_ID` with the client ID, for Production and Preview. Then
+   redeploy (Deployments → the latest → ⋯ → Redeploy): it's built into the app, so it only
+   takes effect in a new build. The old GitHub Pages build reads the same name from the
+   repository's **Settings → Secrets and variables → Actions → Variables**.
 6. For local work, add the same line to `mobile/.env.local`.
 
 ## Before Google verifies the app

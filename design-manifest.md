@@ -142,3 +142,29 @@ Verified in the user's open preview: new bundle loaded, reduced motion off,
 fold panels reached approximately 42 degrees under the mouse at 593px, and
 gradient positions changed between observations. Production build, JavaScript
 syntax and patch checks passed. No console errors were reported in the preview.
+
+## Public website shared theme
+
+Scope is the static dculive.ie pages in site/. Direction is restrained student utility.
+The existing landing-page components and violet palette supply the shared styling.
+Delivery is a responsive static website for touch, pointer and keyboard.
+
+Privacy, Terms and Help reuse the landing header, brand, footer and theme script.
+Their existing content occupies a readable 720px column with responsive headings.
+The 404 composes the existing final-call surface and buttons, with a return-home
+action and a download link. All its assets use root-relative URLs for nested misses.
+The shared theme loads before styles to apply the saved light/dark preference.
+
+The document stylesheet now supplies scoped layout and prose rules over landing.css.
+The error action uses a theme token for the existing #7c3aed violet, giving white
+button text approximately 5.7:1 contrast. Main and supporting text retain the
+landing palette. Footer current-page links have an underline and aria-current.
+Interior navigation targets have a 44px minimum height and visible keyboard focus.
+No new dependencies or animation were introduced.
+
+Verification completed with the site build, git diff --check, asset existence and
+root-relative-path checks, a single h1 per page, exact policy/support content
+comparison against HEAD, and theme-script execution for saved, invalid and system
+preferences. Chrome launch failed and the sandbox denied local-server binding,
+so visual viewport review, browser keyboard interaction, and live hosting status
+remain unverified. Changes are local source edits.
