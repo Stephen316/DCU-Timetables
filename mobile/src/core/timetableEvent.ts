@@ -1,4 +1,4 @@
-import { ActivityCode, kindLabel, parseActivityCode } from './activityCode';
+import { ActivityCode, cohortText, kindLabel, parseActivityCode } from './activityCode';
 
 /** How a class is delivered. Mapped from the API's free-text `EventType` string. */
 export type EventType = 'onCampus' | 'synchronous' | 'asynchronous' | 'booking' | 'unknown';
@@ -138,12 +138,12 @@ export function groupKeyOf(event: TimetableEvent): string {
   ].join('|');
 }
 
-/** Human label for the group, e.g. "Lab P1", "Tutorial T1 · Grp 02 · Surname A - M". */
+/** Human label for the group, e.g. "Lab P1", "Tutorial T1 · Grp 02 · Surname A - M", "Tutorial T1 · Grp 01 · Weeks 2–6, 8–12". */
 export function groupLabelOf(event: TimetableEvent): string {
   const a = event.activity;
   const parts = [`${kindLabel(a.kind)} ${a.kind}${a.activityIndex ?? ''}`];
   if (a.group) parts.push(`Grp ${a.group}`);
-  if (a.cohort) parts.push(a.cohort);
+  if (a.cohort) parts.push(cohortText(a.cohort));
   return parts.join(' · ');
 }
 

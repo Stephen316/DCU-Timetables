@@ -1,5 +1,6 @@
 import { DeadlineDraft, DeadlineRules, DETAILS_LIMIT, LABEL_LIMIT, makeDeadline, TITLE_LIMIT } from '../src/core/deadline';
-import { groupKeyOf } from '../src/core/timetableEvent';
+import { cohortText } from '../src/core/activityCode';
+import { groupKeyOf, groupLabelOf } from '../src/core/timetableEvent';
 import { createServices } from '../src/data/services';
 import { MemoryKV } from '../src/data/storage';
 import { DeadlinesModel } from '../src/features/deadlines/DeadlinesModel';
@@ -103,6 +104,29 @@ describe('Adding a deadline from the Deadlines tab', () => {
     const choices = DeadlineRules.moduleChoices(events, (key) => names[key] ?? key);
     expect(choices.map((c) => c.name)).toEqual(['Algebra', 'Computing']);
     expect(choices[1].classes.map((c) => c.groupKey).sort()).toEqual([groupKeyOf(events[0]), groupKeyOf(events[2])].sort());
+  });
+
+  test('lists a module\'s classes by kind, lectures first, without a group number nobody needs', () => {
+    const events = [
+      event('EM113[1]OC/T1/01 <02-06, 08-12>', at(2026, 11, 6, 11)),
+      event('EM113[1]OC/L2/01', at(2026, 11, 4, 9)),
+      event('EM113[1]OC/L1/01', at(2026, 11, 3, 9)),
+      event('EM113[1]OC/P1/02', at(2026, 11, 5, 14)),
+      event('EM113[1]OC/P1/03', at(2026, 11, 7, 14)),
+    ];
+    const [choice] = DeadlineRules.moduleChoices(events, () => 'Engineering Mathematics I');
+    expect(choice.classes.map((c) => [c.kind, c.short])).toEqual([
+      ['L', 'L1'], ['L', 'L2'], ['T', 'T1 · Weeks 2–6, 8–12'], ['P', 'P1 · Grp 02'], ['P', 'P1 · Grp 03'],
+    ]);
+    expect(choice.classes[2].label).toBe('Tutorial T1 · Weeks 2–6, 8–12');
+  });
+
+  test('reads a week-range cohort as weeks, and leaves any other cohort as it is', () => {
+    expect(cohortText('<02-06, 08-12>')).toBe('Weeks 2–6, 8–12');
+    expect(cohortText('<07>')).toBe('Week 7');
+    expect(cohortText('Surname A - M')).toBe('Surname A - M');
+    // The class page's heading reads the same way.
+    expect(groupLabelOf(event('EM113[1]OC/T1/01 <02-06, 08-12>', at(2026, 11, 6, 11)))).toBe('Tutorial T1 · Grp 01 · Weeks 2–6, 8–12');
   });
 
   test('a new deadline is in the list straight away, pinned where chosen, with its own name', async () => {

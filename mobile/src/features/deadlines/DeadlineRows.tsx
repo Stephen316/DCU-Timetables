@@ -3,8 +3,9 @@ import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import {
   ABUSE_REPORT_REASONS, Deadline, deadlineCountdown, DeadlineFields, DEADLINE_KINDS, DeadlineKind, deadlineKindLabel,
   DeadlinePlacement, DeadlineReportReason, DeadlineRules, DeadlineStanding, deadlineTrust, DETAILS_LIMIT, detailsEditedLabel,
-  displayTitle, LABEL_LIMIT, ModuleChoice, reportReasonLabel, gradeWeightLabel, TITLE_LIMIT,
+  ClassChoice, displayTitle, LABEL_LIMIT, ModuleChoice, reportReasonLabel, gradeWeightLabel, TITLE_LIMIT,
 } from '../../core/deadline';
+import { ActivityKind, kindPluralLabel } from '../../core/activityCode';
 import { addDays, formatWeekdayDayMonthTime } from '../../core/time';
 import {
   ActionRow, ActionSheet, AppSwitch, Avatar, BarButton, Icon, InlineAction, Label, ListScroll, Row, Section, Sheet, Txt,
@@ -403,8 +404,12 @@ export function DeadlineForm({
   const [moduleKey, setModuleKey] = useState<string | null>(null);
   const [atGroupKey, setAtGroupKey] = useState<string | null>(null);
   const [title, setTitle] = useState('');
-  // An empty title is only called a problem once the student has been in the box.
-  const [titleTouched, setTitleTouched] = useState(false);
+  // Pressing the dimmed Add is when what's missing gets said. Not on leaving the box: that
+  // nags about a field only touched, and in the browser the line it adds shifts every row
+  // below while the finger that blurred it is still down, so the tap misses what it aimed at.
+  const [triedAdd, setTriedAdd] = useState(false);
+  // The class list stays folded to the one chosen, until asked to show the rest.
+  const [classesOpen, setClassesOpen] = useState(false);
   const [kind, setKind] = useState<DeadlineKind>('assignment');
   const [due, setDue] = useState(() => addDays(new Date(), 7));
   // Kept as typed; blank is 0, which is not graded.
@@ -422,6 +427,18 @@ export function DeadlineForm({
   );
   const valid = Object.keys(problems).length === 0 && !detailsProblem;
   const chosen = modules?.find((m) => m.key === moduleKey) ?? null;
+  const chosenClass = chosen?.classes.find((c) => c.groupKey === atGroupKey) ?? null;
+  // Consecutive runs of one kind, as the choices come sorted: lectures, tutorials, labs…
+  const classKinds = (chosen?.classes ?? []).reduce<{ kind: ActivityKind; classes: ClassChoice[] }[]>((runs, c) => {
+    const last = runs[runs.length - 1];
+    if (last && last.kind === c.kind) last.classes.push(c);
+    else runs.push({ kind: c.kind, classes: [c] });
+    return runs;
+  }, []);
+  const pickClass = (groupKey: string | null) => {
+    setAtGroupKey(groupKey);
+    setClassesOpen(false);
+  };
   const moduleButton = useRef<View>(null);
   const [pickingModule, setPickingModule] = useState(false);
 
@@ -433,7 +450,8 @@ export function DeadlineForm({
       setModuleKey(firstModule());
       setAtGroupKey(null);
       setTitle(initial?.title ?? '');
-      setTitleTouched(false);
+      setTriedAdd(false);
+      setClassesOpen(false);
       setKind(initial?.kind ?? 'assignment');
       setDue(initial?.due ?? defaultDue ?? addDays(new Date(), 7));
       setWeightText(initial && initial.gradeWeight > 0 ? String(initial.gradeWeight) : '');
@@ -465,9 +483,12 @@ export function DeadlineForm({
         <BarButton
           title={editing ? 'Confirm' : 'Add'}
           bold
-          disabled={!valid}
+          dimmed={!valid}
           onPress={() => {
-            if (weight === null) return;
+            if (!valid || weight === null) {
+              setTriedAdd(true);
+              return;
+            }
             const fields = { title: title.trim(), kind, due, gradeWeight: weight, ...(!editing && isPrivate ? { isPrivate: true } : {}) };
             // A private one has no shared title for its own name to stand in for.
             if (choosing && moduleKey) onSubmit(fields, details.trim(), { moduleKey, atGroupKey, label: isPrivate ? '' : label });
@@ -509,24 +530,60 @@ export function DeadlineForm({
             </Row>
           ) : null}
           {choosing && chosen && chosen.classes.length > 0 ? (
-            <Row>
-              <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Class</Txt>
-              <View style={styles.kinds}>
-                {chip(atGroupKey === null, () => setAtGroupKey(null),
-                  <Txt type="footnote" color={atGroupKey === null ? theme.onAccent : theme.ink}>Whole module</Txt>, 'all')}
-                {chosen.classes.map((c) => chip(c.groupKey === atGroupKey, () => setAtGroupKey(c.groupKey),
-                  <Txt type="footnote" color={c.groupKey === atGroupKey ? theme.onAccent : theme.ink}>{c.label}</Txt>, c.groupKey))}
-              </View>
-              <Txt type="caption" color={theme.inkTertiary} style={styles.fieldNote}>
-                {"If it's due at one class, pick it: that class shows it first. Every class in the module still lists it."}
-              </Txt>
-            </Row>
+            classesOpen ? (
+              <Row>
+                <Pressable
+                  onPress={() => setClassesOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Class"
+                  accessibilityHint="Hides the other classes"
+                  accessibilityState={{ expanded: true }}
+                  style={[styles.dueRow, styles.fieldLabel]}
+                >
+                  <Txt type="footnote" color={theme.inkSecondary}>Class</Txt>
+                  <View style={[styles.chevronButton, styles.chevronUp]}><Icon name="dropdown" size={16} color={theme.inkSecondary} /></View>
+                </Pressable>
+                <View style={styles.kinds}>
+                  {chip(atGroupKey === null, () => pickClass(null),
+                    <Txt type="footnote" color={atGroupKey === null ? theme.onAccent : theme.ink}>Whole module</Txt>, 'all')}
+                </View>
+                {classKinds.map(({ kind: classKind, classes }) => (
+                  <View key={classKind} style={styles.classKind}>
+                    <Txt type="caption" color={theme.inkTertiary} style={styles.classKindHeading}>{kindPluralLabel(classKind)}</Txt>
+                    <View style={styles.kinds}>
+                      {classes.map((c) => chip(c.groupKey === atGroupKey, () => pickClass(c.groupKey),
+                        <Txt type="footnote" color={c.groupKey === atGroupKey ? theme.onAccent : theme.ink} accessibilityLabel={c.label}>
+                          {c.short}
+                        </Txt>, c.groupKey))}
+                    </View>
+                  </View>
+                ))}
+                <Txt type="caption" color={theme.inkTertiary} style={styles.fieldNote}>
+                  {"If it's due at one class, pick it: that class shows it first. Every class in the module still lists it."}
+                </Txt>
+              </Row>
+            ) : (
+              <Row
+                onPress={() => setClassesOpen(true)}
+                accessibilityLabel={`Class: ${chosenClass?.label ?? 'Whole module'}`}
+                accessibilityHint="Shows the module's other classes"
+              >
+                <View style={styles.dueRow}>
+                  <Txt type="footnote" color={theme.inkSecondary}>Class</Txt>
+                  <View style={[styles.classValue, { backgroundColor: theme.raised }]}>
+                    <Txt type="footnote" color={theme.accent} numberOfLines={1} style={[styles.medium, styles.classValueText]}>
+                      {chosenClass?.label ?? 'Whole module'}
+                    </Txt>
+                    <Icon name="dropdown" size={14} color={theme.accent} />
+                  </View>
+                </View>
+              </Row>
+            )
           ) : null}
           <Row>
             <TextInput
               value={title}
               onChangeText={setTitle}
-              onBlur={() => setTitleTouched(true)}
               maxLength={TITLE_LIMIT}
               placeholder="What's due?"
               placeholderTextColor={theme.inkTertiary}
@@ -534,7 +591,7 @@ export function DeadlineForm({
               accessibilityLabel="What's due?"
               returnKeyType="done"
             />
-            {titleTouched && problems.title ? <Txt type="caption" color={theme.tint.off}>{problems.title}</Txt> : null}
+            {triedAdd && problems.title ? <Txt type="caption" color={theme.tint.off}>{problems.title}</Txt> : null}
           </Row>
           <Row>
             <Txt type="footnote" color={theme.inkSecondary} style={styles.fieldLabel}>Type</Txt>
@@ -662,6 +719,17 @@ const styles = StyleSheet.create({
   dueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.m },
   kinds: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.s },
   kind: { borderRadius: 999, paddingHorizontal: Space.m, paddingVertical: Space.s },
+  medium: { fontWeight: '500' },
+  classKind: { marginTop: Space.m },
+  classKindHeading: { marginBottom: Space.xs },
+  classValue: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.xs, flexShrink: 1,
+    // The Module button's chip, so the two choices read as a pair.
+    borderRadius: Radius.control, paddingHorizontal: Space.m, paddingVertical: Space.xs + Space.xxs,
+  },
+  classValueText: { flexShrink: 1 },
+  chevronButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  chevronUp: { transform: [{ rotate: '180deg' }] },
   weight: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   weightInput: { width: 64, borderRadius: 8, paddingHorizontal: Space.m, textAlign: 'right' },
   weightReadout: { flex: 1, marginLeft: Space.s },

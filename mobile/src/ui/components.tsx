@@ -516,12 +516,24 @@ export function InlineAction({ title, onPress, tint, disabled }: { title: string
   );
 }
 
-/** A plain text button for a header bar: "Done", "Cancel". */
-export function BarButton({ title, onPress, disabled, bold }: { title: string; onPress: () => void; disabled?: boolean; bold?: boolean }) {
+/**
+ * A plain text button for a header bar: "Done", "Cancel". `dimmed` looks like `disabled` but
+ * still takes the press, so a form can say then what's missing rather than nagging beforehand.
+ */
+export function BarButton({
+  title, onPress, disabled, dimmed, bold,
+}: { title: string; onPress: () => void; disabled?: boolean; dimmed?: boolean; bold?: boolean }) {
   const theme = useTheme();
   return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" hitSlop={10} style={styles.barButton}>
-      <Txt color={theme.accent} style={[bold && styles.semibold, disabled && styles.disabled]}>{title}</Txt>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!(disabled || dimmed) }}
+      hitSlop={10}
+      style={styles.barButton}
+    >
+      <Txt color={theme.accent} style={[bold && styles.semibold, (disabled || dimmed) && styles.disabled]}>{title}</Txt>
     </Pressable>
   );
 }

@@ -1,5 +1,6 @@
 import { CancellationStatus, verdictSource } from './cancellation';
-import { groupKeyOf, groupLabelOf, shortTitleOf, TimetableEvent } from './timetableEvent';
+import { ActivityKind, cohortText, KIND_ORDER, kindLabel } from './activityCode';
+import { groupKeyOf, shortTitleOf, TimetableEvent } from './timetableEvent';
 import { addDays, daysBetween, formatDayMonth, isSameDay, startOfDay, startOfWeek } from './time';
 import { uuid } from './uuid';
 
@@ -77,11 +78,46 @@ export interface DeadlinePlacement {
   label: string;
 }
 
+/** One of the student's classes in a module, as the deadline form offers it. */
+export interface ClassChoice {
+  groupKey: string;
+  kind: ActivityKind;
+  /** Under its kind's heading: "L1", "T1 · Weeks 2–6, 8–12". */
+  short: string;
+  /** On its own, once picked: "Lecture L1", "Tutorial T1 · Weeks 2–6, 8–12". */
+  label: string;
+}
+
 /** A module the student can add a deadline to, and the classes of theirs it has. */
 export interface ModuleChoice {
   key: string;
   name: string;
-  classes: { groupKey: string; label: string }[];
+  /** Lectures first, then tutorials, labs and the rest; in number order within each. */
+  classes: ClassChoice[];
+}
+
+/**
+ * A module's classes as the form lists them, from one event of each. The group number is only
+ * said where two of the student's classes would otherwise read the same — usually they take
+ * one group of each, and "Grp 01" on every chip is noise.
+ */
+function classChoicesOf(events: TimetableEvent[]): ClassChoice[] {
+  const parts = events.map((e) => {
+    const a = e.activity;
+    const code = a.kind === '?' ? (a.activityIndex === null ? 'Class' : `Class ${a.activityIndex}`) : `${a.kind}${a.activityIndex ?? ''}`;
+    return { e, a, base: [code, ...(a.cohort ? [cohortText(a.cohort)] : [])].join(' · ') };
+  });
+  const seen = new Map<string, number>();
+  for (const p of parts) seen.set(p.base, (seen.get(p.base) ?? 0) + 1);
+  return parts
+    .sort((x, y) => KIND_ORDER.indexOf(x.a.kind) - KIND_ORDER.indexOf(y.a.kind)
+      || (x.a.activityIndex ?? 0) - (y.a.activityIndex ?? 0)
+      || (x.a.group ?? '').localeCompare(y.a.group ?? '')
+      || (x.a.cohort ?? '').localeCompare(y.a.cohort ?? ''))
+    .map(({ e, a, base }) => {
+      const short = (seen.get(base) ?? 0) > 1 && a.group ? `${base} · Grp ${a.group}` : base;
+      return { groupKey: groupKeyOf(e), kind: a.kind, short, label: a.kind === '?' ? short : `${kindLabel(a.kind)} ${short}` };
+    });
 }
 
 /** "Not graded" for 0, which is the default: an unsaid weight is not a guessed one. */
@@ -486,17 +522,18 @@ export const DeadlineRules = {
    * loaded — so the Deadlines tab offers only what the student actually takes.
    */
   moduleChoices(events: TimetableEvent[], nameOf: (key: string) => string): ModuleChoice[] {
-    const byModule = new Map<string, Map<string, string>>();
+    // One event per class is enough to describe it.
+    const byModule = new Map<string, Map<string, TimetableEvent>>();
     for (const e of events) {
       const key = DeadlineRules.moduleKey(e);
-      const classes = byModule.get(key) ?? new Map<string, string>();
-      classes.set(groupKeyOf(e), groupLabelOf(e));
+      const classes = byModule.get(key) ?? new Map<string, TimetableEvent>();
+      if (!classes.has(groupKeyOf(e))) classes.set(groupKeyOf(e), e);
       byModule.set(key, classes);
     }
     return [...byModule].map(([key, classes]) => ({
       key,
       name: nameOf(key),
-      classes: [...classes].map(([groupKey, label]) => ({ groupKey, label })).sort((a, b) => a.label.localeCompare(b.label)),
+      classes: classChoicesOf([...classes.values()]),
     })).sort((a, b) => a.name.localeCompare(b.name));
   },
 

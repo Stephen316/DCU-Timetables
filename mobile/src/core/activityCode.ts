@@ -40,6 +40,34 @@ export function kindLabel(kind: ActivityKind): string {
   return KIND_LABELS[kind];
 }
 
+/** The order a module's classes are listed in: lectures first, anything unrecognised last. */
+export const KIND_ORDER: ActivityKind[] = ['L', 'T', 'P', 'S', 'W', '?'];
+
+const KIND_PLURALS: Record<ActivityKind, string> = {
+  L: 'Lectures',
+  T: 'Tutorials',
+  P: 'Labs',
+  S: 'Seminars',
+  W: 'Workshops',
+  '?': 'Other classes',
+};
+
+/** A heading over a kind's classes: "Lectures", "Labs". */
+export function kindPluralLabel(kind: ActivityKind): string {
+  return KIND_PLURALS[kind];
+}
+
+/**
+ * DCU's week-range cohort, "<02-06, 08-12>", read as "Weeks 2–6, 8–12". A surname split such
+ * as "Surname A - M" is already words, and is kept.
+ */
+export function cohortText(cohort: string): string {
+  const weeks = /^<\s*([\d\s,-]+?)\s*>$/.exec(cohort);
+  if (!weeks) return cohort;
+  const spans = weeks[1].split(',').map((span) => span.trim().split('-').map((n) => String(Number(n.trim()))).join('–'));
+  return `${spans.length === 1 && !spans[0].includes('–') ? 'Week' : 'Weeks'} ${spans.join(', ')}`;
+}
+
 /** A letter in any cased script. */
 export function isLetter(ch: string): boolean {
   return ch.toLowerCase() !== ch.toUpperCase();
