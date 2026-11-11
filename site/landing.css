@@ -201,7 +201,7 @@ h2 { margin: 0; font-size: clamp(32px, 5.4vw, 56px); line-height: 1.04; letter-s
 @media (max-width: 920px) { .bento { grid-template-columns: repeat(2, 1fr); } .tile, .tile.wide { grid-column: span 1; } .tile.wide { grid-column: span 2; } }
 @media (max-width: 600px) { .bento { grid-template-columns: 1fr; } .tile.wide { grid-column: span 1; } .tile { min-height: 220px; padding: 24px; } }
 
-/* Static excerpts of the web app's WeekGrid, DeadlineCard and SubgroupCard.
+/* Static excerpts of the web app's WeekGrid and DeadlineCard.
    Scoped to the examples so the surrounding tiles retain their layout and effects. */
 .app-preview {
   --preview-band: #26252e; --preview-separator: #2c2b34;
@@ -248,12 +248,27 @@ h2 { margin: 0; font-size: clamp(32px, 5.4vw, 56px); line-height: 1.04; letter-s
 .preview-cancelled-text { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; opacity: .55; }
 .preview-cancelled b { text-decoration: line-through; }
 .preview-status { border-radius: 999px; padding: 2px 8px; margin-top: 2px; background: white; color: #55526b; font-size: 12px; font-weight: 600; }
-.preview-subgroups { text-align: center; }
-.preview-subgroups > b { font-size: 17px; font-weight: 600; }
-.preview-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
-.preview-choices span { display: grid; place-items: center; min-height: 44px; border: 1.5px solid var(--preview-separator); border-radius: 10px; color: var(--muted); font-size: 15px; }
-.preview-choices .selected { border-color: var(--accent); color: var(--text); font-weight: 600; }
-.preview-primary { display: block; padding: 12px; border-radius: 10px; background: var(--accent); color: white; font-size: 15px; font-weight: 600; }
+/* Keep the supplied ID artwork still; only the surrounding corners move. */
+.student-id-preview { display: grid; place-items: center; flex: 1; padding: 20px; }
+.student-id-scan { position: relative; width: 100%; max-width: 320px; }
+.student-id-scan img { display: block; width: 100%; height: auto; }
+.scan-corner {
+  position: absolute; width: 24px; height: 24px;
+  border: 2px solid var(--accent); pointer-events: none;
+  animation: student-id-shutter 2.8s infinite;
+}
+.scan-corner.top-left { top: -18px; left: -18px; border-right: 0; border-bottom: 0; --scan-x: 8px; --scan-y: 8px; }
+.scan-corner.top-right { top: -18px; right: -18px; border-left: 0; border-bottom: 0; --scan-x: -8px; --scan-y: 8px; }
+.scan-corner.bottom-left { bottom: -18px; left: -18px; border-right: 0; border-top: 0; --scan-x: 8px; --scan-y: -8px; }
+.scan-corner.bottom-right { bottom: -18px; right: -18px; border-left: 0; border-top: 0; --scan-x: -8px; --scan-y: -8px; }
+@keyframes student-id-shutter {
+  0%, 100% { transform: translate(0, 0); animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+  8% { transform: translate(var(--scan-x), var(--scan-y)); animation-timing-function: cubic-bezier(.22, .61, .36, 1); }
+  80% { transform: translate(0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-corner { animation: none; }
+}
 
 /* Little live-looking bits inside the tiles */
 .mini { display: flex; flex-direction: column; gap: 8px; }
