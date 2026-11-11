@@ -113,7 +113,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
       .completeEmailLink(link.tokens)
       .then((next) => {
         if (cancelled) return;
-        services.user.save(next);
+        services.signedIn(next);
         setUser(next);
         if (link.type === 'recovery') setResetting(true);
       })
@@ -318,7 +318,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
 
   const signedIn = useCallback(
     (next: AuthenticatedUser) => {
-      services.user.save(next);
+      services.signedIn(next);
       setUser(next);
     },
     [services],

@@ -136,4 +136,46 @@ describe('Class alerts from the week model', () => {
     services.signOut();
     expect(services.prefs.get(PrefKey.completedDeadlines)).toBeNull();
   });
+
+  describe('a session that ran out, then someone signs in', () => {
+    const a = { id: 'aaaa-1111', address: 'ann.one2@mail.dcu.ie' };
+    const b = { id: 'bbbb-2222', address: 'bob.two3@mail.dcu.ie' };
+
+    async function leftBehindBy(owner: typeof a, legacy = false) {
+      const services = await createServices({ kv: new MemoryKV(), secrets: { get: async () => null, set: async () => {}, remove: async () => {} }, env: {}, alerts: null });
+      if (legacy) services.prefs.set(PrefKey.lastSeenSent, `${owner.id}:2026-11-10`);
+      else services.signedIn(owner);
+      services.prefs.set(PrefKey.studentID, '12345678');
+      services.prefs.setJSON(PrefKey.timetableEdits, [{ kind: 'remove' }]);
+      services.prefs.setJSON(PrefKey.completedDeadlines, ['d1']);
+      // What the session running out does: the user is forgotten, nothing else is.
+      services.user.forget();
+      return services;
+    }
+
+    test('a different account starts clean, and keeps the tutorial its sign-up asked for', async () => {
+      const services = await leftBehindBy(a);
+      services.prefs.setBool(PrefKey.tutorialDue, true);
+      services.signedIn(b);
+      expect(services.prefs.get(PrefKey.studentID)).toBeNull();
+      expect(services.prefs.get(PrefKey.timetableEdits)).toBeNull();
+      expect(services.prefs.get(PrefKey.completedDeadlines)).toBeNull();
+      expect(services.prefs.getBool(PrefKey.tutorialDue)).toBe(true);
+      expect(services.prefs.get(PrefKey.dataOwner)).toBe(b.id);
+      expect(services.user.current).toEqual(b);
+    });
+
+    test('the same student signing back in keeps everything', async () => {
+      const services = await leftBehindBy(a);
+      services.signedIn(a);
+      expect(services.prefs.get(PrefKey.studentID)).toBe('12345678');
+      expect(services.prefs.getJSON(PrefKey.timetableEdits, [])).toHaveLength(1);
+    });
+
+    test('an install from before the owner was recorded is still caught', async () => {
+      const services = await leftBehindBy(a, true);
+      services.signedIn(b);
+      expect(services.prefs.get(PrefKey.studentID)).toBeNull();
+    });
+  });
 });

@@ -10,7 +10,7 @@ import { DCU_API, DCUAPIClient, TimetableSource } from './dcuApi';
 import { GoogleCalendar } from './googleCalendar';
 import { SupabaseREST, withTimeLimit } from './rest';
 import {
-  AppEvent, CachedRole, Emitter, ReporterID, SecretStore, SignedInUser, supabaseConfigFromEnv, SupabaseConfig,
+  AppEvent, AuthenticatedUser, CachedRole, Emitter, ReporterID, SecretStore, SignedInUser, supabaseConfigFromEnv, SupabaseConfig,
   SupabaseSession,
 } from './session';
 import { AsyncKV, PrefKey, Prefs } from './storage';
@@ -65,10 +65,37 @@ export interface Services {
   /** Add to Google Calendar, in the web build in a browser once a Google client id is set. Null everywhere else. */
   googleCalendar: GoogleCalendar | null;
   /**
+   * Remembers who signed in. When it is a different account from the one whose data the
+   * device holds — the last student's session ran out without a sign-out — that data goes
+   * first, so nobody opens on someone else's student number and timetable.
+   */
+  signedIn(user: AuthenticatedUser): void;
+  /**
    * Everything this student left on the device goes, not just their credentials: the next
    * person to sign in here is a different person.
    */
   signOut(): void;
+}
+
+/** One student's own data on the device, cleared when they leave it or someone else arrives. */
+const STUDENT_KEYS = [
+  PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme, PrefKey.programmeSaved,
+  PrefKey.skipped, PrefKey.timetableEdits, PrefKey.allocationTried, PrefKey.subgroupQuestion,
+  PrefKey.contributionsTold, PrefKey.completedDeadlines,
+];
+
+/**
+ * Whose data the device holds: whoever is signed in, else the owner recorded at sign-in.
+ * Installs from before that was recorded still carry the id in the once-a-day and
+ * programme markers (`accountID:…`), so a session that ran out before the update is caught too.
+ */
+export function deviceOwner(prefs: Prefs, user: SignedInUser): string | null {
+  const marked = (key: string) => {
+    const value = prefs.get(key);
+    const id = value?.split(':')[0];
+    return id ? id : null;
+  };
+  return user.current?.id ?? prefs.get(PrefKey.dataOwner) ?? marked(PrefKey.lastSeenSent) ?? marked(PrefKey.programmeSaved);
 }
 
 export interface Platform {
@@ -151,24 +178,35 @@ export async function createServices(platform: Platform): Promise<Services> {
     alerts,
     webPush,
     googleCalendar,
+    signedIn(next) {
+      const owner = deviceOwner(prefs, user);
+      // `tutorialDue` stays: it was set when this account was made here, before its first sign-in.
+      if (owner !== null && owner !== next.id) forgetStudent();
+      prefs.set(PrefKey.dataOwner, next.id);
+      user.save(next);
+    },
     signOut() {
-      // First, while who's signed in is still known: nothing more reaches this browser.
-      webPush?.forget();
+      forgetStudent();
       user.forget();
       void session.clear();
-      reporter.reset();
-      role.reset();
-      for (const key of [
-        PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme, PrefKey.programmeSaved,
-        PrefKey.skipped, PrefKey.timetableEdits, PrefKey.tutorialDue, PrefKey.allocationTried, PrefKey.subgroupQuestion,
-        PrefKey.contributionsTold, PrefKey.completedDeadlines,
-      ]) {
-        prefs.set(key, null);
-      }
-      // Last, so nothing re-planned while the rest was cleared survives: the next person to
-      // sign in here shouldn't be told where this one's classes are.
-      void alerts?.clear();
+      prefs.set(PrefKey.tutorialDue, null);
+      prefs.set(PrefKey.dataOwner, null);
     },
   };
+
+  function forgetStudent(): void {
+    // First, while whose data it is is still known: nothing more of theirs reaches this browser.
+    webPush?.forget();
+    reporter.reset();
+    role.reset();
+    for (const key of STUDENT_KEYS) prefs.set(key, null);
+    // Last, so nothing re-planned while the rest was cleared survives: the next person to
+    // sign in here shouldn't be told where this one's classes are.
+    void alerts?.clear();
+  }
+
+  // Recorded from the first launch after this was added, for a student still signed in.
+  const current = user.current;
+  if (current && prefs.get(PrefKey.dataOwner) !== current.id) prefs.set(PrefKey.dataOwner, current.id);
   return services;
 }
