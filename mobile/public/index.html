@@ -69,6 +69,9 @@
         justify-content: center;
         gap: 16px;
       }
+      .boot picture {
+        display: flex;
+      }
       .boot img {
         width: 88px;
         height: 88px;
@@ -123,7 +126,10 @@
     <!-- The root element for your Expo app. -->
     <div id="root">
       <div class="boot" role="progressbar" aria-label="Loading">
-        <img src="./icon-192.png" alt="" onerror="this.style.visibility = 'hidden'" />
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="./icon-192-dark.png" />
+          <img src="./icon-192.png" alt="" onerror="this.style.visibility = 'hidden'" />
+        </picture>
         <div class="spin"></div>
       </div>
     </div>

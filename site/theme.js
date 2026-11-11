@@ -15,6 +15,10 @@
     document.querySelectorAll('.phone picture source').forEach(function (source) {
       source.media = theme === 'light' ? 'all' : 'not all';
     });
+    // The logo's darker purple tile, for the dark page.
+    document.querySelectorAll('.brand picture source').forEach(function (source) {
+      source.media = theme === 'dark' ? 'all' : 'not all';
+    });
   }
 
   // Apply the saved preference before the stylesheet loads to avoid a theme flash.

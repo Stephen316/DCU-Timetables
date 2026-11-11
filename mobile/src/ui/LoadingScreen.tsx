@@ -5,8 +5,9 @@ import { Txt } from './components';
 import { isNewUI } from './newUI';
 import { Space, useTheme } from './theme';
 
-// Metro's way to bundle an image.
+// Metro's way to bundle an image. Dark mode gets the same violet, darker (as the iOS icon does).
 const icon: ImageSourcePropType = require('../../assets/icon.png');
+const iconDark: ImageSourcePropType = require('../../assets/icon-dark.png');
 
 /** How long before the loading screen says it's still waiting, and on what. */
 const SLOW_AFTER_MS = 6_000;
@@ -35,7 +36,7 @@ export function LoadingScreen({ caption, slowCaption }: { caption?: string; slow
       accessibilityLabel={said ?? 'Loading'}
       accessibilityLiveRegion="polite"
     >
-      <Image source={icon} style={styles.icon} accessibilityIgnoresInvertColors />
+      <Image source={theme.scheme === 'dark' ? iconDark : icon} style={styles.icon} accessibilityIgnoresInvertColors />
       {/* The boot screen (no caption) matches the web page's own spinner; later loads get the wake. */}
       {isNewUI() && caption ? <AsciiWake /> : <ActivityIndicator color={theme.inkSecondary} />}
       {said ? (

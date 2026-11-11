@@ -8,7 +8,8 @@
 <meta name="description" content="DCU Live is a free app for your DCU timetable on your phone and your Mac, with deadlines, cancelled classes and class alerts shared by your classmates. For anyone with a DCU email.">
 <meta name="keywords" content="DCU Live, DCU timetable, DCU timetables app, Dublin City University timetable, DCU class schedule, DCU deadlines, DCU cancelled classes, DCU class alerts, DCU student app, Rubric, Redbrick Timetable, Redbrick, Loop Timetable">
 <link rel="canonical" href="https://dculive.ie/">
-<link rel="icon" href="img/icon.png">
+<link rel="icon" href="img/icon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="img/icon-dark.png" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="DCU Live">
@@ -81,8 +82,8 @@
   ]
 }
 </script>
-<script src="theme.js?v=1"></script>
-<link rel="stylesheet" href="landing.css?v=15">
+<script src="theme.js?v=2"></script>
+<link rel="stylesheet" href="landing.css?v=16">
 <link rel="stylesheet" href="react-bits.css?v=3">
 <script src="react-bits.js?v=3" defer></script>
 <link rel="stylesheet" href="assets/heading.css?v=3">
@@ -118,7 +119,7 @@
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="index.html"><img src="img/icon.png" alt="" width="28" height="28">DCU Live</a>
+    <a class="brand" href="index.html"><picture><source media="(prefers-color-scheme: dark)" srcset="img/icon-dark.png"><img src="img/icon.png" alt="" width="28" height="28"></picture>DCU Live</a>
     <nav aria-label="Main">
       <a class="hide-s" href="#features">Features</a>
       <a class="hide-s" href="#get">Get it</a>
@@ -430,7 +431,7 @@
 <footer>
   <div class="wrap">
     <div class="foot">
-      <a class="brand" href="index.html"><img src="img/icon.png" alt="" width="28" height="28">DCU Live</a>
+      <a class="brand" href="index.html"><picture><source media="(prefers-color-scheme: dark)" srcset="img/icon-dark.png"><img src="img/icon.png" alt="" width="28" height="28"></picture>DCU Live</a>
       <nav aria-label="Footer"><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms of use</a><a href="support.html">Help and contact</a></nav>
     </div>
     <p class="share">

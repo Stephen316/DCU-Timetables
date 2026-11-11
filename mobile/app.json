@@ -15,6 +15,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png"
+      },
       "bundleIdentifier": "com.stephenh.dcutimetable",
       "supportsTablet": false,
       "requireFullScreen": true,
@@ -77,7 +81,7 @@
     "android": {
       "package": "com.stephenh.dcutimetable",
       "adaptiveIcon": {
-        "backgroundColor": "#172549",
+        "backgroundColor": "#7C3AED",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false
@@ -99,7 +103,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#212129",
           "dark": {
-            "image": "./assets/splash-icon.png",
+            "image": "./assets/splash-icon-dark.png",
             "backgroundColor": "#212129"
           }
         }
