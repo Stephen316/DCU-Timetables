@@ -203,4 +203,18 @@ describe('Week model', () => {
     expect((await m.remainingEvents(at(2026, 9, 24))).map((e) => e.id)).toEqual(['next']);
     expect(source.calls).toHaveLength(3);
   });
+
+  test("offline, the saved copy of a week is shown, but never last year's week of the same number", async () => {
+    jest.useFakeTimers({ now: at(2026, 9, 23, 8), doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'] });
+    const lastYear = event('EEG1001[1]OC/L1/01', at(2025, 9, 24, 9), at(2025, 9, 24, 11), { id: 'old' });
+    for (const [saved, shown] of [[lastYear, []], [lectureWed, ['lec']]] as const) {
+      const { services, source, model } = await setup([]);
+      source.events = async () => { throw new TypeError('Network request failed'); };
+      await services.timetableCache.store({ categoryID: programme.identity, weekNumber: 2, events: [saved], fetchedAt: new Date() });
+      const m = model();
+      await m.start();
+      await settle();
+      expect(m.events.map((e) => e.id)).toEqual(shown);
+    }
+  });
 });

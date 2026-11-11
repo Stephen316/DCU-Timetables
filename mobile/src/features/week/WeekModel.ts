@@ -479,6 +479,9 @@ export class WeekModel extends Observable {
    * This model is the only writer — it alone has the week, the tallies and the deadlines.
    */
   private publishWidgetSnapshot(): void {
+    // A load still in flight when this model was replaced (another programme, a sign-out)
+    // would otherwise land last and put the old timetable back on the home screen.
+    if (this.disposed) return;
     const today = startOfDay(new Date());
     const horizon = addDays(today, WeekModel.widgetDays);
     const upcoming: TimetableEvent[] = [];
@@ -560,7 +563,13 @@ export class WeekModel extends Observable {
     const cached = await this.services.timetableCache.snapshot(this.programme.identity, week.number);
     // A fresher copy may have landed while the device was read.
     if (!cached || this.rawByWeekNumber.has(week.number)) return this.rawByWeekNumber.has(week.number);
-    this.rawByWeekNumber.set(week.number, cached.events);
+    // Week numbers start again each year, so the copy saved under this one may be last
+    // year's: shown offline, it would pass a year-old week off as this one.
+    const start = startOfDay(week.firstDay);
+    const end = addDays(start, 7);
+    const events = cached.events.filter((e) => e.start >= start && e.start < end);
+    if (cached.events.length > 0 && events.length === 0) return false;
+    this.rawByWeekNumber.set(week.number, events);
     this.applyFilter();
     return true;
   }
