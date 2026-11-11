@@ -1,19 +1,17 @@
 import { Tabs } from 'expo-router';
-import { useState } from 'react';
 import { Platform } from 'react-native';
-import { MacShell } from '../../data/macShell';
 import { TabBar } from '../../features/week/TabBar';
 import { Icon } from '../../ui/components';
-import { DesktopRail, useDesktopRail } from '../../ui/floatingBar';
+import { DesktopRail, useDesktopRail, useWeekFirst } from '../../ui/floatingBar';
 
 /**
  * The signed-in app: Today, This week, Deadlines and Account, sharing one week model. On a
  * phone they sit along the bottom; on a desktop-wide window they stand down the right edge,
- * named when the cursor rests on one. The Mac app has no day view, so there the first tab is
- * the week and the separate week tab is left off the bar.
+ * named when the cursor rests on one. The Mac app and a desktop-wide window have no Today
+ * tab: there the first tab is the week and the separate week tab is left off the bar.
  */
 export default function TabsLayout() {
-  const [onMac] = useState(() => MacShell.isPresent());
+  const weekFirst = useWeekFirst();
   const rail = useDesktopRail();
   return (
     <Tabs
@@ -26,11 +24,11 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: onMac ? 'This week' : 'Today', tabBarIcon: ({ color, size }) => <Icon name={onMac ? 'calendar' : 'today'} color={color} size={size} /> }}
+        options={{ title: weekFirst ? 'This week' : 'Today', tabBarIcon: ({ color, size }) => <Icon name={weekFirst ? 'calendar' : 'today'} color={color} size={size} /> }}
       />
       <Tabs.Screen
         name="week"
-        options={{ title: 'This week', href: onMac ? null : undefined, tabBarIcon: ({ color, size }) => <Icon name="calendar" color={color} size={size} /> }}
+        options={{ title: 'This week', href: weekFirst ? null : undefined, tabBarIcon: ({ color, size }) => <Icon name="calendar" color={color} size={size} /> }}
       />
       <Tabs.Screen
         name="deadlines"

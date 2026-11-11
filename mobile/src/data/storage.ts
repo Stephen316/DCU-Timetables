@@ -103,6 +103,11 @@ export class Prefs {
 /** The keys the app saves under, in one place so two screens can't spell one differently. */
 export const PrefKey = {
   signedInUser: 'signedInUser',
+  /**
+   * The account id the student's data on this device belongs to. Outlives an expired session,
+   * which forgets `signedInUser`, so a different account signing in next is noticed.
+   */
+  dataOwner: 'dataOwner',
   reporterID: 'cancellationReporterID',
   role: 'accountRole',
   studentID: 'studentID',

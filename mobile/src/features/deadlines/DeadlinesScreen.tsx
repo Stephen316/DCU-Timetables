@@ -237,6 +237,7 @@ export function DeadlinesScreen() {
                     deadline={d}
                     moduleName={week.moduleName(d.moduleKey)}
                     completed={model.isCompleted(d)}
+                    disputed={model.standing(d).disputeCount > 0}
                     onToggle={() => model.toggleCompleted(d)}
                     onOpen={() => setOpenId(d.id)}
                   />
@@ -257,6 +258,7 @@ export function DeadlinesScreen() {
                     deadline={d}
                     moduleName={week.moduleName(d.moduleKey)}
                     completed={model.isCompleted(d)}
+                    disputed={model.standing(d).disputeCount > 0}
                     onToggle={() => model.toggleCompleted(d)}
                     onOpen={() => setOpenId(d.id)}
                     leaves={false}

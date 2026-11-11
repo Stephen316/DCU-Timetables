@@ -228,6 +228,7 @@ export function LectureScreen({ event, isClashing, known }: { event: TimetableEv
                 deadline={d}
                 moduleName={shortTitleOf(event)}
                 completed={model.isCompleted(d)}
+                disputed={model.standing(d).disputeCount > 0}
                 leaves={false}
                 onToggle={() => model.toggleCompleted(d)}
                 onOpen={() => setOpenId(d.id)}

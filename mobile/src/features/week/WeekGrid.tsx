@@ -9,8 +9,7 @@ import { compactTitleOf, isOnline, shortTitleOf, staffText, TimetableEvent, titl
 import { DeadlineMark, Hatch, Icon, IconName, Txt } from '../../ui/components';
 import { MacShell } from '../../data/macShell';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
-import { elasticScroll } from '../../ui/elasticScroll';
-import { useTabBarClearance } from '../../ui/floatingBar';
+import { useTabBarClearance, useWeekFirst } from '../../ui/floatingBar';
 import { concentric, elevation, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
 import { usePagerDrag } from './Pager';
@@ -55,7 +54,8 @@ export function WeekGridView({
   now: Date;
 }) {
   const pagerDrag = usePagerDrag();
-  const [onMac] = React.useState(() => MacShell.isPresent());
+  // The week as the front page: it has arrows, and the tour points at the grid itself.
+  const weekFirst = useWeekFirst();
   // Only what falls between 8am and 9pm: the grid never draws the night.
   const shownDays = (editing ? [...eventsByDay, ...ghostsByDay] : eventsByDay)
     .map((d) => ({ ...d, events: d.events.filter(GridHours.shows) }));
@@ -63,7 +63,7 @@ export function WeekGridView({
   const ghostIDs = new Set(editing ? ghostsByDay.flatMap((d) => d.events.map((e) => e.id)) : []);
   // The tutorial has the student open the week's first class from here; the Mac's also
   // points at the grid itself, which is all its timetable is.
-  const gridTarget = useTutorialTarget('weekGrid', onMac);
+  const gridTarget = useTutorialTarget('weekGrid', weekFirst);
   const firstID = eventsByDay.flatMap((d) => d.events).filter(GridHours.shows).reduce<TimetableEvent | null>((a, e) => (!a || e.start < a.start ? e : a), null)?.id ?? null;
 
   // Mon–Fri, plus a weekend day only when something is scheduled on it.
@@ -84,7 +84,7 @@ export function WeekGridView({
       now={now}
       empty={isLoaded && all.length === 0 ? {
         title: 'No classes this week',
-        message: editing ? 'Your course has nothing on this week.' : onMac ? 'Use the arrows for other weeks.' : 'Swipe left or right for other weeks.',
+        message: editing ? 'Your course has nothing on this week.' : weekFirst ? 'Use the arrows for other weeks.' : 'Swipe left or right for other weeks.',
       } : null}
       renderColumn={(day, width) =>
         Placement.place(shownDays.filter((d) => isSameDay(d.day, day)).flatMap((d) => d.events)).map((item) => {
@@ -143,7 +143,6 @@ export function TimeGrid({
   const clearance = useTabBarClearance();
   const [onMac] = React.useState(() => MacShell.isPresent());
   const [width, setWidth] = React.useState(0);
-  const elastic = React.useMemo(() => elasticScroll(), []);
   const inner = Math.max(0, width - GUTTER - Space.s);
   const headWidth = Math.max(44, inner / Math.max(heads.length, 1));
   const columnWidth = Math.max(58, inner / Math.max(columns.length, 1));
@@ -160,7 +159,7 @@ export function TimeGrid({
             ))}
           </View>
           {/* Runs from the first hour to the last and no further; pulled past either, it rubber-bands back. */}
-          <ScrollView ref={elastic} contentContainerStyle={[styles.gridScroll, { paddingBottom: clearance }]} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={[styles.gridScroll, { paddingBottom: clearance }]} showsVerticalScrollIndicator={false}>
             <View style={styles.gridRow}>
               <View style={{ width: GUTTER, height: gridHeight }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
                 {hours.map((hour) => (

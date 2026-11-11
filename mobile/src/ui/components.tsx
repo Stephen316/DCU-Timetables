@@ -1,12 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, createContext, isValidElement, ReactNode, Ref, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Children, createContext, isValidElement, ReactNode, Ref, useContext, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo, ActivityIndicator, Animated, ColorValue, Easing, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardInset, concentric, Desktop, elevation, MIN_TARGET, Radius, screenCorner, Space, Type, useTheme, withAlpha } from './theme';
-import { elasticScroll } from './elasticScroll';
 import { withShinyPlus } from './PlusWord';
 
 // MARK: - Icons
@@ -72,6 +71,8 @@ const ICONS = {
   arrowUp: 'arrow-up',
   arrowDown: 'arrow-down',
   arrowLeft: 'arrow-back',
+  /** A deadline that counts towards the grade. */
+  graded: 'star',
 } as const;
 
 export type IconName = keyof typeof ICONS;
@@ -160,12 +161,10 @@ export function ListScroll({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const viewport = useRef({ offsetY: 0, height: 0 });
-  // Rubber-banded in the browser too, and still handed to whoever asked for the view.
-  const ref = useMemo(() => elasticScroll(scrollRef), [scrollRef]);
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       <ScrollView
-        ref={ref}
+        ref={scrollRef}
         onLayout={onViewport && ((e) => {
           viewport.current.height = e.nativeEvent.layout.height;
           onViewport(viewport.current.offsetY, viewport.current.height);
@@ -516,12 +515,24 @@ export function InlineAction({ title, onPress, tint, disabled }: { title: string
   );
 }
 
-/** A plain text button for a header bar: "Done", "Cancel". */
-export function BarButton({ title, onPress, disabled, bold }: { title: string; onPress: () => void; disabled?: boolean; bold?: boolean }) {
+/**
+ * A plain text button for a header bar: "Done", "Cancel". `dimmed` looks like `disabled` but
+ * still takes the press, so a form can say then what's missing rather than nagging beforehand.
+ */
+export function BarButton({
+  title, onPress, disabled, dimmed, bold,
+}: { title: string; onPress: () => void; disabled?: boolean; dimmed?: boolean; bold?: boolean }) {
   const theme = useTheme();
   return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" hitSlop={10} style={styles.barButton}>
-      <Txt color={theme.accent} style={[bold && styles.semibold, disabled && styles.disabled]}>{title}</Txt>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!(disabled || dimmed) }}
+      hitSlop={10}
+      style={styles.barButton}
+    >
+      <Txt color={theme.accent} style={[bold && styles.semibold, (disabled || dimmed) && styles.disabled]}>{title}</Txt>
     </Pressable>
   );
 }
