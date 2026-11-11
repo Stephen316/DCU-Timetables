@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import React, { ReactNode, Ref } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { kindLabel, activitySummary } from '../../core/activityCode';
@@ -8,7 +9,7 @@ import { addDays, formatTime, formatWeekdayDayMonth, isSameDay, isWeekend, start
 import { compactTitleOf, isOnline, shortTitleOf, staffText, TimetableEvent, titleOf } from '../../core/timetableEvent';
 import { DeadlineMark, Hatch, Icon, IconName, Txt } from '../../ui/components';
 import { MacShell } from '../../data/macShell';
-import { highlightIcon, highlightTint } from '../../ui/meaning';
+import { deadlineKindIcon, deadlineTint, highlightIcon, highlightTint } from '../../ui/meaning';
 import { elasticScroll } from '../../ui/elasticScroll';
 import { useTabBarClearance } from '../../ui/floatingBar';
 import { concentric, elevation, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
@@ -37,8 +38,10 @@ const MAC_SIDE = Space.xl;
  * their module's colour. Overlapping classes share the column width.
  */
 export function WeekGridView({
-  eventsByDay, ghostsByDay, editing, isLoaded, weekStart, clashingIDs, highlight, dueAt, onSelect, onEdit, now,
+  eventsByDay, ghostsByDay, editing, isLoaded, weekStart, clashingIDs, highlight, dueAt, looseDeadlines, onSelect, onEdit, now,
 }: {
+  /** What's due on a day that none of its shown classes carries, marked at its time. */
+  looseDeadlines: (day: Date, shown: TimetableEvent[]) => Deadline[];
   eventsByDay: DayEvents[];
   /** The course's classes that aren't the student's, shown while editing. */
   ghostsByDay: DayEvents[];
@@ -72,7 +75,11 @@ export function WeekGridView({
     ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))
         .filter((d) => !isWeekend(d) || shownDays.some((e) => isSameDay(e.day, d)))
     : [];
-  const hours = GridHours.of(all);
+  const eventsOn = (day: Date) => shownDays.filter((d) => isSameDay(d.day, day)).flatMap((d) => d.events);
+  // Hidden while editing, which is about classes alone.
+  const markersByDay = new Map(days.map((day) => [day.getTime(), editing ? [] : looseDeadlines(day, eventsOn(day))]));
+  const hours = GridHours.including(GridHours.of(all), [...markersByDay.values()].flat().map((d) => d.due));
+  const anyMarkers = [...markersByDay.values()].some((list) => list.length > 0);
 
   return (
     <TimeGrid
@@ -82,12 +89,13 @@ export function WeekGridView({
       hours={hours}
       hourHeight={WEEK_HOUR}
       now={now}
-      empty={isLoaded && all.length === 0 ? {
+      empty={isLoaded && all.length === 0 && !anyMarkers ? {
         title: 'No classes this week',
         message: editing ? 'Your course has nothing on this week.' : onMac ? 'Use the arrows for other weeks.' : 'Swipe left or right for other weeks.',
       } : null}
-      renderColumn={(day, width) =>
-        Placement.place(shownDays.filter((d) => isSameDay(d.day, day)).flatMap((d) => d.events)).map((item) => {
+      renderColumn={(day, width) => (
+        <>
+        {Placement.place(eventsOn(day)).map((item) => {
           const edit: EditKind | undefined = !editing ? undefined : ghostIDs.has(item.event.id) ? 'add' : 'remove';
           return (
             <Block
@@ -108,8 +116,17 @@ export function WeekGridView({
               }}
             />
           );
-        })
-      }
+        })}
+        <DeadlineMarkers
+          deadlines={markersByDay.get(day.getTime()) ?? []}
+          hours={hours}
+          hourHeight={WEEK_HOUR}
+          columnWidth={width}
+          compact
+          onPress={() => !pagerDrag.isSuppressingTaps() && router.navigate('/deadlines')}
+        />
+        </>
+      )}
     />
   );
 }
@@ -484,8 +501,84 @@ export function FreeBlock({ start, end, label, hours, hourHeight, columnWidth }:
   );
 }
 
+/** A deadline marker's pill: a line of `caption2` and its padding. */
+const MARKER_HEIGHT = 20;
+
+/**
+ * A deadline no class on the grid carries, drawn at the moment it's due: a line across the
+ * column in its kind's colour, and on it a pill with what it is. Due before or after the grid's
+ * hours, it sits on the first or last line and its pill says the time. A tap opens the deadlines.
+ */
+export function DeadlineMarker({ deadline, hours, hourHeight, columnWidth, compact = false, stack = 0, onPress }: {
+  deadline: Deadline;
+  /** How many markers just above it would its pill land on: it moves down past them. */
+  stack?: number;
+  hours: number[];
+  hourHeight: number;
+  columnWidth: number;
+  /** The week's narrow columns: the title alone. */
+  compact?: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const tint = deadlineTint(deadline.kind, theme);
+  const gridHeight = (hours.length - 1) * hourHeight;
+  const minutes = (deadline.due.getHours() - hours[0]) * 60 + deadline.due.getMinutes();
+  const top = Math.min(gridHeight, Math.max(0, (minutes / 60) * hourHeight));
+  // Kept on the grid: a pill on its last line goes above the line rather than off the end.
+  const pillTop = Math.min(top - MARKER_HEIGHT / 2 + stack * (MARKER_HEIGHT + BLOCK_GAP), gridHeight - MARKER_HEIGHT);
+  const title = displayTitle(deadline);
+  return (
+    <>
+      <View pointerEvents="none" style={[styles.markerLine, { top: top - 1, width: columnWidth - BLOCK_GAP - 2, backgroundColor: tint }]} />
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${deadlineKindLabel(deadline.kind)} due at ${formatTime(deadline.due)}: ${title}`}
+        style={({ pressed }) => [
+          styles.marker,
+          { top: Math.max(0, pillTop), maxWidth: columnWidth - BLOCK_GAP - 4, borderColor: tint, backgroundColor: theme.surface, opacity: pressed ? 0.7 : 1 },
+        ]}
+      >
+        {compact ? null : <Icon name={deadlineKindIcon(deadline.kind)} size={11} color={tint} />}
+        <Txt type="caption2" numberOfLines={1} color={theme.ink} style={[styles.semibold, styles.shrink]} maxFontSizeMultiplier={1.3}>
+          {compact ? title : `${title} · ${formatTime(deadline.due)}`}
+        </Txt>
+      </Pressable>
+    </>
+  );
+}
+
+/**
+ * A day's markers, soonest first, each with how far its pill steps down to clear the ones
+ * just before it: two due within a pill's height of each other would otherwise sit on one another.
+ */
+export function DeadlineMarkers({ deadlines, hours, hourHeight, columnWidth, compact, onPress }: {
+  deadlines: Deadline[];
+  hours: number[];
+  hourHeight: number;
+  columnWidth: number;
+  compact?: boolean;
+  onPress: () => void;
+}) {
+  const closeMinutes = (MARKER_HEIGHT / hourHeight) * 60;
+  const stacks = deadlines.reduce<number[]>((acc, d, i) => {
+    const before = deadlines[i - 1];
+    const close = before && d.due.getTime() - before.due.getTime() < closeMinutes * 60_000;
+    return [...acc, close ? acc[i - 1] + 1 : 0];
+  }, []);
+  return (
+    <>
+      {deadlines.map((d, i) => (
+        <DeadlineMarker key={d.id} deadline={d} hours={hours} hourHeight={hourHeight} columnWidth={columnWidth} compact={compact} stack={stacks[i]} onPress={onPress} />
+      ))}
+    </>
+  );
+}
+
 function hourLabel(hour: number): string {
-  const suffix = hour < 12 ? 'am' : 'pm';
+  // 24 is the midnight a late deadline runs the grid on to.
+  const suffix = hour < 12 || hour === 24 ? 'am' : 'pm';
   const twelve = hour % 12 === 0 ? 12 : hour % 12;
   return `${twelve}${suffix}`;
 }
@@ -529,6 +622,11 @@ const styles = StyleSheet.create({
   // corner centre, a point in from its edge.
   editMark: { position: 'absolute', bottom: 2, right: 2, borderRadius: 12, borderBottomRightRadius: concentric(Radius.block, 2) },
   free: { position: 'absolute', left: BLOCK_GAP / 2 + 1, borderRadius: Radius.block, paddingHorizontal: Space.m, justifyContent: 'center' },
+  markerLine: { position: 'absolute', left: BLOCK_GAP / 2 + 1, height: 2, borderRadius: 1, zIndex: 2 },
+  marker: {
+    position: 'absolute', left: BLOCK_GAP / 2 + 3, height: MARKER_HEIGHT, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: 3,
+    borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 6,
+  },
   now: { position: 'absolute', left: 0, right: 0, height: 0 },
   nowAcross: { position: 'absolute', top: -StyleSheet.hairlineWidth / 2, height: StyleSheet.hairlineWidth },
   nowToday: { position: 'absolute', top: -1, height: 2 },

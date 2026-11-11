@@ -118,6 +118,7 @@ export class DeadlinesModel extends Observable {
   toggleCompleted(deadline: Deadline): void {
     this.completed.toggle(deadline.id);
     this.changed();
+    this.services.events.emit('deadlinesChanged');
   }
 
   standing(deadline: Deadline): DeadlineStanding {
@@ -187,6 +188,7 @@ export class DeadlinesModel extends Observable {
     }
     await this.reload();
     this.keepError(failure);
+    this.services.events.emit('deadlinesChanged');
   }
 
   /**

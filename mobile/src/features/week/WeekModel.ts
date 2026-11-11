@@ -6,7 +6,7 @@ import { TimetableAudience, TimetableChange, TimetableChanges } from '../../core
 import { ModuleSplit, ModuleSplits, surnameInitial } from '../../core/splits';
 import { campusName, parsedLocations } from '../../core/roomLocation';
 import { ClashDetector, DefaultDay } from '../../core/schedule';
-import { addDays, startOfDay } from '../../core/time';
+import { addDays, isSameDay, startOfDay } from '../../core/time';
 import { ModuleTitle, ModuleTitles, TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar } from '../../core/timetableEvent';
 import { ModuleAbbreviation, ModuleAbbreviations } from '../../core/abbreviations';
 import { EditRepeat, TimetableEdit, TimetableEdits } from '../../core/timetableEdits';
@@ -19,6 +19,7 @@ import { TimetableEditStore } from '../../data/timetableEdits';
 import { TimetableSource } from '../../data/dcuApi';
 import { WidgetSnapshotPublisher } from '../../data/widgets';
 import { Observable } from '../../state/hooks';
+import { CompletedDeadlines } from '../deadlines/Completed';
 
 export interface DayEvents {
   day: Date;
@@ -135,6 +136,17 @@ export class WeekModel extends Observable {
   /** Everything due at this class on its day — what the day view lists and the "!" marks. */
   dueAt(event: TimetableEvent): Deadline[] {
     return DeadlineRules.dueAt(event, this.deadlines);
+  }
+
+  /**
+   * What's due on this day that no class drawn there carries — due at another time, or for a
+   * module with nothing on that day — for the grid to mark at its time. Ticked-off ones aren't.
+   */
+  looseDeadlinesOn(day: Date, shown: TimetableEvent[]): Deadline[] {
+    const completed = new CompletedDeadlines(this.services.prefs);
+    return this.deadlines
+      .filter((d) => isSameDay(d.due, day) && !completed.has(d.id) && !shown.some((e) => DeadlineRules.isDue(d, e)))
+      .sort((a, b) => a.due.getTime() - b.due.getTime());
   }
 
   /** What (if anything) to outline a class with. */

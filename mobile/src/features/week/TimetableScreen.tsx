@@ -10,7 +10,8 @@ import { useAppEvent, useModel, useNow } from '../../state/hooks';
 import { useRoot, useWeekModel } from '../../state/root';
 import { EmptyState, IconButton, Label, PillButton, PrimaryButton, ScreenHeader, Txt } from '../../ui/components';
 import { LoadingScreen } from '../../ui/LoadingScreen';
-import { Space, useTheme } from '../../ui/theme';
+import { Radius, Space, useTheme } from '../../ui/theme';
+import { DeadlinesGlance } from '../deadlines/DeadlinesGlance';
 import { useTutorial } from '../tutorial/Tutorial';
 import { DayPage } from './DayPage';
 import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
@@ -40,6 +41,10 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
   const [editing, setEditing] = useState(false);
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
   const tutorial = useTutorial();
+  // A wide window gives the day a narrow column and the room beside it to what's due.
+  const [areaWidth, setAreaWidth] = useState(0);
+  // Split in two halves, so each half needs the day's least width.
+  const sideBySide = mode === 'day' && areaWidth >= DAY_COLUMN_WIDTH * 2;
 
   useEffect(() => {
     void model.start();
@@ -74,6 +79,8 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
   useAppEvent('moduleTitlesChanged', () => owner && model.reloadTitles());
   useAppEvent('moduleAbbreviationsChanged', () => owner && model.reloadAbbreviations());
   useAppEvent('labRotationChanged', () => owner && void model.reloadAll());
+  // Added, changed or ticked off anywhere: the grids mark what's due where, so they redraw.
+  useAppEvent('deadlinesChanged', () => owner && void model.refreshDeadlines());
 
   const open = (event: TimetableEvent) => router.push({ pathname: '/class/[id]', params: { id: event.id } });
   const askToEdit = (event: TimetableEvent, kind: EditKind) => setPendingEdit({ event, kind });
@@ -108,6 +115,7 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
             clashingIDs={model.clashingIDs}
             highlight={(e) => model.highlight(e)}
             dueAt={(e) => model.dueAt(e)}
+            looseDeadlines={(d, shown) => model.looseDeadlinesOn(d, shown)}
             onSelect={open}
             onEdit={askToEdit}
             now={now}
@@ -143,6 +151,7 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
               clashingIDs={model.clashingIDs}
               highlight={(e) => model.highlight(e)}
               dueAt={(e) => model.dueAt(e)}
+              looseDeadlines={(d, shown) => model.looseDeadlinesOn(d, shown)}
               isLoading={model.isLoading}
               onSelect={open}
               onEdit={askToEdit}
@@ -192,8 +201,15 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
         }
       />
 
-      <View style={styles.fill}>
-        {body}
+      <View style={[styles.fill, styles.row]} onLayout={(e) => setAreaWidth(e.nativeEvent.layout.width)}>
+        <View style={styles.fill}>{body}</View>
+        {sideBySide ? (
+          // The day as a narrow column, and beside it what's due and a square kept for later.
+          <View style={styles.side}>
+            <DeadlinesGlance />
+            <View style={[styles.reserved, { borderColor: theme.separator }]} />
+          </View>
+        ) : null}
         {model.waitingForFirstWeek ? (
           <LoadingScreen caption="Loading your timetable…" slowCaption="Still waiting on DCU's timetable server…" />
         ) : null}
@@ -211,7 +227,18 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
   );
 }
 
+/**
+ * The least the day's half of a wide screen can be: the grid's hours and padding, and a block
+ * wide enough for a long room ("Henry Grattan, Room 114, Floor 1") to fit without an ellipsis.
+ * Narrower than twice this, the day takes the whole width again.
+ */
+const DAY_COLUMN_WIDTH = 420;
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  row: { flexDirection: 'row' },
+  // Half the width, as the day's column has the other half.
+  side: { flex: 1, paddingTop: Space.xxs, paddingRight: Space.m, paddingBottom: Space.l, gap: Space.m },
+  reserved: { marginTop: 'auto', width: '100%', aspectRatio: 1, flexShrink: 1, borderRadius: Radius.card + Space.xs, borderWidth: 1.5, borderStyle: 'dashed' },
   subtitle: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
 });

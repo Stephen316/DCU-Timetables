@@ -177,6 +177,24 @@ export const GridHours = {
     return hourRange(first, Math.max(last, first + 1));
   },
 
+  /**
+   * `hours` stretched to take in these moments too — deadlines drawn on the grid — so one due
+   * at 6pm on a day that ends at 4 still lands on the grid. Deadlines may run the grid on to
+   * midnight, where most of them fall; with none that late it stops at the last thing on it.
+   */
+  including(hours: number[], times: Date[]): number[] {
+    if (times.length === 0 || hours.length === 0) return hours;
+    let first = hours[0];
+    let last = hours[hours.length - 1];
+    for (const t of times) {
+      const h = t.getHours();
+      first = Math.min(first, Math.max(GridHours.open, h));
+      // An hour's room below, so the marker isn't drawn on the grid's last line.
+      last = Math.max(last, Math.min(24, h + 1));
+    }
+    return hourRange(first, Math.max(last, first + 1));
+  },
+
   /** The part of a class a grid over these hours draws: cut off at its first and last lines. */
   clip(event: TimetableEvent, hours: number[]): { start: Date; end: Date } {
     const top = atHour(event.start, hours[0]);

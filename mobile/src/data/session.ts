@@ -88,7 +88,9 @@ export type AppEvent =
   /** The headings saved in the console changed; the week view re-applies them. */
   | 'moduleTitlesChanged'
   /** The week-grid abbreviations set in the console changed; the week view re-applies them. */
-  | 'moduleAbbreviationsChanged';
+  | 'moduleAbbreviationsChanged'
+  /** A deadline was added, changed, removed or ticked off; the timetable redraws its markers. */
+  | 'deadlinesChanged';
 
 // MARK: - Tokens
 

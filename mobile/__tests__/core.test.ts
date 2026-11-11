@@ -417,6 +417,18 @@ describe('Grid hours', () => {
   });
 
   test('a free day shows 9 to 6', () => expect(GridHours.of([])).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17, 18]));
+
+  test('a deadline due before midnight runs the grid on to midnight', () => {
+    const hours = GridHours.of([c(9, 10), c(14, 16)]);
+    expect(GridHours.including(hours, [at(2026, 11, 10, 23, 59)]).slice(-1)).toEqual([24]);
+  });
+
+  test('without a late deadline the grid ends at its last class or deadline', () => {
+    const hours = GridHours.of([c(9, 10), c(14, 16)]);
+    expect(GridHours.including(hours, [])).toEqual(hours);
+    expect(GridHours.including(hours, [at(2026, 11, 10, 18, 30)]).slice(-1)).toEqual([19]);
+    expect(GridHours.including(hours, [at(2026, 11, 10, 12)])).toEqual(hours);
+  });
 });
 
 describe('Day schedule', () => {

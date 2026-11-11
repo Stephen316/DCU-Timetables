@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { ClassHighlight, Deadline } from '../../core/deadline';
 import { WeekGrid as Placement, DaySchedule, gapLabel, GridHours, NextClassWindow } from '../../core/schedule';
@@ -7,7 +8,7 @@ import { useTheme } from '../../ui/theme';
 import { usePagerDrag } from './Pager';
 import { EditKind } from './editing';
 import { useTutorialTarget } from '../tutorial/Tutorial';
-import { Block, BlockChip, DAY_HOUR, FreeBlock, TimeGrid } from './WeekGrid';
+import { Block, BlockChip, DAY_HOUR, DeadlineMarkers, FreeBlock, TimeGrid } from './WeekGrid';
 
 /**
  * One day of the timetable, drawn as the week is: the same card, the same weekday names across
@@ -18,8 +19,10 @@ import { Block, BlockChip, DAY_HOUR, FreeBlock, TimeGrid } from './WeekGrid';
  * already over fade.
  */
 export function DayPage({
-  day, events, ghosts, editing, now, clashingIDs, highlight, dueAt, isLoading, onSelect, onEdit, onPick,
+  day, events, ghosts, editing, now, clashingIDs, highlight, dueAt, looseDeadlines, isLoading, onSelect, onEdit, onPick,
 }: {
+  /** What's due on this day that none of its classes carries, marked at its time. */
+  looseDeadlines: (day: Date, shown: TimetableEvent[]) => Deadline[];
   day: Date | null;
   events: TimetableEvent[];
   /** The course's classes on this day that aren't the student's, shown while editing. */
@@ -49,7 +52,9 @@ export function DayPage({
   const classes = events.filter(GridHours.shows);
   const shown = editing ? [...classes, ...ghosts.filter(GridHours.shows)] : classes;
   const ghostIDs = new Set(editing ? ghosts.map((e) => e.id) : []);
-  const hours = GridHours.of(shown);
+  // Hidden while editing, which is about classes alone.
+  const markers = day && !editing ? looseDeadlines(day, classes) : [];
+  const hours = GridHours.including(GridHours.of(shown), markers.map((d) => d.due));
   const weekdays = day ? Array.from({ length: 5 }, (_, i) => addDays(startOfWeek(day), i)) : [];
   const gaps = editing ? [] : DaySchedule.slots(classes).flatMap((s) => (s.kind === 'gap' ? [s.gap] : []));
 
@@ -74,7 +79,7 @@ export function DayPage({
         selected={day ?? undefined}
         onPick={(d) => !pagerDrag.isSuppressingTaps() && onPick(d)}
         headRef={dayHeading}
-        empty={!isLoading && shown.length === 0 ? {
+        empty={!isLoading && shown.length === 0 && markers.length === 0 ? {
           title: 'No classes',
           message: editing ? 'Your course has nothing on this day.' : 'Swipe left or right for the rest of the week.',
         } : null}
@@ -116,6 +121,13 @@ export function DayPage({
                 />
               );
             })}
+            <DeadlineMarkers
+              deadlines={markers}
+              hours={hours}
+              hourHeight={DAY_HOUR}
+              columnWidth={width}
+              onPress={() => !pagerDrag.isSuppressingTaps() && router.navigate('/deadlines')}
+            />
           </>
         )}
       />

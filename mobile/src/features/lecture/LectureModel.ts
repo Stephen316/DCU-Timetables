@@ -135,6 +135,7 @@ export class LectureModel extends Observable {
     }
     this.isBusy = false;
     this.changed();
+    this.services.events.emit('deadlinesChanged');
   }
 
   /** Vouching for someone else's deadline, or taking that back. */
@@ -223,6 +224,7 @@ export class LectureModel extends Observable {
       this.errorText = errorMessage(error, "Couldn't share that deadline.");
     }
     await this.load();
+    this.services.events.emit('deadlinesChanged');
   }
 
   /** "The details are wrong", or taking that back. It stays on the page either way. */
@@ -286,5 +288,6 @@ export class LectureModel extends Observable {
       this.errorText = errorMessage(error, fallback);
     }
     await this.load();
+    this.services.events.emit('deadlinesChanged');
   }
 }
