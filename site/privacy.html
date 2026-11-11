@@ -2,13 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
 <title>Privacy policy · DCU Live</title>
-<link rel="stylesheet" href="style.css">
+<link rel="icon" href="/img/icon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="/img/icon-dark.png" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<script src="/theme.js?v=2"></script>
+<link rel="stylesheet" href="/landing.css?v=17">
+<link rel="stylesheet" href="/style.css?v=2">
 </head>
-<body>
-<main>
-<nav><a href="/">DCU Live</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Help and contact</a></nav>
+<body class="interior">
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><picture><source media="(prefers-color-scheme: dark)" srcset="/img/icon-dark.png"><img src="/img/icon.png" alt="" width="28" height="28"></picture>DCU Live</a>
+    <nav aria-label="Main">
+      <a class="hide-s" href="/#features">Features</a>
+      <a class="hide-s" href="/#get">Get it</a>
+      <a class="hide-s" href="/#faq">FAQ</a>
+      <a class="hide-s" href="/support">Help</a>
+      <a class="chip-btn" href="https://app.dculive.ie/">Open app</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap document">
 <h1>Privacy policy</h1>
 <p class="updated">Last updated 6 November 2026</p>
 
@@ -79,5 +97,14 @@
 <h2>Changes</h2>
 <p>If this policy changes, the date at the top changes too. Significant changes are also announced in the app.</p>
 </main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="brand" href="/"><picture><source media="(prefers-color-scheme: dark)" srcset="/img/icon-dark.png"><img src="/img/icon.png" alt="" width="28" height="28"></picture>DCU Live</a>
+      <nav aria-label="Footer"><a href="/privacy" aria-current="page">Privacy policy</a><a href="/terms">Terms of use</a><a href="/support">Help and contact</a></nav>
+    </div>
+  </div>
+</footer>
 </body>
 </html>

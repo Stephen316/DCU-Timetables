@@ -2,19 +2,49 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
 <title>Page not found · DCU Live</title>
-<link rel="stylesheet" href="/DCU-Timetables/style.css">
-<script>
-  // The web app routes in the browser, so reloading one of its pages (e.g. a class) asks
-  // Pages for a file that doesn't exist. Send those back to the app's start.
-  if (location.pathname.startsWith('/DCU-Timetables/app/')) location.replace('/DCU-Timetables/app/');
-</script>
+<link rel="icon" href="/img/icon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="/img/icon-dark.png" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<script src="/theme.js?v=2"></script>
+<link rel="stylesheet" href="/landing.css?v=17">
+<link rel="stylesheet" href="/style.css?v=2">
 </head>
-<body>
-<main>
-<h1>Page not found</h1>
-<p>Looking for the app? <a href="https://app.dculive.ie/">Open DCU Live</a>, or <a href="https://dculive.ie/#get">get it for your phone or Mac</a>.</p>
+<body class="interior">
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><picture><source media="(prefers-color-scheme: dark)" srcset="/img/icon-dark.png"><img src="/img/icon.png" alt="" width="28" height="28"></picture>DCU Live</a>
+    <nav aria-label="Main">
+      <a class="hide-s" href="/#features">Features</a>
+      <a class="hide-s" href="/#get">Get it</a>
+      <a class="hide-s" href="/#faq">FAQ</a>
+      <a class="hide-s" href="/support">Help</a>
+      <a class="chip-btn" href="https://app.dculive.ie/">Open app</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap error-page">
+  <section class="final" aria-labelledby="page-title">
+    <p class="pill">Error 404</p>
+    <h1 id="page-title">Page not found</h1>
+    <p class="lede">This page may have moved, or the address may be incorrect.</p>
+    <div class="error-actions">
+      <a class="btn primary" href="/">Back to home</a>
+      <a class="btn" href="/#get">Get the app</a>
+    </div>
+  </section>
 </main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="brand" href="/"><picture><source media="(prefers-color-scheme: dark)" srcset="/img/icon-dark.png"><img src="/img/icon.png" alt="" width="28" height="28"></picture>DCU Live</a>
+      <nav aria-label="Footer"><a href="/privacy">Privacy policy</a><a href="/terms">Terms of use</a><a href="/support">Help and contact</a></nav>
+    </div>
+  </div>
+</footer>
 </body>
 </html>
