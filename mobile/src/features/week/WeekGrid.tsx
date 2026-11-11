@@ -9,7 +9,6 @@ import { compactTitleOf, isOnline, shortTitleOf, staffText, TimetableEvent, titl
 import { DeadlineMark, Hatch, Icon, IconName, Txt } from '../../ui/components';
 import { MacShell } from '../../data/macShell';
 import { highlightIcon, highlightTint } from '../../ui/meaning';
-import { elasticScroll } from '../../ui/elasticScroll';
 import { useTabBarClearance } from '../../ui/floatingBar';
 import { concentric, elevation, moduleTint, Radius, Space, useTheme, withAlpha } from '../../ui/theme';
 import { DayEvents } from './WeekModel';
@@ -143,7 +142,6 @@ export function TimeGrid({
   const clearance = useTabBarClearance();
   const [onMac] = React.useState(() => MacShell.isPresent());
   const [width, setWidth] = React.useState(0);
-  const elastic = React.useMemo(() => elasticScroll(), []);
   const inner = Math.max(0, width - GUTTER - Space.s);
   const headWidth = Math.max(44, inner / Math.max(heads.length, 1));
   const columnWidth = Math.max(58, inner / Math.max(columns.length, 1));
@@ -160,7 +158,7 @@ export function TimeGrid({
             ))}
           </View>
           {/* Runs from the first hour to the last and no further; pulled past either, it rubber-bands back. */}
-          <ScrollView ref={elastic} contentContainerStyle={[styles.gridScroll, { paddingBottom: clearance }]} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={[styles.gridScroll, { paddingBottom: clearance }]} showsVerticalScrollIndicator={false}>
             <View style={styles.gridRow}>
               <View style={{ width: GUTTER, height: gridHeight }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
                 {hours.map((hour) => (

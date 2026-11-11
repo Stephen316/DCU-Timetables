@@ -1,12 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, createContext, isValidElement, ReactNode, Ref, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Children, createContext, isValidElement, ReactNode, Ref, useContext, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo, ActivityIndicator, Animated, ColorValue, Easing, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleProp, StyleSheet, Switch,
   Text, TextProps, TextStyle, View, ViewStyle, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardInset, concentric, Desktop, elevation, MIN_TARGET, Radius, screenCorner, Space, Type, useTheme, withAlpha } from './theme';
-import { elasticScroll } from './elasticScroll';
 import { withShinyPlus } from './PlusWord';
 
 // MARK: - Icons
@@ -160,12 +159,10 @@ export function ListScroll({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const viewport = useRef({ offsetY: 0, height: 0 });
-  // Rubber-banded in the browser too, and still handed to whoever asked for the view.
-  const ref = useMemo(() => elasticScroll(scrollRef), [scrollRef]);
   return (
     <View style={[styles.fill, { backgroundColor: theme.canvas }]}>
       <ScrollView
-        ref={ref}
+        ref={scrollRef}
         onLayout={onViewport && ((e) => {
           viewport.current.height = e.nativeEvent.layout.height;
           onViewport(viewport.current.offsetY, viewport.current.height);

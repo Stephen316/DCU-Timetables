@@ -208,7 +208,7 @@ function useDesktopTurns(clip: RefObject<View | null>, turn: PagerControl['turn'
     let settle: ReturnType<typeof setTimeout> | undefined;
     // Passive: only watching for a sideways swipe, never holding up the browser's scrolling, so
     // the lists inside the pager scroll on the browser's own thread and can't stall. A sideways
-    // swipe needs nothing cancelled: the page's `overscroll-behavior: none` (the root layout)
+    // swipe needs nothing cancelled: the page's `overscroll-behavior: none` (ui/rubberBand)
     // already keeps it from going back a page in the browser's history.
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
