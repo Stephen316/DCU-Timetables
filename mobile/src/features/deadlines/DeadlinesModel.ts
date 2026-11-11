@@ -25,6 +25,11 @@ export async function shareDeadline(services: Services, deadline: Deadline, repo
  */
 export class DeadlinesModel extends Observable {
   sections: { section: DeadlineSection; deadlines: Deadline[] }[] = [];
+  /**
+   * Gone by, back `PAST_DEADLINE_DAYS`, most recent first, for the module being shown:
+   * Completed's Past list. Ticked or not — its day is over either way.
+   */
+  past: Deadline[] = [];
   /** The one module being shown, or null for every module. */
   moduleFilter: string | null = null;
   standings = new Map<string, DeadlineStanding>();
@@ -43,6 +48,7 @@ export class DeadlinesModel extends Observable {
    */
   private loadRequest = 0;
   private all: Deadline[] = [];
+  private allPast: Deadline[] = [];
   private readonly reporterID: string;
 
   readonly details: DetailsEdits;
@@ -58,14 +64,16 @@ export class DeadlinesModel extends Observable {
     this.details = new DetailsEdits(services, {
       replace: (deadline) => {
         this.all = this.all.map((d) => (d.id === deadline.id ? deadline : d));
+        this.allPast = this.allPast.map((d) => (d.id === deadline.id ? deadline : d));
         this.regroup();
       },
       changed: () => this.changed(),
     });
   }
 
+  /** Nothing coming and nothing recent: a student whose last deadline just passed still gets the tabs. */
   get isEmpty(): boolean {
-    return this.sections.length === 0;
+    return this.sections.length === 0 && this.past.length === 0;
   }
 
   /** The modules that have something coming up — the choices for `moduleFilter`. */
@@ -85,6 +93,8 @@ export class DeadlinesModel extends Observable {
     if (this.moduleFilter && !this.modulesWithDeadlines.includes(this.moduleFilter)) this.moduleFilter = null;
     const shown = this.moduleFilter ? this.all.filter((d) => d.moduleKey === this.moduleFilter) : this.all;
     this.sections = DeadlineSchedule.grouped(shown);
+    const pastShown = this.moduleFilter ? this.allPast.filter((d) => d.moduleKey === this.moduleFilter) : this.allPast;
+    this.past = DeadlineRules.recentlyPast(pastShown);
   }
 
   get total(): number {
@@ -124,6 +134,7 @@ export class DeadlinesModel extends Observable {
     this.modules = modules;
     if (modules.length === 0) {
       this.all = [];
+      this.allPast = [];
       this.regroup();
       this.changed();
       return;
@@ -136,13 +147,19 @@ export class DeadlinesModel extends Observable {
     this.isLoading = true;
     this.changed();
     try {
-      const all = await this.services.deadlines.deadlinesForModules(modules);
+      // Past is asked for alongside, and a failure there only keeps the Past list it had:
+      // what's still to hand in matters more than what's gone.
+      const [all, past] = await Promise.all([
+        this.services.deadlines.deadlinesForModules(modules),
+        this.services.deadlines.pastDeadlinesForModules(modules).catch(() => null),
+      ]);
       if (request !== this.loadRequest) return;
       this.all = all;
+      if (past) this.allPast = past;
       this.regroup();
       // The list is shown now; how many confirmed each one fills in when it comes.
       this.changed();
-      const standings = await this.services.deadlines.standings(all.map((d) => d.id));
+      const standings = await this.services.deadlines.standings([...all, ...this.allPast].map((d) => d.id));
       if (request !== this.loadRequest) return;
       this.standings = standings;
       this.errorText = null;

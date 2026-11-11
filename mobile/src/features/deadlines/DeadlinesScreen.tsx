@@ -1,7 +1,7 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
-import { deadlineSectionTitle, DeadlineRules } from '../../core/deadline';
+import { deadlineSectionTitle, DeadlineRules, PAST_DEADLINE_DAYS } from '../../core/deadline';
 import { startOfWeek } from '../../core/time';
 import { useModel, useNow, useServices } from '../../state/hooks';
 import { useWeekModel } from '../../state/root';
@@ -68,17 +68,20 @@ export function DeadlinesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.justAdded]);
 
-  // Pending and Completed are one list split by this student's own ticks.
+  // Pending and Completed are one list split by this student's own ticks. Completed also ends
+  // with Past: everything whose day is over, ticked or not, for the fortnight the server keeps it.
   const [tab, setTab] = useState<'pending' | 'completed'>('pending');
   const [openId, setOpenId] = useState<string | null>(null);
   const all = model.sections.flatMap((g) => g.deadlines);
-  const completedCount = all.filter((d) => model.isCompleted(d)).length;
-  const pendingCount = all.length - completedCount;
+  const ticked = all.filter((d) => model.isCompleted(d)).length;
+  const pendingCount = all.length - ticked;
+  const completedCount = ticked + model.past.length;
   const groups = model.sections
     .map((g) => ({ ...g, deadlines: g.deadlines.filter((d) => model.isCompleted(d) === (tab === 'completed')) }))
     .filter((g) => g.deadlines.length > 0);
+  const past = tab === 'completed' ? model.past : [];
   // Read from the model each render, so a deadline deleted from its sheet closes the sheet.
-  const open = openId ? all.find((d) => d.id === openId) ?? null : null;
+  const open = openId ? [...all, ...model.past].find((d) => d.id === openId) ?? null : null;
 
   const header = (
     <>
@@ -212,7 +215,7 @@ export function DeadlinesScreen() {
         ) : null}
         <CardSwap swapKey={`${model.moduleFilter ?? 'all'}-${tab}`}>
           <View style={styles.list}>
-            {groups.length === 0 ? (
+            {groups.length === 0 && past.length === 0 ? (
               <View style={styles.none}>
                 <Txt type="title3">{tab === 'pending' ? 'All caught up' : 'Nothing completed yet'}</Txt>
                 <Txt type="subheadline" color={theme.inkSecondary}>
@@ -240,6 +243,27 @@ export function DeadlinesScreen() {
                 ))}
               </View>
             ))}
+            {past.length > 0 ? (
+              <View>
+                <View style={styles.sectionHeader}>
+                  <Txt type="footnote" color={theme.inkSecondary} accessibilityRole="header" style={styles.sectionTitle}>
+                    {`Past · last ${PAST_DEADLINE_DAYS} days`}
+                  </Txt>
+                </View>
+                {/* Its day is over, so ticking one only changes its circle: it stays in Past. */}
+                {past.map((d) => (
+                  <DeadlineCard
+                    key={d.id}
+                    deadline={d}
+                    moduleName={week.moduleName(d.moduleKey)}
+                    completed={model.isCompleted(d)}
+                    onToggle={() => model.toggleCompleted(d)}
+                    onOpen={() => setOpenId(d.id)}
+                    leaves={false}
+                  />
+                ))}
+              </View>
+            ) : null}
           </View>
         </CardSwap>
       </ListScroll>

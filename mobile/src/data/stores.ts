@@ -126,6 +126,8 @@ export interface DeadlineStore {
   deadlinesForModule(moduleKey: string): Promise<Deadline[]>;
   /** Every module on screen at once — the timetable needs them all to draw its borders. */
   deadlinesForModules(moduleKeys: string[]): Promise<Deadline[]>;
+  /** Those due before today, back `PAST_DEADLINE_DAYS`, most recent first — Completed's Past list. */
+  pastDeadlinesForModules(moduleKeys: string[]): Promise<Deadline[]>;
   submit(deadline: Deadline): Promise<void>;
   /**
    * The poster changing their own. The server clears the other confirmations when the date
@@ -177,17 +179,31 @@ export class SupabaseDeadlineStore implements DeadlineStore {
     return this.fetch(PostgREST.inList(unique));
   }
 
+  async pastDeadlinesForModules(moduleKeys: string[]): Promise<Deadline[]> {
+    const unique = [...new Set(moduleKeys)].sort();
+    if (unique.length === 0) return [];
+    const now = new Date();
+    return this.fetch(PostgREST.inList(unique), [
+      ['due_at', `gte.${isoSeconds(DeadlineRules.pastHorizon(now))}`],
+      ['due_at', `lt.${isoSeconds(DeadlineRules.horizon(now))}`],
+      ['order', 'due_at.desc'],
+    ]);
+  }
+
   /**
-   * Reads go to the view, which swaps `submitter_id` for `is_mine`. Nothing prunes the
-   * table, so the download is floored at `DeadlineRules.horizon`, the client's own cut-off.
+   * Reads go to the view, which swaps `submitter_id` for `is_mine`. By default the download
+   * is floored at `DeadlineRules.horizon`, the client's own cut-off; the Past list asks for
+   * the fortnight before it instead, which is all the server keeps (phase 52).
    */
-  private async fetch(moduleFilter: string): Promise<Deadline[]> {
+  private async fetch(
+    moduleFilter: string,
+    window: [string, string][] = [['due_at', `gte.${isoSeconds(DeadlineRules.horizon())}`], ['order', 'due_at.asc']],
+  ): Promise<Deadline[]> {
     const json = await this.rest.json('GET', '/rest/v1/module_deadlines_public', SupabaseDeadlineStore.describe, {
       query: [
         ['select', 'id,module_key,at_group_key,title,due_at,kind,is_mine,submitted_at,status,edited_at,my_label,grade_weight,details,details_edited_at'],
         ['module_key', moduleFilter],
-        ['due_at', `gte.${isoSeconds(DeadlineRules.horizon())}`],
-        ['order', 'due_at.asc'],
+        ...window,
       ],
     });
     return rows(json).flatMap((r) => {
@@ -373,6 +389,11 @@ export class LocalDeadlineStore implements DeadlineStore {
     return DeadlineRules.upcoming(this.load().filter((d) => wanted.has(d.moduleKey)));
   }
 
+  async pastDeadlinesForModules(moduleKeys: string[]): Promise<Deadline[]> {
+    const wanted = new Set(moduleKeys);
+    return DeadlineRules.recentlyPast(this.load().filter((d) => wanted.has(d.moduleKey)));
+  }
+
   async submit(deadline: Deadline): Promise<void> {
     this.save([...this.load(), deadline]);
   }
@@ -457,6 +478,11 @@ export class PrivateDeadlineStore implements DeadlineStore {
   async deadlinesForModules(moduleKeys: string[]): Promise<Deadline[]> {
     const [shared, own] = await Promise.all([this.shared.deadlinesForModules(moduleKeys), this.own.deadlinesForModules(moduleKeys)]);
     return DeadlineRules.upcoming([...shared, ...this.mine(own)]);
+  }
+
+  async pastDeadlinesForModules(moduleKeys: string[]): Promise<Deadline[]> {
+    const [shared, own] = await Promise.all([this.shared.pastDeadlinesForModules(moduleKeys), this.own.pastDeadlinesForModules(moduleKeys)]);
+    return DeadlineRules.recentlyPast([...shared, ...this.mine(own)]);
   }
 
   submit(deadline: Deadline): Promise<void> {

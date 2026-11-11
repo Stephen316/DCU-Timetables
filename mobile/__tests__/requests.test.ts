@@ -102,6 +102,20 @@ describe('Supabase requests', () => {
     expect(list[0]).toMatchObject({ id: 'd1', kind: 'quiz', isMine: true, submitterID: '', due: utc(2026, 9, 25, 9) });
   });
 
+  test('past deadlines are asked for between the fortnight floor and today, most recent first', async () => {
+    const { calls, fn } = fakeFetch(() => ({ body: [] }));
+    await new SupabaseDeadlineStore(await signedInREST(fn)).pastDeadlinesForModules(['CA106']);
+    const params = new URL(calls[0].url).searchParams;
+    expect(calls[0].url).toContain('/rest/v1/module_deadlines_public?');
+    const [from, before] = params.getAll('due_at');
+    expect(from).toMatch(/^gte\.\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    expect(before).toMatch(/^lt\.\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    const days = (Date.parse(before.slice(3)) - Date.parse(from.slice(4))) / 86_400_000;
+    expect(days).toBeGreaterThan(13);
+    expect(days).toBeLessThanOrEqual(14);
+    expect(params.get('order')).toBe('due_at.desc');
+  });
+
   test('a deadline is written to the table with its submitter', async () => {
     const { calls, fn } = fakeFetch(() => ({ status: 201 }));
     const d = makeDeadline({ id: 'd1', moduleKey: 'CA106', atGroupKey: 'g', title: 'Quiz', due: utc(2026, 9, 25, 9), kind: 'quiz', submitterID: 'user-1' });

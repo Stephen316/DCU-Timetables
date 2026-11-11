@@ -129,10 +129,6 @@ create policy "delete own" on deadline_confirmations
 -- 4. Housekeeping
 -- ---------------------------------------------------------------------------
 --
--- The app only ever asks for deadlines due today or later, so old rows are invisible
--- long before they are large. Run this occasionally (or from a scheduled job) to stop
--- the table growing for the life of each module:
---
---   delete from module_deadlines where due_at < now() - interval '60 days';
---
--- Confirmations cascade with the row they belong to.
+-- The app lists a deadline until fourteen days after it falls due (Completed → Past), and
+-- phase 52's hourly cron job deletes it then, so the table doesn't grow for the life of
+-- each module. Confirmations cascade with the row they belong to.

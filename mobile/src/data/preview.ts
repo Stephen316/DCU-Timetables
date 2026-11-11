@@ -1,5 +1,5 @@
 import { CancellationRules, CancellationTally } from '../core/cancellation';
-import { Deadline, DeadlineStanding, makeDeadline } from '../core/deadline';
+import { Deadline, DeadlineRules, DeadlineStanding, makeDeadline } from '../core/deadline';
 import { parseActivityCode } from '../core/activityCode';
 import { addDays, daysBetween, HOUR, startOfDay, startOfWeek } from '../core/time';
 import { EventType, TimetableCategory, TimetableEvent, WeekCalendar } from '../core/timetableEvent';
@@ -163,6 +163,7 @@ class PreviewDeadlineStore implements DeadlineStore {
   }
   async deadlinesForModule(moduleKey: string) { return this.all().filter((d) => d.moduleKey === moduleKey); }
   async deadlinesForModules() { return this.all(); }
+  async pastDeadlinesForModules() { return DeadlineRules.recentlyPast(this.all()); }
   async submit(deadline: Deadline) { this.added.push({ ...deadline, isMine: true }); }
   async edit() {}
   async setLabel(id: string, label: string | null) {

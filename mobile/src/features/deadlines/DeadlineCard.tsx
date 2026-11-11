@@ -14,10 +14,14 @@ const GIVE_MS = 140;
 /** Then it fades as the space it took closes, and the cards below slide up into it. */
 const CLOSE_MS = 260;
 
-/** When it's due, as short as the day allows: "18:00" today, "Thu 18:00" this week, "18 Nov" later. */
+/**
+ * When it's due, as short as the day allows: "18:00" today, "Thu 18:00" this week, "18 Nov"
+ * later — and "18 Nov" for one already gone, which a time or weekday alone would misdate.
+ */
 export function dueLabel(due: Date, now: Date): string {
   const days = daysBetween(now, due);
-  if (days <= 0) return formatTime(due);
+  if (days < 0) return `${due.getDate()} ${monthName(due).slice(0, 3)}`;
+  if (days === 0) return formatTime(due);
   if (days < 7) return `${weekdayShort(due)} ${formatTime(due)}`;
   return `${due.getDate()} ${monthName(due).slice(0, 3)}`;
 }

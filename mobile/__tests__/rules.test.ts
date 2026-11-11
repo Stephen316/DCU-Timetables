@@ -322,6 +322,14 @@ describe('Deadlines', () => {
     expect(DeadlineRules.upcoming(list, at(2026, 9, 17, 14)).map((d) => d.title)).toEqual(['Handed in this morning']);
   });
 
+  test('recently past is the fortnight before today, most recent first', () => {
+    const now = at(2026, 9, 17, 14);
+    const due = (title: string, day: number, hour = 12) =>
+      makeDeadline({ moduleKey: 'EEG1001', title, due: at(2026, 9, day, hour), submitterID: 's' });
+    const list = [due('Today', 17, 9), due('Yesterday', 16), due('Twelve days ago', 5), due('Fifteen days ago', 2), due('Next week', 24)];
+    expect(DeadlineRules.recentlyPast(list, now).map((d) => d.title)).toEqual(['Yesterday', 'Twelve days ago']);
+  });
+
   test('rejects empty titles and past dates', () => {
     const future = new Date(Date.now() + 3600_000);
     expect(DeadlineRules.isValid('Assignment 1', future)).toBe(true);

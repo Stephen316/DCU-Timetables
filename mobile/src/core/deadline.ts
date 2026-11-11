@@ -37,6 +37,8 @@ export type DeadlineStatus = 'pending' | 'verified';
 
 /** The database's limits, so a form can't offer what the server will refuse. */
 export const TITLE_LIMIT = 120;
+/** How long a deadline stays listed, under Completed → Past, once its day is over. */
+export const PAST_DEADLINE_DAYS = 14;
 export const LABEL_LIMIT = 80;
 export const DETAILS_LIMIT = 100;
 
@@ -344,6 +346,23 @@ export const DeadlineRules = {
   /** The oldest deadline still worth fetching or showing. */
   horizon(now: Date = new Date()): Date {
     return startOfDay(now);
+  },
+
+  /**
+   * The oldest a passed deadline gets before the server deletes it (phase 52 runs the same
+   * fourteen days), so the Past list never offers one that's about to vanish mid-tap.
+   */
+  pastHorizon(now: Date = new Date()): Date {
+    return new Date(now.getTime() - PAST_DEADLINE_DAYS * 24 * 60 * 60 * 1000);
+  },
+
+  /** Due before today but within `PAST_DEADLINE_DAYS`, the most recent first: Completed's Past list. */
+  recentlyPast(deadlines: Deadline[], now: Date = new Date()): Deadline[] {
+    const floor = DeadlineRules.pastHorizon(now).getTime();
+    const ceiling = DeadlineRules.horizon(now).getTime();
+    return deadlines
+      .filter((d) => d.due.getTime() >= floor && d.due.getTime() < ceiling)
+      .sort((a, b) => b.due.getTime() - a.due.getTime());
   },
 
   /** A submission is only accepted with a real title and a due date in the future. */
