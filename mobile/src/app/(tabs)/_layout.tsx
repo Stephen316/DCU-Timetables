@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { useState } from 'react';
+import { Platform } from 'react-native';
 import { MacShell } from '../../data/macShell';
 import { TabBar } from '../../features/week/TabBar';
 import { Icon } from '../../ui/components';
@@ -16,6 +17,10 @@ export default function TabsLayout() {
   const rail = useDesktopRail();
   return (
     <Tabs
+      // In a browser every tab switch would otherwise add a page to its history, and on a phone
+      // that history is an edge swipe: iOS slides a stale screenshot of the other tab over this
+      // one while the day pager drags under the same finger. Tabs replace each other instead.
+      backBehavior={Platform.OS === 'web' ? 'none' : 'firstRoute'}
       screenOptions={{ headerShown: false, sceneStyle: rail ? { marginRight: DesktopRail.width } : undefined }}
       tabBar={(props) => <TabBar {...props} />}
     >
