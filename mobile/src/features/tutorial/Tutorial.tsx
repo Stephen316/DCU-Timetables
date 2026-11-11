@@ -4,7 +4,7 @@ import {
 } from 'react';
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Tutorial, TutorialSignal, TutorialStep, TutorialTarget, TutorialText } from '../../core/tutorial';
-import { MacShell } from '../../data/macShell';
+import { useWeekFirst } from '../../ui/floatingBar';
 import { Safari } from '../../data/safari';
 import { PrefKey } from '../../data/storage';
 import { usePrefBool, useServices } from '../../state/hooks';
@@ -91,6 +91,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const [run, setRun] = useState<{ steps: TutorialStep[]; index: number } | null>(null);
   const targets = useRef(new Map<TutorialTarget, Set<RefObject<View | null>>>());
   const [dragging, setDragging] = useState(false);
+  // No Today tab on the Mac or a desktop-wide window, so their tour starts on the week.
+  const weekFirst = useWeekFirst();
 
   // TEMPORARY — remove once existing students have had it (from early November 2026): the
   // tour is new, so everyone already signed in on this phone is offered it once, as a new
@@ -106,14 +108,13 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!due || !ready || run || flow !== 'shell') return;
     const timer = setTimeout(() => {
-      const onMac = MacShell.isPresent();
-      // The tour starts on today's list: the Day tab, which is the app's front page.
+      // The tour starts on the front page: today's list, or the week where that's the front page.
       router.navigate('/');
       model?.resetToDefaultDay(new Date(), false);
-      setRun({ steps: Tutorial.steps(onMac, Safari.current()), index: 0 });
+      setRun({ steps: Tutorial.steps(weekFirst, Safari.current()), index: 0 });
     }, 600);
     return () => clearTimeout(timer);
-  }, [due, ready, run, flow, model, services]);
+  }, [due, ready, run, flow, model, services, weekFirst]);
 
   // Signed out mid-tour: nothing left to point at, and nothing to pick up again later.
   if (flow !== 'shell' && run) setRun(null);

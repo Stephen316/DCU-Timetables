@@ -51,6 +51,8 @@ export interface Palette {
     off: string;
     /** Enough people have vouched for a deadline. */
     confirmed: string;
+    /** A deadline that counts towards the grade: a bright outline meant to catch the eye. */
+    graded: string;
     /**
      * `off` as a **fill** behind white text, in either theme: white on the light dark-mode
      * shade lands near 2:1, so a filled control keeps the dark shade throughout.
@@ -85,7 +87,7 @@ export const light: Palette = {
   onAccent: '#FFFFFF',
   destructive: '#E11D48',
   now: '#F43F5E',
-  tint: { due: '#B45309', test: '#2563EB', off: '#EA580C', confirmed: '#059669', offFill: '#C2410C', online: '#16A34A' },
+  tint: { due: '#B45309', test: '#2563EB', off: '#EA580C', confirmed: '#059669', graded: '#DB2777', offFill: '#C2410C', online: '#16A34A' },
   modules: MODULES,
 };
 
@@ -105,7 +107,7 @@ export const dark: Palette = {
   onAccent: '#FFFFFF',
   destructive: '#FF6B81',
   now: '#FF4D6A',
-  tint: { due: '#FBBF24', test: '#60A5FA', off: '#FB923C', confirmed: '#34D399', offFill: '#C2410C', online: '#4ADE80' },
+  tint: { due: '#FBBF24', test: '#60A5FA', off: '#FB923C', confirmed: '#34D399', graded: '#F472B6', offFill: '#C2410C', online: '#4ADE80' },
   modules: MODULES,
 };
 
