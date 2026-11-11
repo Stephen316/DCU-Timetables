@@ -36,12 +36,17 @@ export function dueLabel(due: Date, now: Date): string {
  * into it, and only then is it reported done. Tapping anywhere else opens it.
  */
 export function DeadlineCard({
-  deadline, moduleName, completed, onToggle, onOpen, leaves = true,
+  deadline, moduleName, completed, disputed = false, onToggle, onOpen, leaves = true,
 }: {
   deadline: Deadline;
   moduleName: string;
   /** Ticked off by this student: the circle already holds a tick. */
   completed: boolean;
+  /**
+   * Someone says its date or details are wrong and it hasn't been settled: a "!" beside the
+   * title, so the list warns before anyone opens it.
+   */
+  disputed?: boolean;
   /** Called once the card has finished its animation. */
   onToggle: () => void;
   onOpen: () => void;
@@ -123,7 +128,7 @@ export function DeadlineCard({
         <Pressable
           onPress={onOpen}
           accessibilityRole="button"
-          accessibilityLabel={`${displayTitle(deadline)}, ${deadlineKindLabel(deadline.kind)}, ${moduleName}, due ${dueLabel(deadline.due, now)}${completed ? ', completed' : ''}`}
+          accessibilityLabel={`${displayTitle(deadline)}, ${deadlineKindLabel(deadline.kind)}, ${moduleName}, due ${dueLabel(deadline.due, now)}${disputed ? ', reported wrong' : ''}${completed ? ', completed' : ''}`}
           accessibilityHint="Opens it"
           style={({ pressed }) => [styles.card, { backgroundColor: theme.surface, opacity: pressed ? 0.85 : 1 }, elevation(theme)]}
         >
@@ -140,7 +145,14 @@ export function DeadlineCard({
             </View>
           </Pressable>
           <View style={styles.body}>
-            <Txt type="headline" numberOfLines={2} style={[styles.title, ticked && styles.faded]}>{displayTitle(deadline)}</Txt>
+            <View style={styles.titleRow}>
+              <Txt type="headline" numberOfLines={2} style={[styles.title, styles.shrink, ticked && styles.faded]}>{displayTitle(deadline)}</Txt>
+              {disputed ? (
+                <View style={[styles.flag, { backgroundColor: withAlpha(theme.tint.off, 0.16) }]}>
+                  <Txt type="caption" color={theme.tint.off} style={styles.flagMark}>!</Txt>
+                </View>
+              ) : null}
+            </View>
             <View style={styles.meta}>
               <View style={[styles.kind, { backgroundColor: withAlpha(kindTint, 0.14) }]}>
                 <Txt type="caption" color={kindTint} style={styles.semibold}>{deadlineKindLabel(deadline.kind)}</Txt>
@@ -170,6 +182,9 @@ const styles = StyleSheet.create({
   circle: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, gap: Space.s },
   title: { fontWeight: '700' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
+  flag: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  flagMark: { fontWeight: '800' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: Space.s },
   kind: { borderRadius: 999, paddingHorizontal: Space.s, paddingVertical: 2 },
   semibold: { fontWeight: '600' },
