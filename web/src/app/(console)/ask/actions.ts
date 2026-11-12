@@ -7,7 +7,7 @@ import { classify } from "@/lib/mistral/api";
 import { readDocument, transcribeRotation, type ReadDocument } from "@/lib/mistral/rotation";
 import { classifyDocument, classListToCsv } from "@/lib/mistral/roster";
 import { transcribeSchedule } from "@/lib/mistral/schedule";
-import { checkTeams, readSchedule, type ScheduleEvent } from "@/lib/schedule/parse";
+import { checkTeams, groupingId, pickGrouping, readSchedule, type ScheduleEvent } from "@/lib/schedule/parse";
 import { correctTable } from "@/lib/mistral/correct";
 import { applyToRoster, applyToRotation, rosterColumns, rosterTable, rotationTable, ROTATION_COLUMNS } from "@/lib/corrections/apply";
 import type { RotationSession } from "@/lib/extraction/rotation";
@@ -15,7 +15,7 @@ import { normalise } from "@/lib/extraction/normalise";
 import { interpretMessage, PROGRAMME_MODEL, type ChangeArgs, type HeadingArgs } from "@/lib/mistral/split";
 import { checkHeading, checkHeadingProvenance, type Heading } from "@/lib/proposals/heading";
 import { classes, dublin, weeks } from "@/lib/dcu/timetable";
-import { checkAudienceProvenance, checkChange, checkChangeProvenance, describeChange, fromRow, programmesNamed, teamGroup, toRow, weekday, type TimetableChange } from "@/lib/changes/change";
+import { checkAudienceProvenance, checkChange, checkChangeProvenance, describeChange, fromRow, groupingGroup, programmesNamed, toRow, weekday, type TimetableChange } from "@/lib/changes/change";
 import { saveChanges } from "../timetable/actions";
 import { review } from "@/lib/changes/review";
 import { checkRule, checkProvenance, type SplitRule } from "@/lib/proposals/rules";
@@ -24,7 +24,7 @@ import { phoneCohortProblem, resolveCourse, scopeCheck } from "@/lib/proposals/c
 import type { Proposal } from "@/lib/proposals/types";
 import type { Finding } from "@/lib/extraction/rotation";
 import { validateRotation } from "@/lib/extraction/rotation";
-import { nameKey, parseRoster, type RosterRow } from "@/lib/roster/parse";
+import { extraLabel, nameKey, parseRoster, type RosterRow } from "@/lib/roster/parse";
 import { validateRoster } from "@/lib/roster/validate";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload";
 import type { Untyped } from "@/lib/untyped";
@@ -462,8 +462,14 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
     if (scope.module && documentModule && scope.module !== documentModule) {
       notes.push({ level: "warn", message: `The document's heading names ${documentModule}, but ${scope.module} is selected. It will be saved for ${scope.module}.` });
     }
-    const part: SchedulePart = { scope, module: moduleKey, title, events };
-    const checks = await scheduleProblems(await supabaseServer(), part);
+    const db = await supabaseServer();
+    // Teams, or another grouping on the class list — a class test's sittings. Whichever the
+    // slots' IDs are on the list as.
+    const known = await groupingsOf(db, scope.programme);
+    const grouping = known ? pickGrouping(events, known) : "team";
+    const noun = extraLabel(grouping).toLowerCase();
+    const part: SchedulePart = { scope, module: moduleKey, title, events, grouping };
+    const checks = await scheduleProblems(db, part, known);
     const byDay = new Map<string, number>();
     for (const e of events) if (e.date) byDay.set(e.date, (byDay.get(e.date) ?? 0) + 1);
     const summary: Finding = {
@@ -472,11 +478,11 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
     };
     return {
       ok: true,
-      reply: `Read ${events.length} team slots from the ${source}. Accepting shows each team's slot on that team's students' timetables, ` +
-        `and replaces any team slots already saved for ${moduleKey || "the module"}${title ? ` called “${title}”` : ""}.`,
+      reply: `Read ${events.length} ${noun} slots from the ${source}. Accepting shows each ${noun}'s slot on its students' timetables, ` +
+        `and replaces any ${noun} slots already saved for ${moduleKey || "the module"}${title ? ` called “${title}”` : ""}.`,
       meta: meta(),
       proposal: {
-        kind: "schedule", scope, courseKey: scope.programme, module: moduleKey, title,
+        kind: "schedule", scope, courseKey: scope.programme, module: moduleKey, title, grouping,
         fileName: file.name, readBy: `read by ${run.model}`, events,
         findings: [...notes, summary, ...checks], log: [],
       },
@@ -490,42 +496,59 @@ async function readUpload(file: File, scope: Scope, started: number, note: strin
   };
 }
 
-/// What saving a team schedule needs: the slots, and the module and title they are saved under.
-type SchedulePart = { scope: Scope; module: string; title: string; events: ScheduleEvent[] };
+/// What saving a schedule needs: the slots, the module and title they are saved under, and
+/// the class-list grouping they are for — "team", or another such as "sitting_group".
+type SchedulePart = { scope: Scope; module: string; title: string; events: ScheduleEvent[]; grouping: string };
 
-/// Each slot as the added class it becomes, for one team. A slot with something missing still
-/// becomes one, so the ordinary checks say what it is.
+/// The IDs of every grouping on a course's class list, by key: "team" -> {"A1.A", …},
+/// "sitting_group" -> {"S143-18NOV-1300", …}. Null when the list can't be read.
+async function groupingsOf(db: Db, course: string): Promise<Map<string, Set<string>> | null> {
+  if (!course) return null;
+  const { data, error } = await db.from("course_allocations").select("extra").eq("course_key", course);
+  if (error) return null;
+  const out = new Map<string, Set<string>>();
+  for (const r of (data ?? []) as Untyped[]) {
+    if (typeof r.extra !== "object" || r.extra === null) continue;
+    for (const [k, v] of Object.entries(r.extra as Record<string, unknown>)) {
+      if (typeof v !== "string" || !v.trim()) continue;
+      out.set(k, (out.get(k) ?? new Set()).add(groupingId(v)));
+    }
+  }
+  return out;
+}
+
+/// Each slot as the added class it becomes, for one member of the grouping. A slot with
+/// something missing still becomes one, so the ordinary checks say what it is.
 function scheduleChanges(p: SchedulePart): TimetableChange[] {
   return p.events.map((e) => ({
-    courseKey: p.scope.programme, group: teamGroup(e.team), kind: "add" as const, module: p.module,
+    courseKey: p.scope.programme, group: groupingGroup(p.grouping, e.team), kind: "add" as const, module: p.module,
     activityCode: null, title: p.title || null, dates: e.date ? [e.date] : [], start: e.start ?? "",
     end: e.end, room: e.room, staff: null, note: null,
   }));
 }
 
-/// Everything that would stop a team schedule being saved, in words: used when it is
-/// proposed and again when it is accepted, so what is saved is what was checked.
-async function scheduleProblems(db: Awaited<ReturnType<typeof supabaseServer>>, p: SchedulePart): Promise<Finding[]> {
+/// Everything that would stop a schedule being saved, in words: used when it is proposed and
+/// again when it is accepted, so what is saved is what was checked. `known` is the class
+/// list's groupings when the caller has already read them.
+async function scheduleProblems(db: Db, p: SchedulePart, known?: Map<string, Set<string>> | null): Promise<Finding[]> {
+  const noun = extraLabel(p.grouping).toLowerCase();
   const out: Finding[] = [...(await scopeCheck(p.scope)), ...phoneCohortProblem(p.scope, "team schedule")];
   if (!p.module) out.push({ level: "error", message: "Pick the module this schedule is for." });
   if (!p.title.trim()) out.push({ level: "error", message: "No name for the slots — say what each one is, like “Preliminary Design Presentation”." });
   if (!p.events.length) out.push({ level: "error", message: "No slots." });
   if (p.events.length > 100) out.push({ level: "error", message: `${p.events.length} slots — the limit is 100 at once.` });
 
-  // A team ID that isn't on the class list would be saved and shown to nobody.
-  let known: Set<string> | null = null;
-  if (p.scope.programme) {
-    const { data, error } = await db.from("course_allocations").select("extra").eq("course_key", p.scope.programme);
-    if (error) {
-      out.push({ level: "warn", message: "Couldn't read the class list's teams to check these against them." });
-    } else {
-      known = new Set((data ?? []).map((r: Untyped) => String(r.extra?.team ?? "").trim().replace(/\s+/g, "").toUpperCase()).filter(Boolean));
-    }
-  }
-  out.push(...checkTeams(p.events, known));
+  if (!/^[a-z][a-z0-9_]{0,29}$/.test(p.grouping)) out.push({ level: "error", message: `"${p.grouping}" isn't a grouping on a class list.` });
 
-  const bad = p.events.filter((e) => e.team && !teamGroup(e.team)).map((e) => e.team);
-  if (bad.length) out.push({ level: "error", message: `Not usable as team IDs: ${[...new Set(bad)].slice(0, 6).join(", ")}.` });
+  // An ID that isn't on the class list would be saved and shown to nobody.
+  const groupings = known === undefined ? await groupingsOf(db, p.scope.programme) : known;
+  if (p.scope.programme && groupings === null) {
+    out.push({ level: "warn", message: `Couldn't read the class list's ${noun}s to check these against them.` });
+  }
+  out.push(...checkTeams(p.events, groupings ? groupings.get(p.grouping) ?? new Set() : null, noun));
+
+  const bad = p.events.filter((e) => e.team && !groupingGroup(p.grouping, e.team)).map((e) => e.team);
+  if (bad.length) out.push({ level: "error", message: `Not usable as ${noun} IDs: ${[...new Set(bad)].slice(0, 6).join(", ")}.` });
 
   // The ordinary checks for an added class, said once however many slots share the problem.
   const said = new Set<string>();
@@ -779,11 +802,14 @@ export async function accept(proposal: Proposal) {
   }
 
   if (proposal.kind === "schedule") {
-    const part: SchedulePart = { scope: proposal.scope, module: proposal.module, title: proposal.title, events: proposal.events };
+    const part: SchedulePart = {
+      scope: proposal.scope, module: proposal.module, title: proposal.title, events: proposal.events,
+      grouping: proposal.grouping ?? "team",
+    };
     const blocker = (await scheduleProblems(db, part)).find((f) => f.level === "error");
     if (blocker) return { ok: false, error: blocker.message };
-    // Replaces the team slots saved before under this module and title, and saves these, as
-    // one step: a corrected schedule uploaded again doesn't leave every team with two slots.
+    // Replaces the slots saved before for this grouping under this module and title, and saves
+    // these, as one step: a corrected schedule uploaded again doesn't leave every team with two.
     const { error } = await db.rpc("save_team_schedule", {
       p_course_key: proposal.scope.programme,
       p_module: proposal.module,

@@ -41,6 +41,9 @@ export type Proposal =
       /** What each slot is — "Preliminary Design Presentation" — and the class's title on a
        *  student's timetable. Accepting replaces the team slots saved under it before. */
       title: string;
+      /** Which class-list grouping the slots are for: "team", or another kind such as
+       *  "sitting_group" — whichever the slots' IDs are on the class list as. Absent is "team". */
+      grouping?: string;
       fileName: string; readBy: string;
       events: ScheduleEvent[]; findings: Finding[]; log?: Finding[] }
   | { kind: "change"; scope: Scope;

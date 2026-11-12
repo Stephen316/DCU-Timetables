@@ -40,6 +40,9 @@ const LAB_GROUP = /^[A-Z](\.[0-9]{1,2})?$/;
 /// A change for one project team: `TEAM:` and its ID in capitals (supabase/phase48). Teams
 /// are the `team` stored on each student's class-list row.
 const TEAM_GROUP = /^TEAM:[A-Z0-9._-]{1,30}$/;
+/// A change for one member of any grouping on the class list: the grouping's key in capitals,
+/// a colon, the ID — `SITTING_GROUP:S143-18NOV-1300` (supabase/phase60). A team is the key "team".
+const GROUPING_GROUP = /^[A-Z][A-Z0-9_]{0,29}:[A-Z0-9._-]{1,30}$/;
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function weekday(date: string): string {
@@ -134,8 +137,23 @@ export function fromRow(r: Untyped): SavedChange {
 
 /// A team's ID as a change's group: "a1.a" -> "TEAM:A1.A". Null when it can't be one.
 export function teamGroup(team: string): string | null {
-  const g = `TEAM:${team.trim().replace(/\s+/g, "").toUpperCase()}`;
-  return TEAM_GROUP.test(g) ? g : null;
+  return groupingGroup("team", team);
+}
+
+/// One member of a grouping as a change's group: ("sitting_group", "s143-18nov-1300") ->
+/// "SITTING_GROUP:S143-18NOV-1300". Null when it can't be one.
+export function groupingGroup(key: string, id: string): string | null {
+  const g = `${key.toUpperCase()}:${id.trim().replace(/\s+/g, "").toUpperCase()}`;
+  return GROUPING_GROUP.test(g) ? g : null;
+}
+
+/// The grouping a change is for and the member of it, or null when it is for anyone else:
+/// "SITTING_GROUP:S143-18NOV-1300" -> { key: "sitting_group", id: "S143-18NOV-1300" }.
+export function groupingOf(group: string | null): { key: string; id: string } | null {
+  const g = group?.toUpperCase() ?? "";
+  if (!GROUPING_GROUP.test(g)) return null;
+  const at = g.indexOf(":");
+  return { key: g.slice(0, at).toLowerCase(), id: g.slice(at + 1) };
 }
 
 /// The team a change is for, or null when it is for anyone else.
@@ -143,17 +161,20 @@ export function teamOf(group: string | null): string | null {
   return group && TEAM_GROUP.test(group.toUpperCase()) ? group.slice(5).toUpperCase() : null;
 }
 
-/// Who a change is for, in words: "everyone", "group C", "BMED1", "team A1.A".
+/// Who a change is for, in words: "everyone", "group C", "BMED1", "team A1.A",
+/// "sitting group S143-18NOV-1300".
 export function audience(group: string | null): string {
   const team = teamOf(group);
   if (team) return `team ${team}`;
+  const grouping = groupingOf(group);
+  if (grouping) return `${grouping.key.replace(/_/g, " ")} ${grouping.id}`;
   return !group ? "everyone" : PROGRAMME_CODE.test(group) ? group : `group ${group}`;
 }
 
 /// Why this isn't a group the course has, or null when it is. A programme must be one the
 /// course covers: "ECE2" would be saved and then match no student.
 export function groupProblem(group: string, programme: Programme | undefined): string | null {
-  if (LAB_GROUP.test(group) || TEAM_GROUP.test(group.toUpperCase())) return null;
+  if (LAB_GROUP.test(group) || GROUPING_GROUP.test(group.toUpperCase())) return null;
   if (PROGRAMME_CODE.test(group)) {
     if (!programme || programme.covers.some((c) => c.code === group)) return null;
     if (!programme.covers.length) return `${programme.key} has no programmes within it to make a change for.`;

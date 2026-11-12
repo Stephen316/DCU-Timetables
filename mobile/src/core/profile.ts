@@ -16,6 +16,21 @@ export interface Allocation {
   drawing: string | null;
   /** The project team on the class list ("A1.a"), if it carries one. Beside the lab group, never instead of it. */
   team?: string | null;
+  /**
+   * Any other groupings the class list carries, keyed by kind — a class test's sitting:
+   * {"sitting_group": "S143-18NOV-1300"}. Absent when there are none. A change for
+   * `SITTING_GROUP:S143-18NOV-1300` reaches this student.
+   */
+  groupings?: Record<string, string>;
+}
+
+/** The groupings in a row's `extra` other than the team, which has a field of its own. */
+function groupingsFrom(extra: Record<string, unknown>): Record<string, string> | undefined {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(extra)) {
+    if (key !== 'team' && /^[a-z][a-z0-9_]{0,29}$/.test(key) && typeof value === 'string' && value.trim()) out[key] = value;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /**
@@ -29,9 +44,11 @@ export function allocationFromRow(row: Record<string, unknown>): Allocation | nu
   const text = (v: unknown) => (typeof v === 'string' ? v : null);
   // `extra` holds the further groupings a class list carries, keyed by kind: {"team": "A1.a"}.
   const extra = typeof row.extra === 'object' && row.extra !== null ? (row.extra as Record<string, unknown>) : {};
+  const groupings = groupingsFrom(extra);
   return {
     group: row.grp, subgroup: text(row.subgroup), day: text(row.day), workshop: text(row.workshop), drawing: text(row.drawing),
     team: text(extra.team),
+    ...(groupings ? { groupings } : {}),
   };
 }
 
@@ -69,6 +86,8 @@ export interface StudentProfile {
   drawing: string;
   /** Project team, e.g. "A1.a". Empty when the class list has none for them. */
   team: string;
+  /** Other groupings from the class list, e.g. {"sitting_group": "S143-18NOV-1300"}. Absent when none. */
+  groupings?: Record<string, string>;
   /** Where the allocation came from, so a re-imported class list can be noticed. */
   courseKey: string | null;
   allocationKey: string | null;
@@ -84,6 +103,7 @@ export function makeProfile(fields: Partial<StudentProfile> & { name: string; gr
     workshop: fields.workshop ?? '',
     drawing: fields.drawing ?? '',
     team: fields.team ?? '',
+    ...(fields.groupings ? { groupings: fields.groupings } : {}),
     courseKey: fields.courseKey ?? null,
     allocationKey: fields.allocationKey ?? null,
     rosterVersion: fields.rosterVersion ?? null,
@@ -109,6 +129,7 @@ export function profileFromAllocation(
     workshop: allocation.workshop ?? '',
     drawing: allocation.drawing ?? '',
     team: allocation.team ?? '',
+    ...(allocation.groupings ? { groupings: allocation.groupings } : {}),
     courseKey: cohortCourseKey(cohort),
     allocationKey,
     rosterVersion,
@@ -123,6 +144,8 @@ export function decodeProfile(value: unknown): StudentProfile | null {
   if (v.cohort !== undefined && !COHORTS.includes(v.cohort as Cohort)) return null;
   const text = (x: unknown) => (typeof x === 'string' ? x : '');
   const opt = (x: unknown) => (typeof x === 'string' ? x : null);
+  const groupings = typeof v.groupings === 'object' && v.groupings !== null
+    ? groupingsFrom(v.groupings as Record<string, unknown>) : undefined;
   return {
     name: v.name,
     cohort: (v.cohort as Cohort | undefined) ?? 'engineeringYear1',
@@ -131,6 +154,7 @@ export function decodeProfile(value: unknown): StudentProfile | null {
     workshop: text(v.workshop),
     drawing: text(v.drawing),
     team: text(v.team),
+    ...(groupings ? { groupings } : {}),
     courseKey: opt(v.courseKey),
     allocationKey: opt(v.allocationKey),
     // A profile saved before teams existed has no `team` key at all, which is not the same as
@@ -308,6 +332,11 @@ export class TimetableAudience {
   readonly programme: string | null;
   /** The student's project team in capitals, "A1.A". A change for `TEAM:A1.A` reaches them. */
   readonly team: string | null;
+  /**
+   * The student's other groupings, IDs in capitals: {"sitting_group": "S143-18NOV-1300"}. A
+   * change for `SITTING_GROUP:S143-18NOV-1300` reaches them.
+   */
+  readonly groupings: Readonly<Record<string, string>>;
 
   constructor(
     readonly courseKey: string,
@@ -315,11 +344,23 @@ export class TimetableAudience {
     subgroup: string | null = null,
     programme: string | null = null,
     team: string | null = null,
+    groupings: Record<string, string> = {},
   ) {
     this.group = group === '' ? null : group;
     this.subgroup = subgroup === '' ? null : subgroup;
     this.programme = programme?.trim().toUpperCase() || null;
-    this.team = team?.replace(/\s+/g, '').toUpperCase() || null;
+    this.team = TimetableAudience.id(team);
+    const ids: Record<string, string> = {};
+    for (const [key, value] of Object.entries(groupings)) {
+      const id = TimetableAudience.id(value);
+      if (id) ids[key.toLowerCase()] = id;
+    }
+    this.groupings = ids;
+  }
+
+  /** A team's or other grouping's ID as changes name it: no spaces, capitals. */
+  private static id(value: string | null | undefined): string | null {
+    return value?.replace(/\s+/g, '').toUpperCase() || null;
   }
 
   /**
@@ -350,7 +391,7 @@ export class TimetableAudience {
     const course = profile.courseKey ?? cohortCourseKey(profile.cohort);
     const code = programme?.trim().toUpperCase() ?? '';
     return new TimetableAudience(course, profile.group, profile.subgroup,
-      TimetableAudience.programmeCourses[code] === course ? code : null, profile.team);
+      TimetableAudience.programmeCourses[code] === course ? code : null, profile.team, profile.groupings);
   }
 
   static forCategory(category: TimetableCategory): TimetableAudience | null {
@@ -360,10 +401,15 @@ export class TimetableAudience {
   includes(change: TimetableChange): boolean {
     if (change.courseKey !== this.courseKey) return false;
     if (change.group === null) return true;
-    // A change for one team (supabase/phase48) reaches that team's students and no one else —
-    // never matched as a lab group, so a team called "C.2" can't be mistaken for subgroup C.2.
-    if (change.group.toUpperCase().startsWith('TEAM:')) {
-      return this.team !== null && change.group.slice(5).replace(/\s+/g, '').toUpperCase() === this.team;
+    // A change for one team (supabase/phase48), or one member of another grouping such as a
+    // class test's sitting (phase60: SITTING_GROUP:S143-18NOV-1300), reaches those students and
+    // no one else — never matched as a lab group, so a team called "C.2" can't be mistaken for
+    // subgroup C.2.
+    const colon = change.group.indexOf(':');
+    if (colon > 0) {
+      const key = change.group.slice(0, colon).toLowerCase();
+      const mine = key === 'team' ? this.team : this.groupings[key] ?? null;
+      return mine !== null && TimetableAudience.id(change.group.slice(colon + 1)) === mine;
     }
     return change.group === this.group || change.group === this.subgroup || change.group === this.programme;
   }
