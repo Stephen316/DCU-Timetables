@@ -52,7 +52,8 @@ export async function classifyDocument(opts: { key: string; text: string; model?
           "You sort documents a university timetable administrator uploads. Answer with the " +
           "document's kind:\n" +
           "- class_list: a list of students — by name or by student number — with the lab " +
-          "group each is in. May also give subgroup, day and rooms.\n" +
+          "group each is in. May also give subgroup, day and rooms, or each student's own " +
+          "room, date and time for a test or exam.\n" +
           "- rotation: a schedule of which groups attend which lab in which week, usually a " +
           "grid of weeks or dates against modules or activities. It repeats over many weeks. " +
           "It lists groups, not students.\n" +
@@ -103,11 +104,17 @@ Then one line per student, in the order they appear. Rules:
    team (whatever the document calls its ID) or "<Kind> Group" / "<Kind> Team" for another
    kind, e.g. "Studio Group". Never write a value into Group that is really a team, and never
    write the same grouping twice. Add no other columns: no emails, no notes.
-9. ALWAYS write the full header line, in full, in this order. If the administrator's note
+9. Some lists give each student their own room, date and time — a class test or exam
+   sitting. That is a grouping too: add a column headed "Sitting Group" and write the three
+   together as one ID — the room as written with no spaces, then the day as two digits and
+   the month as three capital letters, then the 24-hour start time as four digits, joined by
+   hyphens. Room "S143", date "18/11/2026", time "13-00" is "S143-18NOV-1300". Students with
+   the same room, date and time get exactly the same ID. Never put a sitting in Group or Team.
+10. ALWAYS write the full header line, in full, in this order. If the administrator's note
    says to use only some columns, leave the others EMPTY on every row; never delete a column
    or rename one. A document with only teams and no lab groups leaves Group empty and
    fills Team.
-10. If the administrator's note says to leave rows out or read a column a certain way, do so.
+11. If the administrator's note says to leave rows out or read a column a certain way, do so.
 `.trim();
 
 /// Long enough for ~600 students; a list that hits it is refused rather than half-saved.

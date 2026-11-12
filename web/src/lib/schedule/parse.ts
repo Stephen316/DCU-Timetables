@@ -223,23 +223,41 @@ export function readSchedule(raw: RawEvent[], source: string): { events: Schedul
   return { events, findings };
 }
 
-/// Against the class list's teams: one that isn't on it would be saved and shown to nobody,
-/// and a team on it with no slot is likelier a missing row than a team with nothing to do.
-export function checkTeams(events: ScheduleEvent[], known: Set<string> | null): Finding[] {
+/// Against the class list's teams — or whichever grouping the slots are for, named by `noun`
+/// ("sitting group"): one that isn't on it would be saved and shown to nobody, and one on it
+/// with no slot is likelier a missing row than a team with nothing to do.
+export function checkTeams(events: ScheduleEvent[], known: Set<string> | null, noun = "team"): Finding[] {
   if (known === null) return [];
   if (known.size === 0) {
-    return [{ level: "error", message: "The class list has no teams, so these slots would reach nobody. Add the teams to the class list first." }];
+    return [{ level: "error", message: `The class list has no ${noun}s, so these slots would reach nobody. Add the ${noun}s to the class list first.` }];
   }
   const out: Finding[] = [];
-  const upper = (t: string) => t.trim().replace(/\s+/g, "").toUpperCase();
-  const unknown = [...new Set(events.filter((e) => e.team && !known.has(upper(e.team))).map((e) => e.team))];
+  const unknown = [...new Set(events.filter((e) => e.team && !known.has(groupingId(e.team))).map((e) => e.team))];
   if (unknown.length) {
-    out.push({ level: "error", message: `Not on the class list as teams, so no student would see them: ${unknown.slice(0, 10).join(", ")}${unknown.length > 10 ? ` and ${unknown.length - 10} more` : ""}.` });
+    out.push({ level: "error", message: `Not on the class list as ${noun}s, so no student would see them: ${unknown.slice(0, 10).join(", ")}${unknown.length > 10 ? ` and ${unknown.length - 10} more` : ""}.` });
   }
-  const given = new Set(events.map((e) => upper(e.team)));
+  const given = new Set(events.map((e) => groupingId(e.team)));
   const without = [...known].filter((t) => !given.has(t)).sort();
   if (without.length) {
-    out.push({ level: "info", message: `${without.length} team${without.length === 1 ? "" : "s"} on the class list ${without.length === 1 ? "has" : "have"} no slot here: ${without.slice(0, 10).join(", ")}${without.length > 10 ? " …" : ""}.` });
+    out.push({ level: "info", message: `${without.length} ${noun}${without.length === 1 ? "" : "s"} on the class list ${without.length === 1 ? "has" : "have"} no slot here: ${without.slice(0, 10).join(", ")}${without.length > 10 ? " …" : ""}.` });
   }
   return out;
+}
+
+/// A team's or other grouping's ID as it is compared: no spaces, capitals. "a1 .a" -> "A1.A".
+export function groupingId(id: string): string {
+  return id.trim().replace(/\s+/g, "").toUpperCase();
+}
+
+/// Which of the class list's groupings a schedule's slots are for: the one most of their IDs
+/// belong to, so a sitting schedule finds "sitting_group" without being told. Teams win a tie,
+/// and are the answer when nothing matches — then the check above says the IDs aren't teams.
+export function pickGrouping(events: ScheduleEvent[], known: Map<string, Set<string>>): string {
+  let best = "team";
+  let bestHits = 0;
+  for (const [key, ids] of known) {
+    const hits = events.filter((e) => e.team && ids.has(groupingId(e.team))).length;
+    if (hits > bestHits || (hits === bestHits && hits > 0 && key === "team")) { best = key; bestHits = hits; }
+  }
+  return best;
 }

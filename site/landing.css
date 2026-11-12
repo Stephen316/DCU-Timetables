@@ -370,6 +370,13 @@ footer { padding: 56px 0 56px; color: var(--muted); font-size: 14px; }
 .legal { margin: 22px 0 0; font-size: 13px; }
 .seo-keywords { font-size: 11px; opacity: .55; margin-top: 18px; }
 
+/* ── Theme switch: theme.js crossfades the whole page through a view transition ── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: .45s;
+  animation-timing-function: cubic-bezier(.4, 0, .2, 1);
+}
+
 /* ── Scroll reveal ───────────────────────────────────────────────── */
 .js .rv { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1); transition-delay: var(--d, 0s); }
 .js .rv.in { opacity: 1; transform: none; }

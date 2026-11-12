@@ -1,7 +1,7 @@
 import { Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MacShell } from '../data/macShell';
-import { Space } from './theme';
+import { Desktop, Space } from './theme';
 
 /** The selected tab's violet disc, and the pale ring round it. */
 const DISC = 40;
@@ -46,7 +46,21 @@ export const DesktopRail = {
   minWindow: 600,
   /** A browser window shorter than this is a phone on its side, which keeps the bottom bar. */
   minWebHeight: 480,
+  /**
+   * The narrowest window whose week is centred in the whole window, the rail's room matched on
+   * the left; below it the grid needs that room more than it needs to look centred.
+   */
+  minBalanced: Desktop.wide + (FloatingBar.height + Space.l * 2) * 2,
 } as const;
+
+/**
+ * What the week screen keeps clear on its left, beside the rail's room on its right, so the
+ * grid sits as centred as it would with no rail at all. Nothing on a window too narrow to spare it.
+ */
+export function useRailBalance(): number {
+  const { width } = useWindowDimensions();
+  return useDesktopRail() && width >= DesktopRail.minBalanced ? DesktopRail.width : 0;
+}
 
 /**
  * Whether the tabs stand down the right edge rather than along the bottom: on any big screen —

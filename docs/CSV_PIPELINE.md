@@ -384,6 +384,31 @@ Run order: phase30 → phase46 → phase48 (phase48 refuses to run without the f
 added to the class list by a team file but with no lab group isn't adopted by the phone (§4.3a), so
 they get no team either until they are on the lab list.
 
+### 4.3c Class test sittings and other groupings (phase 60)
+
+A class test allocation gives each student their own room, date and time
+(`EEG1007_2027_CT_allocation.xlsx`: Firstname, Surname, Student ID, Email, Room, Date, Time). That
+is a grouping like a team, kept under its own key so it never replaces the project team:
+
+- **Class list.** `classListToCsv` writes a `Sitting Group` column — room, day, month and 24-hour
+  start joined by hyphens, `S143-18NOV-1300` — so students in the same sitting share one ID. It is
+  stored as `extra.sitting_group`. Save it with **Add**: the file has no lab groups.
+- **Slots.** Upload the sittings as a schedule (§4.3b), one row per sitting ID with its date, start,
+  end and room, under a heading that names the class ("EEG1007 Class Test"). The proposal works out
+  which grouping the IDs are on the class list as (`pickGrouping`) and checks them against it.
+- **Saving.** `timetable_changes.grp` is any grouping's key in capitals, a colon and the ID:
+  `SITTING_GROUP:S143-18NOV-1300`. `TEAM:` is the same rule with the key `team`.
+  `save_team_schedule` takes one grouping at a time and replaces only that grouping's slots under
+  the module and title.
+- **Phones.** The profile keeps every grouping on the student's row (`groupings`), and a change for
+  `<KEY>:<ID>` reaches the students whose row has that ID under that key. Deploy the web build
+  before saving a class list that adds a grouping: a phone that re-reads the list on older code
+  stores no groupings, and only reads them again when the list's version next changes.
+
+One sitting key per programme, so a second class test for another module replaces each student's
+`sitting_group`. Before that happens, name the column for the module ("EEG1007 Sitting Group") in
+the upload note.
+
 ### 4.4 Note on the allocation itself
 
 Engineering Year 1's allocation is **not alphabetical** — sorting by name gives 155 runs
