@@ -2,7 +2,10 @@ import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 import { TabBar } from '../../features/week/TabBar';
 import { Icon } from '../../ui/components';
-import { DesktopRail, useDesktopRail, useWeekFirst } from '../../ui/floatingBar';
+import { DesktopRail, useDesktopRail, useRailBalance, useWeekFirst } from '../../ui/floatingBar';
+
+/** The tabs that draw the week grid when the rail is up: the front page, and the week tab. */
+const WEEK_ROUTES = new Set(['index', 'week']);
 
 /**
  * The signed-in app: Today, This week, Deadlines and Account, sharing one week model. On a
@@ -13,13 +16,19 @@ import { DesktopRail, useDesktopRail, useWeekFirst } from '../../ui/floatingBar'
 export default function TabsLayout() {
   const weekFirst = useWeekFirst();
   const rail = useDesktopRail();
+  const balance = useRailBalance();
   return (
     <Tabs
       // In a browser every tab switch would otherwise add a page to its history, and on a phone
       // that history is an edge swipe: iOS slides a stale screenshot of the other tab over this
       // one while the day pager drags under the same finger. Tabs replace each other instead.
       backBehavior={Platform.OS === 'web' ? 'none' : 'firstRoute'}
-      screenOptions={{ headerShown: false, sceneStyle: rail ? { marginRight: DesktopRail.width } : undefined }}
+      // Every screen keeps clear of the rail; the week also gives up as much on its left, so the
+      // grid is centred in the window rather than in what the rail leaves of it.
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        sceneStyle: rail ? { marginRight: DesktopRail.width, marginLeft: WEEK_ROUTES.has(route.name) ? balance : 0 } : undefined,
+      })}
       tabBar={(props) => <TabBar {...props} />}
     >
       <Tabs.Screen
