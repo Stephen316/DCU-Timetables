@@ -81,6 +81,19 @@ export const PreviewData = {
     return [0, 1, 2, 3, 4, 7, 8, 9, 10, 11].flatMap((day) => [
       e(`o${day}a`, 'Programming Lab', 'CA117[1]OC/P1/04', at(day, 10), 1, 'GLA.L102'),
       e(`o${day}b`, 'Maths Tutorial', 'MS121[1]OC/T1/02', at(day, 16), 1, 'GLA.QG13'),
+      // Networks' second lecture stream, so today's cancelled one has something to swap to.
+      e(`o${day}c`, 'Networks', 'CA218[1]OC/L1/02', at(day, 13), 1, 'GLA.XG15'),
+    ]);
+  },
+
+  /** A module outside the course, for Add class to find: "MS134". */
+  get statistics(): TimetableEvent[] {
+    const e = PreviewData.event;
+    const at = PreviewData.at;
+    return [1, 3, 8, 10].flatMap((day) => [
+      e(`s${day}a`, 'Statistics', 'MS134[1]OC/L1/01', at(day, 15), 1, 'GLA.QG21', ['Ryan, Niamh']),
+      e(`s${day}b`, 'Statistics Tutorial', 'MS134[1]OC/T1/01', at(day, 17), 1, 'GLA.QG13'),
+      e(`s${day}c`, 'Statistics Lab', 'MS134[1]OC/P1/01', at(day, 10), 2, 'GLA.L114'),
     ]);
   },
 
@@ -129,6 +142,11 @@ class PreviewTimetableSource implements TimetableSource {
 
   async otherEvents(_category: TimetableCategory, weeks: { firstDay: Date }[]): Promise<TimetableEvent[]> {
     return inWeeks(PreviewData.otherGroups, weeks);
+  }
+
+  async moduleEvents(codes: string[], weeks: { firstDay: Date }[]): Promise<TimetableEvent[]> {
+    const all = [...PreviewData.week, ...PreviewData.otherGroups, ...PreviewData.statistics];
+    return inWeeks(all.filter((e) => codes.includes(e.activity.moduleCode ?? '')), weeks);
   }
 }
 

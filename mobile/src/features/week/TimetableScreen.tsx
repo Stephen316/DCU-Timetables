@@ -14,7 +14,7 @@ import { LoadingScreen } from '../../ui/LoadingScreen';
 import { Space, useTheme } from '../../ui/theme';
 import { useTutorial } from '../tutorial/Tutorial';
 import { DayPage } from './DayPage';
-import { EditChoiceSheet, EditKind, PendingEdit } from './editing';
+import { AddClassCard, EditKind, EditSheets, EditStep } from './editing';
 import { ContributionCard } from './ContributionCard';
 import { SubgroupCard } from './SubgroupCard';
 import { Pager, PagerControl } from './Pager';
@@ -40,7 +40,8 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
   const weekPager = useRef<PagerControl>(null);
   /** Edit timetable: the course's other classes show as ghosts, and a tap adds or removes. */
   const [editing, setEditing] = useState(false);
-  const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+  const [editStep, setEditStep] = useState<EditStep | null>(null);
+  const [addingClass, setAddingClass] = useState(false);
   const tutorial = useTutorial();
 
   useEffect(() => {
@@ -78,7 +79,13 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
   useAppEvent('labRotationChanged', () => owner && void model.reloadAll());
 
   const open = (event: TimetableEvent) => router.push({ pathname: '/class/[id]', params: { id: event.id } });
-  const askToEdit = (event: TimetableEvent, kind: EditKind) => setPendingEdit({ event, kind });
+  // One of theirs can also be swapped for another session of its module — a cancelled one, most often.
+  const askToEdit = (event: TimetableEvent, kind: EditKind) => setEditStep({
+    step: 'choose',
+    edit: { event, kind },
+    cancelled: kind === 'remove' && model.status(event).isFlagged,
+    replacements: kind === 'remove' ? model.replacementsFor(event) : [],
+  });
 
   let body: ReactNode;
   if (model.errorText && model.events.length === 0) {
@@ -196,6 +203,7 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
           // Editing lives here and only here: on the day and the week, the two places a class can be added or dropped.
           <>
             {weekControls && !editing ? <PillButton title="Today" onPress={() => model.showCurrentWeek()} /> : null}
+            {editing ? <PillButton title="Add class" icon="add" onPress={() => setAddingClass(true)} /> : null}
             {editing
               ? <PillButton title="Done" filled onPress={() => setEditing(false)} />
               : <PillButton title="Edit" icon="edit" label="Edit timetable" onPress={() => setEditing(true)} />}
@@ -213,10 +221,21 @@ export function TimetableScreen({ mode, owner = false }: { mode: 'day' | 'week';
       {/* The subgroup question first: it changes the timetable itself, so it waits on nothing else. */}
       {owner ? <SubgroupCard ready={hasWeek && !editing} /> : null}
       {owner ? <ContributionCard ready={hasWeek && !editing && !subgroupQuestion} /> : null}
-      <EditChoiceSheet
-        pending={pendingEdit}
-        onChoose={({ event, kind }, repeat) => model.edit(kind, repeat, event)}
-        onClose={() => setPendingEdit(null)}
+      <EditSheets
+        step={editStep}
+        onStep={setEditStep}
+        actions={{
+          edit: ({ event, kind }, repeat) => model.edit(kind, repeat, event),
+          replace: (cancelled, replacement, repeat) => model.replace(cancelled, replacement, repeat),
+          addClass: (session, repeat) => model.addClass(session, repeat),
+        }}
+      />
+      <AddClassCard
+        visible={addingClass}
+        weekLabel={shownWeek ? `week ${shownWeek.label}` : ''}
+        onFind={(code) => model.sessionsOf(code, model.weekIndex)}
+        onPick={(session) => setEditStep({ step: 'addRepeat', session })}
+        onClose={() => setAddingClass(false)}
       />
     </View>
   );

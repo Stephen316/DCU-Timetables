@@ -157,3 +157,26 @@ describe("Other groups' rotation sessions", () => {
     expect(others.every((e) => e.locations.length === 0)).toBe(true);
   });
 });
+
+describe('Replacing a cancelled class', () => {
+  const otherLab = event('EEG1001[1]OC/P1/04', at(2026, 9, 30, 9), at(2026, 9, 30, 12), { id: 'lab-other', moduleName: 'EEG1001[1] Workshop' });
+  const otherLecture = event('EEG1001[1]OC/L1/02', at(2026, 9, 29, 9), at(2026, 9, 29, 10), { id: 'lec-other', moduleName: 'EEG1001[1] Workshop' });
+  const unrelated = event('EEG1006[1]OC/P1/01', at(2026, 9, 29, 14), at(2026, 9, 29, 17), { id: 'unrelated', moduleName: 'EEG1006[1] Materials' });
+
+  test("offers the same module's other sessions, the same kind first", () => {
+    expect(ids(TimetableEdits.replacementsFor(labThisWeek, [unrelated, otherLecture, otherLab, labThisWeek]))).toEqual(['lab-other', 'lec-other']);
+  });
+
+  test('a once-off swap drops the class and adds the other that week only', () => {
+    const edits = TimetableEdits.replacing([], labThisWeek, otherLab, 'once');
+    const week = TimetableEdits.apply([lecture, labThisWeek], [otherLab], edits);
+    expect(ids(week.events)).toEqual(['lec', 'lab-other']);
+    expect(ids(week.ghosts)).toEqual(['lab-1']);
+    expect(ids(TimetableEdits.apply([labNextWeek], [], edits).events)).toEqual(['lab-2']);
+  });
+
+  test('an every-week swap holds for the weeks after too', () => {
+    const edits = TimetableEdits.replacing([], labThisWeek, otherLab, 'weekly');
+    expect(ids(TimetableEdits.apply([labNextWeek], [], edits).events)).toEqual([]);
+  });
+});

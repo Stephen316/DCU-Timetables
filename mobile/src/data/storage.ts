@@ -123,6 +123,8 @@ export const PrefKey = {
   skipped: 'skippedEvents',
   /** `TimetableEdit[]`: classes the student added to or dropped from their own timetable. */
   timetableEdits: 'timetableEdits',
+  /** `string[]`: module codes outside the course whose classes Add class offers, "MS121". */
+  extraModules: 'extraModules',
   /** Set when an account is created here, or the tutorial asked for again; cleared once it's done. */
   tutorialDue: 'tutorialDue',
   /**

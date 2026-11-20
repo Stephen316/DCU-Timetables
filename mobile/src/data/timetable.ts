@@ -82,6 +82,10 @@ export class ProfileTimetableSource implements TimetableSource {
     return events.sort((a, b) => a.start.getTime() - b.start.getTime());
   }
 
+  moduleEvents(codes: string[], weeks: TeachingWeek[]): Promise<TimetableEvent[]> {
+    return this.client.eventsForModuleCodes(codes, weeks);
+  }
+
   /**
    * The other groups' rotation sessions, for a student who wants to go to one. From the
    * rotation alone, so it needs no network. No room: the student's own rooms are for their
