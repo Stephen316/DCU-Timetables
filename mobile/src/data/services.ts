@@ -80,7 +80,7 @@ export interface Services {
 /** One student's own data on the device, cleared when they leave it or someone else arrives. */
 const STUDENT_KEYS = [
   PrefKey.studentID, PrefKey.profile, PrefKey.selectedProgramme, PrefKey.programmeSaved,
-  PrefKey.skipped, PrefKey.timetableEdits, PrefKey.allocationTried, PrefKey.subgroupQuestion,
+  PrefKey.skipped, PrefKey.timetableEdits, PrefKey.extraModules, PrefKey.customClasses, PrefKey.allocationTried, PrefKey.subgroupQuestion,
   PrefKey.contributionsTold, PrefKey.completedDeadlines,
 ];
 

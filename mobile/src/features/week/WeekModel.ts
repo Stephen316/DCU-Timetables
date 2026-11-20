@@ -9,7 +9,8 @@ import { ClashDetector, DefaultDay } from '../../core/schedule';
 import { addDays, startOfDay } from '../../core/time';
 import { ModuleTitle, ModuleTitles, TeachingWeek, TimetableCategory, TimetableEvent, WeekCalendar } from '../../core/timetableEvent';
 import { ModuleAbbreviation, ModuleAbbreviations } from '../../core/abbreviations';
-import { EditRepeat, TimetableEdit, TimetableEdits } from '../../core/timetableEdits';
+import { CustomClass, CustomClasses } from '../../core/customClasses';
+import { EditRepeat, ModuleCode, TimetableEdit, TimetableEdits } from '../../core/timetableEdits';
 import { PushTargetsRules } from '../../core/webPush';
 import { errorMessage } from '../../data/rest';
 import { userEmail } from '../../data/session';
@@ -75,6 +76,10 @@ export class WeekModel extends Observable {
   /** What the source keeps back as another group's (`TimetableSource.otherEvents`), by week. */
   private rawOthersByWeekNumber = new Map<number, TimetableEvent[]>();
   private edits: TimetableEdit[];
+  /** Modules outside the course the student took a class of through Add class, whose classes are fetched as ghosts. */
+  private extraModules: string[];
+  /** Classes the student set at a time of their own, drawn into every week they fall in. */
+  private customClasses: CustomClass[];
   private changes: TimetableChange[];
   private splits: ModuleSplit[];
   private titles: ModuleTitle[];
@@ -111,8 +116,12 @@ export class WeekModel extends Observable {
     const user = services.user.current;
     this.initial = user ? surnameInitial(userEmail(user)?.familyName) : null;
     this.edits = TimetableEditStore.edits(services.prefs);
+    this.extraModules = TimetableEditStore.extraModules(services.prefs);
+    this.customClasses = TimetableEditStore.customClasses(services.prefs);
     this.unsubscribe.push(
       services.prefs.subscribe(PrefKey.timetableEdits, () => this.reloadEdits()),
+      services.prefs.subscribe(PrefKey.extraModules, () => void this.reloadExtraModules()),
+      services.prefs.subscribe(PrefKey.customClasses, () => this.reloadCustomClasses()),
       services.prefs.subscribe(PrefKey.classAlerts, () => this.scheduleAlerts()),
     );
   }
@@ -211,6 +220,17 @@ export class WeekModel extends Observable {
     return this.moduleNames.get(key) ?? key;
   }
 
+  /**
+   * The student's own modules for Add class, by name: only real module codes, so a class
+   * whose code DCU's timetable couldn't read isn't offered as one.
+   */
+  moduleChoices(): { code: string; name: string }[] {
+    return this.moduleKeys()
+      .filter((key) => ModuleCode.isValid(key))
+      .map((code) => ({ code, name: this.moduleName(code) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   moduleKeys(): string[] {
     const keys = new Set<string>();
     for (const list of this.rawByWeekNumber.values()) for (const e of list) keys.add(DeadlineRules.moduleKey(e));
@@ -265,7 +285,66 @@ export class WeekModel extends Observable {
 
   /** Adds a class to the student's timetable, or drops one from it, once or every week. */
   edit(kind: TimetableEdit['kind'], repeat: EditRepeat, event: TimetableEvent): void {
+    // A class of their own, removed for good, is deleted rather than hidden: nothing would
+    // ever bring it back. One day off an every-week one is an ordinary once-off.
+    const custom = CustomClasses.idOf(event);
+    const saved = custom ? this.customClasses.find((c) => c.id === custom) : null;
+    if (kind === 'remove' && saved && (repeat === 'weekly' || saved.repeat === 'once')) {
+      TimetableEditStore.removeCustomClass(this.services.prefs, saved.id);
+      return;
+    }
     TimetableEditStore.add(this.services.prefs, TimetableEdits.make(kind, repeat, event));
+  }
+
+  /** Puts a class of the student's own on their timetable, at the time they chose. */
+  addCustomClass(added: CustomClass): void {
+    TimetableEditStore.addCustomClass(this.services.prefs, added);
+  }
+
+  /**
+   * What could stand in for one of the student's classes — a cancelled one, say: the same
+   * module's other sessions that week.
+   */
+  replacementsFor(event: TimetableEvent): TimetableEvent[] {
+    for (const [number, list] of this.eventsByWeekNumber) {
+      if (list.some((e) => e.id === event.id)) return TimetableEdits.replacementsFor(event, this.ghostsByWeekNumber.get(number) ?? []);
+    }
+    return [];
+  }
+
+  /** Drops `cancelled` and takes on `replacement` instead, that day only or every week. */
+  replace(cancelled: TimetableEvent, replacement: TimetableEvent, repeat: EditRepeat): void {
+    const prefs = this.services.prefs;
+    TimetableEditStore.set(prefs, TimetableEdits.replacing(TimetableEditStore.edits(prefs), cancelled, replacement, repeat));
+  }
+
+  /**
+   * A module's classes in the given week — lectures, labs, tutorials — for Add class: any
+   * module, the student's or not. Throws when the lookup fails.
+   */
+  async sessionsOf(code: string, weekIndex: number): Promise<TimetableEvent[]> {
+    const resolved = PagerIndex.resolve(weekIndex, this.weeks.length);
+    if (resolved === null || !this.source.moduleEvents) return [];
+    const events = await this.source.moduleEvents([code], [this.weeks[resolved]]);
+    return events
+      .filter((e) => e.activity.moduleCode === code)
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+  }
+
+  /**
+   * Adds a class found by Add class. Its module is remembered, so its classes go on being
+   * fetched for the weeks after, where an every-week edit finds them.
+   */
+  addClass(session: TimetableEvent, repeat: EditRepeat): void {
+    const code = session.activity.moduleCode;
+    const week = this.weeks.find((w) => session.start >= w.firstDay && session.start < addDays(w.firstDay, 7));
+    // In the week at once, before the module's other weeks are fetched behind it.
+    if (week) {
+      const others = this.rawOthersByWeekNumber.get(week.number) ?? [];
+      if (!others.some((e) => e.id === session.id)) this.rawOthersByWeekNumber.set(week.number, [...others, session]);
+    }
+    if (code) TimetableEditStore.addExtraModule(this.services.prefs, code);
+    this.edit('add', repeat, session);
   }
 
   /** Every event loaded this session, for opening a class's page by id. */
@@ -407,6 +486,25 @@ export class WeekModel extends Observable {
     this.publishWidgetSnapshot();
   }
 
+  /** A module was taken on through Add class: fetch its classes for the weeks loaded. */
+  async reloadExtraModules(): Promise<void> {
+    this.extraModules = TimetableEditStore.extraModules(this.services.prefs);
+    const weeks = this.weeks.filter((w) => this.rawByWeekNumber.has(w.number));
+    if (weeks.length === 0) return;
+    const others = await this.othersFor(weeks);
+    if (!others) return;
+    for (const week of weeks) this.rawOthersByWeekNumber.set(week.number, inWeek(week, others));
+    this.applyFilter();
+    this.publishWidgetSnapshot();
+  }
+
+  /** Re-read the classes set at a time of the student's own. */
+  reloadCustomClasses(): void {
+    this.customClasses = TimetableEditStore.customClasses(this.services.prefs);
+    this.applyFilter();
+    this.publishWidgetSnapshot();
+  }
+
   /** Re-read the student's own edits: they added or dropped a class. */
   reloadEdits(): void {
     this.edits = TimetableEditStore.edits(this.services.prefs);
@@ -530,10 +628,8 @@ export class WeekModel extends Observable {
     if (missing.length > 0) {
       const [fetched, others] = await Promise.all([
         this.source.events(this.programme, missing),
-        this.source.otherEvents?.(this.programme, missing).catch(() => null) ?? Promise.resolve(null),
+        this.othersFor(missing),
       ]);
-      const inWeek = (week: TeachingWeek, list: TimetableEvent[]) =>
-        list.filter((e) => e.start >= week.firstDay && e.start < addDays(week.firstDay, 7));
       for (const week of missing) {
         this.rawByWeekNumber.set(week.number, inWeek(week, fetched));
         if (others) this.rawOthersByWeekNumber.set(week.number, inWeek(week, others));
@@ -557,8 +653,7 @@ export class WeekModel extends Observable {
 
   /** The copy of the week kept on the device, shown while the server is asked. Whether there was one. */
   private async showSaved(week: TeachingWeek): Promise<boolean> {
-    // Only ever something to add, so a failure just means no ghosts.
-    const others = await this.source.otherEvents?.(this.programme, [week]).catch(() => null);
+    const others = await this.othersFor([week]);
     if (others) this.rawOthersByWeekNumber.set(week.number, others);
     const cached = await this.services.timetableCache.snapshot(this.programme.identity, week.number);
     // A fresher copy may have landed while the device was read.
@@ -572,6 +667,21 @@ export class WeekModel extends Observable {
     this.rawByWeekNumber.set(week.number, events);
     this.applyFilter();
     return true;
+  }
+
+  /**
+   * What the student could add in these weeks: the course's other groups' classes, and the
+   * classes of any module they took one of through Add class. Only ever something to add,
+   * so a failure just means fewer ghosts; null when neither could be had.
+   */
+  private async othersFor(weeks: TeachingWeek[]): Promise<TimetableEvent[] | null> {
+    const [course, extra] = await Promise.all([
+      this.source.otherEvents?.(this.programme, weeks).catch(() => null) ?? Promise.resolve(null),
+      this.extraModules.length > 0 && this.source.moduleEvents
+        ? this.source.moduleEvents(this.extraModules, weeks).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    return course === null && extra === null ? null : [...(course ?? []), ...(extra ?? [])];
   }
 
   private async fetchLive(week: TeachingWeek, isCurrent: boolean): Promise<void> {
@@ -602,8 +712,13 @@ export class WeekModel extends Observable {
       // What the course runs that the rules above took off this student's week, and what
       // the source kept back as another group's.
       const kept = new Set(mine.map((e) => e.id));
-      const others = [...all.filter((e) => !kept.has(e.id)), ...named(this.rawOthersByWeekNumber.get(number) ?? [])];
-      const edited = TimetableEdits.apply(mine, others, this.edits);
+      // A class fetched for Add class may be one the course has anyway: once is enough.
+      const seen = new Set(all.map((e) => e.id));
+      const extra = (this.rawOthersByWeekNumber.get(number) ?? []).filter((e) => !seen.has(e.id));
+      const others = [...all.filter((e) => !kept.has(e.id)), ...named(extra)];
+      // Their own classes join their week before the edits, so one day can be taken off one.
+      const own = weekStart ? CustomClasses.eventsIn(this.customClasses, weekStart) : [];
+      const edited = TimetableEdits.apply(own.length > 0 ? [...mine, ...own].sort((a, b) => a.start.getTime() - b.start.getTime()) : mine, others, this.edits);
       filtered.set(number, edited.events);
       ghosts.set(number, edited.ghosts);
     }
@@ -617,6 +732,10 @@ export class WeekModel extends Observable {
     this.clashingIDs = ClashDetector.clashingEventIDs(current);
     this.changed();
   }
+}
+
+function inWeek(week: TeachingWeek, list: TimetableEvent[]): TimetableEvent[] {
+  return list.filter((e) => e.start >= week.firstDay && e.start < addDays(week.firstDay, 7));
 }
 
 function grouped(list: TimetableEvent[]): DayEvents[] {

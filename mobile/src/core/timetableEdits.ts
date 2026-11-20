@@ -28,6 +28,17 @@ export interface TimetableEdit {
 
 export type EditRepeat = 'once' | 'weekly';
 
+/** A module code as typed into Add lecture: "ms121 " becomes "MS121". */
+export const ModuleCode = {
+  normalised(text: string): string {
+    return text.trim().toUpperCase().replace(/\s+/g, '');
+  },
+  /** Letters then digits, as DCU writes them: "MS121", "EEG1001". */
+  isValid(code: string): boolean {
+    return /^[A-Z]{2,5}\d{2,5}$/.test(code);
+  },
+};
+
 /** What the student sees in edit mode: their week, and the course's other classes as ghosts. */
 export interface EditedWeek {
   events: TimetableEvent[];
@@ -81,6 +92,30 @@ export const TimetableEdits = {
     for (const e of others) (TimetableEdits.decision(e, edits) === 'add' ? events : ghosts).push(e);
     const byStart = (a: TimetableEvent, b: TimetableEvent) => a.start.getTime() - b.start.getTime();
     return { events: events.sort(byStart), ghosts: ghosts.sort(byStart) };
+  },
+
+  /**
+   * The list with `cancelled` swapped for `replacement`: the one dropped and the other taken
+   * on, for the same stretch — just that day, or every week. A once-off is what a
+   * cancellation usually wants, and leaves the weeks after it as they were.
+   */
+  replacing(edits: TimetableEdit[], cancelled: TimetableEvent, replacement: TimetableEvent, repeat: EditRepeat): TimetableEdit[] {
+    return [TimetableEdits.make('remove', repeat, cancelled), TimetableEdits.make('add', repeat, replacement)]
+      .reduce(TimetableEdits.adding, edits);
+  },
+
+  /**
+   * What could stand in for `event` that week: the same module's other sessions from `ghosts`
+   * — another group's lab, another tutorial, another lecture stream. The same kind of class
+   * first, then the rest, each soonest first.
+   */
+  replacementsFor(event: TimetableEvent, ghosts: TimetableEvent[]): TimetableEvent[] {
+    const module = event.activity.moduleCode;
+    if (!module) return [];
+    const kindRank = (e: TimetableEvent) => (e.activity.kind === event.activity.kind ? 0 : 1);
+    return ghosts
+      .filter((g) => g.id !== event.id && g.activity.moduleCode === module)
+      .sort((a, b) => kindRank(a) - kindRank(b) || a.start.getTime() - b.start.getTime());
   },
 
   /** Reads the saved list, dropping anything that isn't an edit. */

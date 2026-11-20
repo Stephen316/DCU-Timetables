@@ -23,6 +23,11 @@ export interface TimetableSource {
    * student can add from Edit timetable. Absent when the source keeps nothing back.
    */
   otherEvents?(category: TimetableCategory, weeks: TeachingWeek[]): Promise<TimetableEvent[]>;
+  /**
+   * Every class of these modules (codes like "MS121") across the given weeks, whoever they're
+   * for: what Edit timetable's Add class looks through. Absent when the source can't say.
+   */
+  moduleEvents?(codes: string[], weeks: TeachingWeek[]): Promise<TimetableEvent[]>;
 }
 
 export const TimetableSourceError = {
@@ -211,6 +216,10 @@ export class DCUAPIClient implements TimetableSource {
 
   events(category: TimetableCategory, weeks: TeachingWeek[]): Promise<TimetableEvent[]> {
     return this.fetchEvents(category.categoryTypeIdentity, [category.identity], weeks);
+  }
+
+  moduleEvents(codes: string[], weeks: TeachingWeek[]): Promise<TimetableEvent[]> {
+    return this.eventsForModuleCodes(codes, weeks);
   }
 
   /** Combined events for a set of module codes — a cohort timetable built from modules. */
